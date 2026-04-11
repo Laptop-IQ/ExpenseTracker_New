@@ -354,6 +354,40 @@ const handleAddTransaction = async () => {
     setLoading(false);
   }
 };
+
+const renderCustomizedLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+  name,
+}) => {
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 18;
+
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  // hide tiny slices (prevents clutter)
+  if (percent < 0.03) return null;
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#374151"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      style={{ fontSize: "12px" }}
+    >
+      {`${name}: ${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
+
   return (
     <div className={dashboardStyles.container}>
       <div className={dashboardStyles.headerContainer}>
@@ -498,12 +532,10 @@ const handleAddTransaction = async () => {
                 cy="50%"
                 innerRadius={70}
                 outerRadius={110}
-                paddingAngle={2}
+                paddingAngle={3}
                 dataKey="value"
-                label={({ name, percent }) =>
-                  `${name}: ${Math.round(percent * 100)}%`
-                }
                 labelLine={false}
+                label={renderCustomizedLabel} // ✅ IMPORTANT
               >
                 {financialOverviewData.map((entry, index) => (
                   <Cell
@@ -628,7 +660,7 @@ const handleAddTransaction = async () => {
         {/* Expense Column */}
         <div className={dashboardStyles.listContainer}>
           <div className={dashboardStyles.listHeader}>
-            <h3 className="text-lg md:text-xl lg:text-xl xl:text-xl font-bold text-gray-800 md:mt-3 mt-3 flex items-center gap-3">
+            <h3 className="text-lg md:text-xl lg:text-xl xl:text-xl font-bold text-gray-800 flex items-center gap-3">
               <ArrowDown className="w-6 h-6 text-orange-500" /> Recent Expenses{" "}
               <span className={dashboardStyles.listSubtitle}>
                 {" "}

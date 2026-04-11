@@ -139,34 +139,62 @@ const IncomeChart = ({ chartData, timeFrame, timeFrameRange }) => (
     </div>
   </div>
 );
+const FilterSection = ({ filter, setFilter, handleExport }) => {
 
-const FilterSection = ({ filter, setFilter, handleExport }) => (
-  <div className={styles.filterContainer}>
-    <div className="relative w-full sm:w-auto">
-      <select
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        className={styles.filterSelect}
-      >
-        <option value="all">All Transactions</option>
-        <option value="month">This Month</option>
-        <option value="year">This Year</option>
-        <option value="Salary">Salary</option>
-        <option value="Voucher">Voucher</option>
-        <option value="Incentive">Incentive</option>
-        <option value="Freelance">Freelance</option>
-        <option value="Investment">Investment</option>
-        <option value="Bonus">Bonus</option>
-        <option value="Other">Other</option>
-      </select>
-      <Filter className={styles.filterIcon} />
+const [isOpen, setIsOpen] = useState(false);
+  const options = [
+    { value: "all", label: "All Transactions" },
+    { value: "month", label: "This Month" },
+    { value: "year", label: "This Year" },
+
+    { value: "Salary", label: "Salary" },
+    { value: "Extra_Income", label: "Extra Income" },
+    { value: "Freelance", label: "Freelance" },
+    { value: "Side_Hustles", label: "Side Hustles" },
+  ];
+
+  return (
+    <div className={styles.filterContainer}>
+      {/* CUSTOM DROPDOWN (scroll enabled) */}
+      <div className="relative w-full sm:w-auto">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={styles.filterSelect}
+        >
+          {options.find((o) => o.value === filter)?.label}
+        </button>
+
+        {isOpen && (
+          <div
+            className="
+              absolute z-10 mt-1 w-full
+              bg-white border rounded shadow
+              max-h-56 overflow-y-auto
+            "
+          >
+            {options.map((item) => (
+              <div
+                key={item.value}
+                onClick={() => {
+                  setFilter(item.value);
+                  setIsOpen(false);
+                }}
+                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+              >
+                {item.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* EXPORT BUTTON */}
+      <button onClick={handleExport} className={styles.exportButton}>
+        <Download size={16} className="md:size-4" /> Export
+      </button>
     </div>
-
-    <button onClick={handleExport} className={styles.exportButton}>
-      <Download size={16} className="md:size-4" /> Export
-    </button>
-  </div>
-);
+  );
+};
 
 const Income = () => {
   const {
@@ -685,12 +713,9 @@ const handleAddTransaction = useCallback(async () => {
         buttonText="Add Income"
         categories={[
           "Salary",
+          "Extra_Income",
           "Freelance",
-          "Investment",
-          "Bonus",
-          "Voucher",
-          "Incentive",
-          "Other",
+          "Side_Hustles",
         ]}
         color="teal"
       />

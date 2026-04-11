@@ -75,6 +75,31 @@ const ExpensePage = () => {
   const [filter, setFilter] = useState("all");
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const options = [
+    { value: "all", label: "All Transactions" },
+    { value: "month", label: "This Month" },
+    { value: "year", label: "This Year" },
+    { value: "Food", label: "Food" },
+       { value: "Transport", label: "Transport" },
+       { value: "Shopping", label: "Shopping" },
+       { value: "Entertainment", label: "Entertainment" },
+       { value: "Utilities", label: "Utilities" },
+       { value: "Healthcare", label: "Healthcare" },
+       { value: "Housing", label: "Housing" },
+       { value: "Investment", label: "Investment" },
+       
+       { value: "Annual_Expense", label: "Annual Expense" },
+       { value: "Kids_Needs", label: "Kids Needs" },
+       { value: "Vehicle_Expenses", label: "Vehicle Expenses" },
+       { value: "Personal_Care_Expenses", label: "Personal Care Expenses" },
+   
+       { value: "Dairy", label: "Dairy" },
+       { value: "Junk_Food", label: "Junk Food" },
+       { value: "Grocery", label: "Grocery" },
+  ];
+
   const [editForm, setEditForm] = useState({
     description: "",
     amount: "",
@@ -569,25 +594,29 @@ const ExpensePage = () => {
           </h3>
           <div className="flex flex-col sm:flex-row gap-2 md:gap-3 w-full sm:w-auto">
             <div className="relative w-full sm:w-auto">
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+              <button
+                onClick={() => setIsOpen(!isOpen)}
                 className={styles.filterSelect}
               >
-                <option value="all">All Transactions</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
-                <option value="Food">Food</option>
-                <option value="Health Care">Health Care</option>
-                <option value="Kids Need">Kids Need</option>
-                <option value="Housing">Housing</option>
-                <option value="Transport">Transport</option>
-                <option value="Shopping">Shopping</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Utilities">Utilities</option>
-                <option value="Annual Expense">Annual Expense</option>
-                <option value="Other">Other</option>
-              </select>
+                {options.find((o) => o.value === filter)?.label}
+              </button>
+
+              {isOpen && (
+                <div className="absolute z-10 mt-1 w-auto bg-white border rounded shadow max-h-56 overflow-y-auto">
+                  {options.map((item) => (
+                    <div
+                      key={item.value}
+                      onClick={() => {
+                        setFilter(item.value);
+                        setIsOpen(false);
+                      }}
+                      className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+                    >
+                      {item.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button onClick={handleExport} className={styles.exportButton}>
@@ -598,7 +627,7 @@ const ExpensePage = () => {
 
         <div className={styles.transactionsList}>
           {filteredTransactions
-            .slice(0, showAll ? filteredTransactions.length : 8)
+            .slice(0, showAll ? filteredTransactions.length : 5)
             .map((transaction) => (
               <TransactionItem
                 key={transaction.id}
@@ -618,7 +647,7 @@ const ExpensePage = () => {
               />
             ))}
 
-          {!showAll && filteredTransactions.length > 8 && (
+          {!showAll && filteredTransactions.length > 5 && (
             <button
               onClick={() => setShowAll(true)}
               className={styles.viewAllButton}
@@ -663,15 +692,21 @@ const ExpensePage = () => {
         title="Add New Expense"
         buttonText="Add Expense"
         categories={[
+          "Investment",
           "Food",
-          "Housing",
           "Transport",
           "Shopping",
           "Entertainment",
           "Utilities",
           "Healthcare",
-          "Kids Need",
-          "Annual Expense",
+          "Housing",
+          "Annual_Expense",
+          "Kids_Needs",
+          "Vehicle_Expenses",
+          "Personal_Care_Expenses",
+          "Dairy",
+          "Junk_Food",
+          "Grocery",
           "Other",
         ]}
         color="orange"

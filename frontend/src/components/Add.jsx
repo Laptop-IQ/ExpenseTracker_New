@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { modalStyles } from "../assets/dummyStyles";
-import { X } from 'lucide-react';
-
+import { X } from "lucide-react";
+import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
 
 const AddTransactionModal = ({
   showModal,
@@ -13,168 +13,281 @@ const AddTransactionModal = ({
   title = "Add New Transaction",
   buttonText = "Add Transaction",
   categories = [
-    "Food",
-    "Housing",
-    "Transport",
-    "Shopping",
-    "Entertainment",
-    "Utilities",
-    "Healthcare",
-    "Salary",
-    "Freelance",
-    "Investments",
-    "Bonus",
-    "Other",
-  ],
+  "Salary",
+  "Extra_Income",
+  "Freelance",
+  "Investment",
+  "Food",
+  "Transport",
+  "Shopping",
+  "Entertainment",
+  "Utilities",
+  "Healthcare",
+  "Housing",
+  "Annual_Expense",
+  "Side_Hustles",
+  "Kids_Needs",
+  "Vehicle_Expenses",
+  "Personal_Care_Expenses",
+  "Dairy",
+  "Junk_Food",
+  "Grocery",
+],
   color = "teal",
 }) => {
   if (!showModal) return null;
 
-   const colorClass = modalStyles.colorClasses[color];
+  const colorClass = modalStyles.colorClasses[color];
 
-  // Get current date in YYYY-MM-DD format
+  const [suggestedCategory, setSuggestedCategory] = useState(null);
+  const [isThinking, setIsThinking] = useState(false);
+
+  const scrollRef = useRef(null);
+  const debounceRef = useRef(null);
+
   const today = new Date();
-  const currentYear = today.getFullYear();
   const currentDate = today.toISOString().split("T")[0];
-  const minDate = `${currentYear}-01-01`;
+  const minDate = `${today.getFullYear()}-01-01`;
+
+  // =========================
+  // 🧠 AI CATEGORY (DEBOUNCED)
+  // =========================
+  useEffect(() => {
+    const text = newTransaction?.description?.trim();
+
+    if (!text) {
+      setSuggestedCategory(null);
+      return;
+    }
+
+    setIsThinking(true);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      const result = smartDetectCategory(text);
+
+      setSuggestedCategory(result);
+      setIsThinking(false);
+
+      // AUTO APPLY ONLY IF USER HAS NOT OVERRIDDEN
+      setNewTransaction((prev) => {
+        if (prev?._manualCategory) return prev;
+
+        return {
+          ...prev,
+          category: result,
+        };
+      });
+    }, 350);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [newTransaction.description, setNewTransaction]);
+
+  // =========================
+  // 🧠 USER LEARNING (SAFE)
+  // =========================
+  const handleCategorySelect = useCallback(
+    (cat) => {
+      setNewTransaction((prev) => ({
+        ...prev,
+        category: cat,
+        _manualCategory: true,
+      }));
+
+      // AI learns from user choice
+      if (newTransaction?.description) {
+        learnCategory(newTransaction.description, cat);
+      }
+    },
+    [newTransaction?.description, setNewTransaction],
+  );
+
+  // =========================
+  // 🖱️ DRAG SCROLL (SMOOTH)
+  // =========================
+  const handleMouseDown = (e) => {
+    const slider = scrollRef.current;
+    if (!slider) return;
+
+    const startX = e.pageX;
+    const scrollLeft = slider.scrollLeft;
+
+    const onMove = (event) => {
+      const x = event.pageX;
+      const walk = (x - startX) * 1.5;
+      slider.scrollLeft = scrollLeft - walk;
+    };
+
+    const stop = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", stop);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", stop);
+  };
 
   return (
-    <div className={modalStyles.overlay}>
-      <div className={modalStyles.modal}>
-        <div className={modalStyles.modalHeader}>
+    <div className={`${modalStyles.overlay} flex items-end md:items-center`}>
+      <div
+        className={`${modalStyles.modal} w-full md:max-w-lg h-[95vh] md:h-auto rounded-t-2xl md:rounded-xl flex flex-col`}
+      >
+        {/* HEADER */}
+        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white z-10">
           <h3 className={modalStyles.modalTitle}>{title}</h3>
-          <button
-            onClick={() => setShowModal(false)}
-            className={modalStyles.closeButton}
-          >
-            <X size={24} />
+          <button onClick={() => setShowModal(false)}>
+            <X size={22} />
           </button>
         </div>
+
+        {/* BODY */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleAddTransaction();
           }}
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-4"
         >
-          <div className={modalStyles.form}>
-            <div>
-              <label className={modalStyles.label}>Description</label>
+          {/* DESCRIPTION */}
+          <div>
+            <label className={modalStyles.label}>Description</label>
 
-              <input
-                type="text"
-                value={newTransaction.description}
-                onChange={(e) => {
-                  setNewTransaction((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }));
-                }}
-                className={modalStyles.input(colorClass.ring)}
-                placeholder={
-                  type === "both"
-                    ? "Salary, Funds, etc."
-                    : "Groceries, Rent, etc."
-                }
-                required
-              />
-            </div>
+            <input
+              type="text"
+              value={newTransaction.description}
+              onChange={(e) =>
+                setNewTransaction((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+              className={`${modalStyles.input(colorClass.ring)} h-11`}
+              placeholder="Enter description"
+              required
+            />
 
-            <div>
-              <label className={modalStyles.label}>Amount </label>
+            <p className="text-xs text-gray-500 mt-1">
+              {isThinking
+                ? "🤖 AI analyzing..."
+                : suggestedCategory
+                  ? `🤖 Suggested: ${suggestedCategory}`
+                  : "Type description to get AI suggestion"}
+            </p>
+          </div>
 
-              <input
-                type="number"
-                value={newTransaction.amount}
-                onChange={(e) => {
-                  setNewTransaction((prev) => ({
-                    ...prev,
-                    amount: e.target.value,
-                  }));
-                }}
-                className={modalStyles.input(colorClass.ring)}
-                placeholder="0.00"
-                required
-              />
-            </div>
-            {type === "both" && (
-              <div>
-                <label className={modalStyles.label}>Type</label>
-                <div className={modalStyles.typeButtonContainer}>
-                  <button
-                    type="button"
-                    className={modalStyles.typeButton(
-                      newTransaction.type === "income",
-                      modalStyles.colorClasses.teal.typeButtonSelected,
-                    )}
-                    onClick={() =>
-                      setNewTransaction((prev) => ({ ...prev, type: "income" }))
-                    }
-                  >
-                    Income
-                  </button>
-                  <button
-                    type="button"
-                    className={modalStyles.typeButton(
-                      newTransaction.type === "expense",
-                      modalStyles.colorClasses.orange.typeButtonSelected,
-                    )}
-                    onClick={() =>
-                      setNewTransaction((prev) => ({
-                        ...prev,
-                        type: "expense",
-                      }))
-                    }
-                  >
-                    Expense
-                  </button>
-                </div>
-              </div>
-            )}
+          {/* AMOUNT */}
+          <div>
+            <label className={modalStyles.label}>Amount</label>
+            <input
+              type="number"
+              value={newTransaction.amount}
+              onChange={(e) =>
+                setNewTransaction((prev) => ({
+                  ...prev,
+                  amount: e.target.value,
+                }))
+              }
+              className={`${modalStyles.input(colorClass.ring)} h-11`}
+              placeholder="0.00"
+              required
+            />
+          </div>
 
-            <div>
-              <label className={modalStyles.label}>Category </label>
-              <select
-                value={newTransaction.category}
-                onChange={(e) =>
-                  setNewTransaction((prev) => ({
-                    ...prev,
-                    category: e.target.value,
-                  }))
-                }
-                className={modalStyles.input(colorClass.ring)}
-              >
-                {categories.map((cat) => (
-                  <option value={cat} key={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+          {/* TYPE */}
+          {type === "both" && (
+            <div className="flex gap-2">
+              {["income", "expense"].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    setNewTransaction((prev) => ({ ...prev, type: t }))
+                  }
+                  className={`flex-1 py-2 rounded-lg transition ${
+                    newTransaction.type === t
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-100"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className={modalStyles.label}>Date</label>
-              <input
-                type="date"
-                value={newTransaction.date}
-                onChange={(e) =>
-                  setNewTransaction((prev) => ({
-                    ...prev,
-                    date: e.target.value,
-                  }))
-                }
-                className={modalStyles.input(colorClass.ring)}
-                min={minDate}
-                max={currentDate}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className={modalStyles.submitButton(colorClass.button)}
+          )}
+
+          {/* CATEGORY */}
+          <div>
+            <label className={modalStyles.label}>Category</label>
+
+            <div
+              ref={scrollRef}
+              onMouseDown={handleMouseDown}
+              className="flex gap-2 overflow-x-auto md:flex-wrap cursor-grab active:cursor-grabbing pb-2"
             >
-              {buttonText}
-            </button>
+              {categories.map((cat) => {
+                const isActive = newTransaction.category === cat;
+                const isSuggested = suggestedCategory === cat;
+
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => handleCategorySelect(cat)}
+                    className={`
+                      px-3 py-1.5 rounded-full text-sm border transition-all duration-200
+
+                      ${
+                        isActive
+                          ? "bg-green-500 text-white border-green-500 scale-105 shadow-md"
+                          : "bg-white border-gray-300 hover:bg-gray-100"
+                      }
+
+                      ${
+                        isSuggested && !isActive
+                          ? "ring-2 ring-green-400 animate-pulse"
+                          : ""
+                      }
+                    `}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* DATE */}
+          <div>
+            <label className={modalStyles.label}>Date</label>
+            <input
+              type="date"
+              value={newTransaction.date}
+              onChange={(e) =>
+                setNewTransaction((prev) => ({
+                  ...prev,
+                  date: e.target.value,
+                }))
+              }
+              className={`${modalStyles.input(colorClass.ring)} h-11`}
+              min={minDate}
+              max={currentDate}
+              required
+            />
           </div>
         </form>
+
+        {/* FOOTER */}
+        <div className="p-4 border-t bg-white sticky bottom-0">
+          <button
+            onClick={handleAddTransaction}
+            className={`${modalStyles.submitButton(
+              colorClass.button,
+            )} w-full py-3`}
+          >
+            {buttonText}
+          </button>
+        </div>
       </div>
     </div>
   );

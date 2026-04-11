@@ -45,6 +45,15 @@
      z-index: 1000;
 }
 
+
+.scrollbar-hide::-webkit-scrollbar {
+     display: none;
+}
+
+.scrollbar-hide {
+     scrollbar-width: none;
+}
+
 @media (max-width: 640px) {
      .modal {
           width: 90%;

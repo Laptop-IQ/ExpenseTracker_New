@@ -68,7 +68,7 @@ export const dashboardStyles = {
 
   // List container styles
   listContainer:
-    "bg-white rounded-xl lg:p-5 md:p-6 mx-0 md:-mx-3 shadow-lg border border-blue-300 shadow-blue-100",
+    "bg-white rounded-lg mt-5 lg:p-5 md:p-6 mx-0 md:-mx-3 shadow-lg border border-blue-300 shadow-blue-100",
   listHeader:
     "flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3",
   listTitle:
