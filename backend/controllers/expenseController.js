@@ -1,5 +1,5 @@
 import expenseModel from "../models/expenseModel.js";
-import XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import getDateRange from "../utils/dateFilter.js";
 
 // ===== ADD Expense =====
@@ -32,11 +32,13 @@ export async function addExpense(req, res) {
 // ===== GET ALL Expense =====
 export async function getAllExpense(req, res) {
   const userId = req.user._id;
+
   try {
     const expenses = await expenseModel
       .find({ userId })
       .sort({ date: -1 })
       .lean();
+
     res.json(expenses);
   } catch (error) {
     console.error(error);
@@ -57,10 +59,11 @@ export async function updateExpense(req, res) {
       { new: true, lean: true },
     );
 
-    if (!updatedExpense)
+    if (!updatedExpense) {
       return res
         .status(404)
         .json({ success: false, message: "Expense not found" });
+    }
 
     res.json({
       success: true,
@@ -83,10 +86,12 @@ export async function deleteExpense(req, res) {
       _id: id,
       userId,
     });
-    if (!deletedExpense)
+
+    if (!deletedExpense) {
       return res
         .status(404)
         .json({ success: false, message: "Expense not found" });
+    }
 
     res.json({ success: true, message: "Expense deleted successfully!" });
   } catch (error) {
@@ -109,6 +114,7 @@ export async function getExpenseOverview(req, res) {
 
     const totalExpense = expenses.reduce((acc, cur) => acc + cur.amount, 0);
     const averageExpense = expenses.length ? totalExpense / expenses.length : 0;
+
     const recentTransactions = expenses.slice(0, 9);
 
     res.json({
@@ -127,28 +133,47 @@ export async function getExpenseOverview(req, res) {
   }
 }
 
-// ===== DOWNLOAD Expense as Excel =====
+// ===== DOWNLOAD Expense as Excel (ExcelJS) =====
 export async function downloadExpenseExcel(req, res) {
   const userId = req.user._id;
+
   try {
     const expenses = await expenseModel
       .find({ userId })
       .sort({ date: -1 })
       .lean();
 
-    const data = expenses.map((exp) => ({
-      Description: exp.description,
-      Amount: exp.amount,
-      Category: exp.category,
-      Date: new Date(exp.date).toLocaleDateString(),
-    }));
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Expenses");
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Expenses");
+    // Define columns
+    worksheet.columns = [
+      { header: "Description", key: "description", width: 25 },
+      { header: "Amount", key: "amount", width: 15 },
+      { header: "Category", key: "category", width: 20 },
+      { header: "Date", key: "date", width: 20 },
+    ];
 
-    // Send file directly in-memory
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    // Header styling
+    worksheet.getRow(1).font = { bold: true };
+
+    // Add rows
+    expenses.forEach((exp) => {
+      worksheet.addRow({
+        description: exp.description,
+        amount: exp.amount,
+        category: exp.category,
+        date: new Date(exp.date).toLocaleDateString(),
+      });
+    });
+
+    // Freeze header
+    worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Optional: filter
+    worksheet.autoFilter = "A1:D1";
+
+    // Response headers
     res.setHeader(
       "Content-Disposition",
       "attachment; filename=Expense_details.xlsx",
@@ -157,9 +182,13 @@ export async function downloadExpenseExcel(req, res) {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-    res.send(buffer);
+
+    // Stream file
+    await workbook.xlsx.write(res);
+
+    res.end();
   } catch (error) {
-    console.error(error);
+    console.error("Excel export error:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 }

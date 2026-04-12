@@ -1,5 +1,5 @@
 import incomeModel from "../models/incomeModel.js";
-import XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import getDateRange from "../utils/dateFilter.js";
 
 // ===== ADD INCOME =====
@@ -32,11 +32,13 @@ export async function addIncome(req, res) {
 // ===== GET ALL INCOME =====
 export async function getAllIncome(req, res) {
   const userId = req.user._id;
+
   try {
     const incomes = await incomeModel
       .find({ userId })
       .sort({ date: -1 })
       .lean();
+
     res.json(incomes);
   } catch (error) {
     console.error(error);
@@ -57,10 +59,11 @@ export async function updateIncome(req, res) {
       { new: true, lean: true },
     );
 
-    if (!updatedIncome)
+    if (!updatedIncome) {
       return res
         .status(404)
         .json({ success: false, message: "Income not found" });
+    }
 
     res.json({
       success: true,
@@ -83,10 +86,12 @@ export async function deleteIncome(req, res) {
       _id: id,
       userId,
     });
-    if (!deletedIncome)
+
+    if (!deletedIncome) {
       return res
         .status(404)
         .json({ success: false, message: "Income not found" });
+    }
 
     res.json({ success: true, message: "Income deleted successfully!" });
   } catch (error) {
@@ -112,6 +117,7 @@ export async function getIncomeOverview(req, res) {
 
     const totalIncome = incomes.reduce((acc, cur) => acc + cur.amount, 0);
     const averageIncome = incomes.length ? totalIncome / incomes.length : 0;
+
     const recentTransactions = incomes.slice(0, 9);
 
     res.json({
@@ -130,28 +136,44 @@ export async function getIncomeOverview(req, res) {
   }
 }
 
-// ===== DOWNLOAD INCOME AS EXCEL =====
+// ===== DOWNLOAD INCOME AS EXCEL (ExcelJS) =====
 export async function downloadIncomeExcel(req, res) {
   const userId = req.user._id;
+
   try {
     const incomes = await incomeModel
       .find({ userId })
       .sort({ date: -1 })
       .lean();
 
-    const data = incomes.map((inc) => ({
-      Description: inc.description,
-      Amount: inc.amount,
-      Category: inc.category,
-      Date: new Date(inc.date).toLocaleDateString(),
-    }));
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Incomes");
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Incomes");
+    // Define columns
+    worksheet.columns = [
+      { header: "Description", key: "description", width: 25 },
+      { header: "Amount", key: "amount", width: 15 },
+      { header: "Category", key: "category", width: 20 },
+      { header: "Date", key: "date", width: 20 },
+    ];
 
-    // Send file directly in-memory
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    // Style header
+    worksheet.getRow(1).font = { bold: true };
+
+    // Add rows
+    incomes.forEach((inc) => {
+      worksheet.addRow({
+        description: inc.description,
+        amount: inc.amount,
+        category: inc.category,
+        date: new Date(inc.date).toLocaleDateString(),
+      });
+    });
+
+    // Freeze header row
+    worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Set response headers
     res.setHeader(
       "Content-Disposition",
       "attachment; filename=Income_details.xlsx",
@@ -160,9 +182,13 @@ export async function downloadIncomeExcel(req, res) {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-    res.send(buffer);
+
+    // Stream file (better for production)
+    await workbook.xlsx.write(res);
+
+    res.end();
   } catch (error) {
-    console.error(error);
+    console.error("Excel export error:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 }
