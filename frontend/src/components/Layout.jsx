@@ -2,24 +2,78 @@ import React, { Activity, useEffect, useMemo, useState } from "react";
 import { styles } from "../assets/dummyStyles";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
-import { ArrowDown, ArrowUp, Car, ChevronDown, ChevronUp, Clock, CreditCard, IndianRupee, Gift, Home, Info, PieChart, PiggyBank, RefreshCw, ShoppingCart, TrendingUp, Utensils, Zap } from "lucide-react";
 import { Outlet } from "react-router-dom";
+import {
+  Utensils,
+  Home,
+  Car,
+  ShoppingCart,
+  Gift,
+  Zap,
+  ArrowUp,
+  PiggyBank,
+  Banknote,
+  Briefcase,
+  TrendingUp,
+  Fuel,
+  Scissors,
+  Baby,
+  Shield,
+  Milk,
+  Wrench,
+  Wallet,
+  Coins,
+  ShoppingBasket,
+  Cookie,
+  HeartPulse,
+  HeartPulseIcon,
+  IndianRupee,
+  ArrowDown,
+  Clock,
+  RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  PieChart,
+  Info,
+} from "lucide-react";
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 
-const CATEGORY_ICONS = {
+export const CATEGORY_ICONS = {
+  // Income
+  Salary: <Wallet className="w-4 h-4" />,
+  Extra_Income: <Banknote className="w-4 h-4" />,
+  Freelance: <Briefcase className="w-4 h-4" />,
+  Investment: <TrendingUp className="w-4 h-4" />,
+  Side_Hustles: <Coins className="w-4 h-4" />,
+
+  // Essentials
   Food: <Utensils className="w-4 h-4" />,
+  Grocery: <ShoppingBasket className="w-4 h-4" />,
+  Dairy: <Milk className="w-4 h-4" />,
+  Junk_Food: <Cookie className="w-4 h-4" />,
+
   Housing: <Home className="w-4 h-4" />,
   Transport: <Car className="w-4 h-4" />,
+  Fuel: <Fuel className="w-4 h-4" />,
+
+  Utilities: <Zap className="w-4 h-4" />,
+  Healthcare: <HeartPulse className="w-4 h-4" />,
+  Service : <Wrench className="w-4 h-4" />,
+
+  Personal_Care_Expenses: <Scissors className="w-4 h-4" />,
+  Kids_Needs: <Baby className="w-4 h-4" />,
+
+  // Lifestyle
   Shopping: <ShoppingCart className="w-4 h-4" />,
   Entertainment: <Gift className="w-4 h-4" />,
-  Utilities: <Zap className="w-4 h-4" />,
-  Healthcare: <Activity className="w-4 h-4" />,
-  Salary: <ArrowUp className="w-4 h-4" />,
-  Freelance: <CreditCard className="w-4 h-4" />,
+
+  // Savings & expenses
   Savings: <PiggyBank className="w-4 h-4" />,
+  Annual_Expense: <Shield className="w-4 h-4" />,
+  
 };
 
 

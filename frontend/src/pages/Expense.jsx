@@ -81,7 +81,7 @@ const ExpensePage = () => {
     { value: "all", label: "All Transactions" },
     { value: "month", label: "This Month" },
     { value: "year", label: "This Year" },
-    { value: "Food", label: "Food" },
+       { value: "Food", label: "Food" },
        { value: "Transport", label: "Transport" },
        { value: "Shopping", label: "Shopping" },
        { value: "Entertainment", label: "Entertainment" },
@@ -89,10 +89,11 @@ const ExpensePage = () => {
        { value: "Healthcare", label: "Healthcare" },
        { value: "Housing", label: "Housing" },
        { value: "Investment", label: "Investment" },
+       { value: "Fuel", label: "Fuel" },
        
        { value: "Annual_Expense", label: "Annual Expense" },
        { value: "Kids_Needs", label: "Kids Needs" },
-       { value: "Vehicle_Expenses", label: "Vehicle Expenses" },
+       { value: "Service", label: "Vehicle Expenses" },
        { value: "Personal_Care_Expenses", label: "Personal Care Expenses" },
    
        { value: "Dairy", label: "Dairy" },
@@ -268,8 +269,10 @@ const ExpensePage = () => {
       if (data) config.data = data;
       
       const response = await axios(config);
-      await refreshTransactions();
-      await fetchOverview(timeFrame);
+      await Promise.allSettled([
+        refreshTransactions(),
+        fetchOverview(timeFrame),
+      ]);
       
       return response;
     } catch (err) {
@@ -328,8 +331,7 @@ const ExpensePage = () => {
        category: "Food",
      });
      setShowModal(false);
-     await refreshTransactions();
-     await fetchOverview(timeFrame); // Sync with server
+   await Promise.allSettled([refreshTransactions(), fetchOverview(timeFrame)]);
    } catch (err) {
      // Rollback UI change
      setOverview((prev) => ({
@@ -702,7 +704,8 @@ const ExpensePage = () => {
           "Housing",
           "Annual_Expense",
           "Kids_Needs",
-          "Vehicle_Expenses",
+          "Service",
+          "Fuel",
           "Personal_Care_Expenses",
           "Dairy",
           "Junk_Food",

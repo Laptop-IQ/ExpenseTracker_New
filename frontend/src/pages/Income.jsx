@@ -411,8 +411,10 @@ const handleAddTransaction = useCallback(async () => {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       })
       .then(() => {
-        refreshTransactions(); // update with real data
-        fetchOverview(timeFrame ?? "monthly");
+       Promise.allSettled([
+         refreshTransactions(),
+         fetchOverview(timeFrame ?? "monthly"),
+       ]);
       })
       .catch((err) => {
         console.error("Add income error:", err);
@@ -448,8 +450,10 @@ const handleAddTransaction = useCallback(async () => {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       });
 
-      await refreshTransactions();
-      await fetchOverview(timeFrame ?? "monthly");
+      Promise.allSettled([
+        refreshTransactions(),
+        fetchOverview(timeFrame ?? "monthly"),
+      ]);
 
       setEditingId(null);
     } catch (err) {
@@ -479,9 +483,12 @@ const handleAddTransaction = useCallback(async () => {
         await axios.delete(`${API_BASE}/income/delete/${id}`, {
           headers: getAuthHeaders(),
         });
+        
 
-        await refreshTransactions();
-        await fetchOverview(timeFrame ?? "monthly");
+       Promise.allSettled([
+         refreshTransactions(),
+         fetchOverview(timeFrame ?? "monthly"),
+       ]);
       } catch (err) {
         console.error("Delete income error:", err);
         const serverMsg = err?.response?.data?.message;
