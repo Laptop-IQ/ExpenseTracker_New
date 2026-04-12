@@ -12,53 +12,39 @@ const AddTransactionModal = ({
   type = "both",
   title = "Add New Transaction",
   buttonText = "Add Transaction",
-  categories = [
-  "Salary",
-  "Extra_Income",
-  "Freelance",
-  "Investment",
-  "Food",
-  "Transport",
-  "Shopping",
-  "Entertainment",
-  "Utilities",
-  "Healthcare",
-  "Housing",
-  "Annual_Expense",
-  "Side_Hustles",
-  "Kids_Needs",
-  "Vehicle_Expenses",
-  "Personal_Care_Expenses",
-  "Dairy",
-  "Junk_Food",
-  "Grocery",
-],
+  categories = [],
   color = "teal",
 }) => {
-  if (!showModal) return null;
-
   const colorClass = modalStyles.colorClasses[color];
 
-  const [suggestedCategory, setSuggestedCategory] = useState(null);
+  // =========================
+  // 🧠 AI STATE
+  // =========================
+  const [ai, setAi] = useState({
+    category: null,
+    confidence: 0,
+  });
+
   const [isThinking, setIsThinking] = useState(false);
 
-  const scrollRef = useRef(null);
   const debounceRef = useRef(null);
-
-  const today = new Date();
-  const currentDate = today.toISOString().split("T")[0];
-  const minDate = `${today.getFullYear()}-01-01`;
+  const lastTextRef = useRef("");
 
   // =========================
-  // 🧠 AI CATEGORY (DEBOUNCED)
+  // 🧠 AI ENGINE + AUTO SELECT
   // =========================
   useEffect(() => {
     const text = newTransaction?.description?.trim();
 
     if (!text) {
-      setSuggestedCategory(null);
+      setAi({ category: null, confidence: 0 });
+      setIsThinking(false);
+      lastTextRef.current = "";
       return;
     }
+
+    if (lastTextRef.current === text) return;
+    lastTextRef.current = text;
 
     setIsThinking(true);
 
@@ -67,25 +53,56 @@ const AddTransactionModal = ({
     debounceRef.current = setTimeout(() => {
       const result = smartDetectCategory(text);
 
-      setSuggestedCategory(result);
-      setIsThinking(false);
+      const category = typeof result === "string" ? result : result.category;
 
-      // AUTO APPLY ONLY IF USER HAS NOT OVERRIDDEN
+      const confidence =
+        typeof result === "string" ? 0.6 : result.confidence || 0;
+
+      setAi({ category, confidence });
+
+      // =========================
+      // 🚀 AUTO SELECT LOGIC
+      // =========================
       setNewTransaction((prev) => {
+        // user already manually selected → never override
         if (prev?._manualCategory) return prev;
 
-        return {
-          ...prev,
-          category: result,
-        };
+        // AUTO SELECT ONLY HIGH CONFIDENCE
+        if (confidence >= 0.8 && category) {
+          return {
+            ...prev,
+            category,
+          };
+        }
+
+        return prev;
       });
+
+      setIsThinking(false);
     }, 350);
 
     return () => clearTimeout(debounceRef.current);
-  }, [newTransaction.description, setNewTransaction]);
+  }, [newTransaction?.description]);
 
   // =========================
-  // 🧠 USER LEARNING (SAFE)
+  // 🧠 APPLY AI SUGGESTION
+  // =========================
+  const applySuggestion = useCallback(() => {
+    if (!ai.category) return;
+
+    setNewTransaction((prev) => ({
+      ...prev,
+      category: ai.category,
+      _manualCategory: true,
+    }));
+
+    if (newTransaction?.description) {
+      learnCategory(newTransaction.description, ai.category);
+    }
+  }, [ai.category, newTransaction?.description, setNewTransaction]);
+
+  // =========================
+  // 🧠 MANUAL CATEGORY SELECT
   // =========================
   const handleCategorySelect = useCallback(
     (cat) => {
@@ -95,7 +112,6 @@ const AddTransactionModal = ({
         _manualCategory: true,
       }));
 
-      // AI learns from user choice
       if (newTransaction?.description) {
         learnCategory(newTransaction.description, cat);
       }
@@ -104,37 +120,17 @@ const AddTransactionModal = ({
   );
 
   // =========================
-  // 🖱️ DRAG SCROLL (SMOOTH)
+  // ⛔ SAFE RENDER
   // =========================
-  const handleMouseDown = (e) => {
-    const slider = scrollRef.current;
-    if (!slider) return;
-
-    const startX = e.pageX;
-    const scrollLeft = slider.scrollLeft;
-
-    const onMove = (event) => {
-      const x = event.pageX;
-      const walk = (x - startX) * 1.5;
-      slider.scrollLeft = scrollLeft - walk;
-    };
-
-    const stop = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", stop);
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", stop);
-  };
+  if (!showModal) return null;
 
   return (
     <div className={`${modalStyles.overlay} flex items-end md:items-center`}>
       <div
-        className={`${modalStyles.modal} w-full md:max-w-lg h-[95vh] md:h-auto rounded-t-2xl md:rounded-xl flex flex-col`}
+        className={`${modalStyles.modal} w-full md:max-w-lg h-[95vh] flex flex-col`}
       >
         {/* HEADER */}
-        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white z-10">
+        <div className="flex justify-between items-center p-4 border-b bg-white">
           <h3 className={modalStyles.modalTitle}>{title}</h3>
           <button onClick={() => setShowModal(false)}>
             <X size={22} />
@@ -162,18 +158,38 @@ const AddTransactionModal = ({
                   description: e.target.value,
                 }))
               }
-              className={`${modalStyles.input(colorClass.ring)} h-11`}
+              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
               placeholder="Enter description"
               required
             />
 
-            <p className="text-xs text-gray-500 mt-1">
-              {isThinking
-                ? "🤖 AI analyzing..."
-                : suggestedCategory
-                  ? `🤖 Suggested: ${suggestedCategory}`
-                  : "Type description to get AI suggestion"}
-            </p>
+            {/* AI UI */}
+            <div className="mt-2 text-sm">
+              {isThinking ? (
+                <span className="text-gray-500">🤖 Thinking...</span>
+              ) : ai.category ? (
+                <div className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                  <span className="text-green-600">
+                    🤖 {ai.category}{" "}
+                    {ai.confidence
+                      ? `(${Math.round(ai.confidence * 100)}%)`
+                      : ""}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={applySuggestion}
+                    className="text-xs px-2 py-1 bg-green-500 text-white rounded-md"
+                  >
+                    Apply
+                  </button>
+                </div>
+              ) : (
+                <span className="text-gray-400">
+                  Type description for AI suggestion
+                </span>
+              )}
+            </div>
           </div>
 
           {/* AMOUNT */}
@@ -188,7 +204,7 @@ const AddTransactionModal = ({
                   amount: e.target.value,
                 }))
               }
-              className={`${modalStyles.input(colorClass.ring)} h-11`}
+              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
               placeholder="0.00"
               required
             />
@@ -204,7 +220,7 @@ const AddTransactionModal = ({
                   onClick={() =>
                     setNewTransaction((prev) => ({ ...prev, type: t }))
                   }
-                  className={`flex-1 py-2 rounded-lg transition ${
+                  className={`flex-1 py-2 rounded-lg ${
                     newTransaction.type === t
                       ? "bg-green-500 text-white"
                       : "bg-gray-100"
@@ -220,14 +236,10 @@ const AddTransactionModal = ({
           <div>
             <label className={modalStyles.label}>Category</label>
 
-            <div
-              ref={scrollRef}
-              onMouseDown={handleMouseDown}
-              className="flex gap-2 overflow-x-auto md:flex-wrap cursor-grab active:cursor-grabbing pb-2"
-            >
+            <div className="flex flex-wrap gap-2">
               {categories.map((cat) => {
                 const isActive = newTransaction.category === cat;
-                const isSuggested = suggestedCategory === cat;
+                const isSuggested = ai.category === cat;
 
                 return (
                   <button
@@ -235,14 +247,12 @@ const AddTransactionModal = ({
                     type="button"
                     onClick={() => handleCategorySelect(cat)}
                     className={`
-                      px-3 py-1.5 rounded-full text-sm border transition-all duration-200
-
+                      px-3 py-1.5 rounded-full text-sm border transition
                       ${
                         isActive
-                          ? "bg-green-500 text-white border-green-500 scale-105 shadow-md"
-                          : "bg-white border-gray-300 hover:bg-gray-100"
+                          ? "bg-green-500 text-white"
+                          : "bg-white border-gray-300"
                       }
-
                       ${
                         isSuggested && !isActive
                           ? "ring-2 ring-green-400 animate-pulse"
@@ -256,34 +266,13 @@ const AddTransactionModal = ({
               })}
             </div>
           </div>
-
-          {/* DATE */}
-          <div>
-            <label className={modalStyles.label}>Date</label>
-            <input
-              type="date"
-              value={newTransaction.date}
-              onChange={(e) =>
-                setNewTransaction((prev) => ({
-                  ...prev,
-                  date: e.target.value,
-                }))
-              }
-              className={`${modalStyles.input(colorClass.ring)} h-11`}
-              min={minDate}
-              max={currentDate}
-              required
-            />
-          </div>
         </form>
 
         {/* FOOTER */}
-        <div className="p-4 border-t bg-white sticky bottom-0">
+        <div className="p-4 border-t bg-white">
           <button
             onClick={handleAddTransaction}
-            className={`${modalStyles.submitButton(
-              colorClass.button,
-            )} w-full py-3`}
+            className={`${modalStyles.submitButton(colorClass.button)} w-full py-3`}
           >
             {buttonText}
           </button>
