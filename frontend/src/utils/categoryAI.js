@@ -12,7 +12,6 @@ export const CATEGORY_KEYWORDS = {
     "medical claim",
   ],
   Freelance: ["freelance", "client", "project", "gig"],
-  Service: ["Bike service", "Car Service", "Laptop Service", "AC Services",],
   Investment: [
     "stock",
     "mutual",
@@ -23,7 +22,7 @@ export const CATEGORY_KEYWORDS = {
     "silver",
   ],
   Food: ["zomato", "swiggy", "food", "restaurant", "dinner", "lunch", "meal"],
-  Transport: ["uber", "ola", "bus", "metro", "taxi", "fuel", "ride"],
+  Transport: ["uber", "ola", "bus", "metro", "taxi", "ride"],
   Shopping: ["amazon", "flipkart", "meesho", "shopping", "clothes", "order"],
   Entertainment: ["movie", "netflix", "spotify", "game", "youtube premium"],
   Utilities: ["electricity", "bill", "water", "recharge", "wifi", "internet"],
@@ -32,11 +31,31 @@ export const CATEGORY_KEYWORDS = {
   Annual_Expense: ["insurance", "puc", "birthday", "emergency", "annual"],
   Side_Hustles: ["tuition", "other income", "side income", "freelance extra"],
   Kids_Needs: ["kids", "baby", "school", "children"],
-  Fuel: ["petrol", "fuel", "CNG",],
   Personal_Care_Expenses: ["gym", "salon", "skincare", "personal care"],
   Dairy: ["milk", "doodh", "dahi", "paneer"],
   Junk_Food: ["chips", "biscuits", "namkeen", "cold drink", "cola"],
   Grocery: ["atta", "rice", "dal", "oil", "masala", "vegetables", "fruits"],
+  Service: [
+    "service",
+    "servicing",
+    "repair",
+    "bike service",
+    "car service",
+    "vehicle service",
+    "maintenance",
+    "ac repair",
+    "laptop repair",
+  ],
+
+  Fuel: [
+    "fuel",
+    "petrol",
+    "diesel",
+    "cng",
+    "petrol pump",
+    "fuel fill",
+    "refuel",
+  ],
 };
 
 // =========================

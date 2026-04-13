@@ -124,6 +124,13 @@ const AddTransactionModal = ({
   // =========================
   if (!showModal) return null;
 
+  // 📅 DATE LOGIC
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentDate = today.toISOString().split("T")[0];
+  const minDate = `${currentYear}-01-01`;
+
+
   return (
     <div className={`${modalStyles.overlay} flex items-end md:items-center`}>
       <div
@@ -209,7 +216,25 @@ const AddTransactionModal = ({
               required
             />
           </div>
+          {/* DATE */}
+          <div>
+            <label className={modalStyles.label}>Date</label>
 
+            <input
+              type="date"
+              value={newTransaction.date || ""}
+              onChange={(e) =>
+                setNewTransaction((prev) => ({
+                  ...prev,
+                  date: e.target.value,
+                }))
+              }
+              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
+              min={minDate}
+              max={currentDate}
+              required
+            />
+          </div>
           {/* TYPE */}
           {type === "both" && (
             <div className="flex gap-2">
@@ -280,6 +305,6 @@ const AddTransactionModal = ({
       </div>
     </div>
   );
-};
+};;
 
 export default AddTransactionModal;
