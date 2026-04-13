@@ -9,6 +9,7 @@ import {
   Filter,
   BarChart2,
   IndianRupee,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -52,6 +53,8 @@ function toIsoWithClientTime(dateValue) {
     return new Date().toISOString();
   }
 }
+
+
 
 const IncomeChart = ({ chartData, timeFrame, timeFrameRange }) => (
   <div className={styles.chartContainer}>
@@ -209,6 +212,8 @@ const Income = () => {
   const [showAll, setShowAll] = useState(false);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [overview, setOverview] = useState({
     totalIncome: 0,
     averageIncome: 0,
@@ -472,33 +477,32 @@ const handleAddTransaction = useCallback(async () => {
     timeFrame,
   ]);
 
-  const handleDeleteTransaction = useCallback(
-    async (id) => {
-      if (!id) return;
-      if (!window.confirm("Are you sure you want to delete this income?"))
-        return;
+ const handleDeleteTransaction = useCallback(
+   async (id) => {
+     if (!id) return;
 
-      try {
-        setLoading(true);
-        await axios.delete(`${API_BASE}/income/delete/${id}`, {
-          headers: getAuthHeaders(),
-        });
-        
+     try {
+       setLoading(true);
 
-       Promise.allSettled([
+       await axios.delete(`${API_BASE}/income/delete/${id}`, {
+         headers: getAuthHeaders(),
+       });
+
+       await Promise.allSettled([
          refreshTransactions(),
          fetchOverview(timeFrame ?? "monthly"),
        ]);
-      } catch (err) {
-        console.error("Delete income error:", err);
-        const serverMsg = err?.response?.data?.message;
-        alert(serverMsg || "Server error while deleting income.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [getAuthHeaders, refreshTransactions, fetchOverview, timeFrame],
-  );
+     } catch (err) {
+       console.error("Delete income error:", err);
+
+       const serverMsg = err?.response?.data?.message;
+       alert(serverMsg || "Server error while deleting income.");
+     } finally {
+       setLoading(false);
+     }
+   },
+   [getAuthHeaders, refreshTransactions, fetchOverview, timeFrame],
+ );
 
   const handleExport = useCallback(async () => {
     try {
@@ -543,190 +547,271 @@ const handleAddTransaction = useCallback(async () => {
     }
   }, [getAuthHeaders, filteredTransactions]);
 
+const handleDeleteClick = (id) => {
+  setDeleteId(id);
+  setShowDeleteModal(true);
+};
+
+const confirmDelete = async () => {
+  if (!deleteId) return;
+
+  await handleDeleteTransaction(deleteId);
+
+  setShowDeleteModal(false);
+  setDeleteId(null);
+};
+
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.headerContainer}>
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.headerTitle}>Income Overview</h1>
-            <p className={styles.headerSubtitle}>
-              Track and manage your income sources
-            </p>
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className={styles.addButton}
-            disabled={loading}
-          >
-            <Plus size={18} className="md:size-5" />{" "}
-            {loading ? "Processing..." : "Add Income"}
-          </button>
-        </div>
-
-        <div className={styles.timeFrameContainer}>
-          <TimeFrameSelector
-            timeFrame={timeFrame}
-            setTimeFrame={setTimeFrame}
-            options={["daily", "weekly", "monthly", "yearly"]}
-            color="teal"
-          />
-        </div>
-      </div>
-
-      <div className={styles.summaryGrid}>
-        <FinancialCard
-          icon={
-            <div className={styles.iconGreen}>
-              <IndianRupee
-                className={`w-4 h-4 md:w-5 md:h-5 ${styles.textGreen}`}
-              />
+    <>
+      <div className={styles.wrapper}>
+        <div className={styles.headerContainer}>
+          <div className={styles.header}>
+            <div>
+              <h1 className={styles.headerTitle}>Income Overview</h1>
+              <p className={styles.headerSubtitle}>
+                Track and manage your income sources
+              </p>
             </div>
-          }
-          label="Total Income"
-          value={`₹${Number(totalIncome || 0).toLocaleString()}`}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-900 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" /> {timeFrameRange.label}
-            </div>
-          }
-          borderColor={styles.borderGreen}
-        />
-
-        <FinancialCard
-          icon={
-            <div className={styles.iconBlue}>
-              <BarChart2
-                className={`w-4 h-4 md:w-5 md:h-5 ${styles.textBlue}`}
-              />
-            </div>
-          }
-          label="Average Income"
-          value={`₹${Number(averageIncome || 0).toLocaleString()}`}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-500 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" /> {transactionsCount}{" "}
-              transactions
-            </div>
-          }
-          borderColor={styles.borderPurple}
-        />
-
-        <FinancialCard
-          icon={
-            <div className={styles.iconPurple}>
-              <TrendingUp
-                className={`w-4 h-4 md:w-5 md:h-5 ${styles.textPurple}`}
-              />
-            </div>
-          }
-          label="Transactions"
-          value={transactionsCount}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-500  flex items-center">
-              <Calendar className="w-3 h-3 mr-1" />
-              {filter === "all" ? "All records" : "Filtered records"}
-            </div>
-          }
-          borderColor={styles.borderRose}
-        />
-      </div>
-
-      <IncomeChart
-        chartData={chartData}
-        timeFrame={timeFrame}
-        timeFrameRange={timeFrameRange}
-      />
-
-      <div className={styles.listContainer}>
-        <div className={styles.header}>
-          <h3 className={styles.sectionTitle}>
-            <IndianRupee className="w-5 h-5 md:w-6 md:h-6 text-green-500" />
-            Income Transactions
-            <span className="text-sm text-gray-500 font-normal">
-              {" "}
-              ({timeFrameRange.label})
-            </span>
-          </h3>
-
-          <FilterSection
-            filter={filter}
-            setFilter={setFilter}
-            handleExport={handleExport}
-          />
-        </div>
-
-        <div className={styles.transactionList}>
-          {filteredTransactions
-            .slice(0, showAll ? filteredTransactions.length : 8)
-            .map((transaction) => (
-              <TransactionItem
-                key={transaction.id}
-                transaction={transaction}
-                isEditing={editingId === transaction.id}
-                editForm={editForm}
-                setEditForm={setEditForm}
-                onSave={handleEditTransaction}
-                onCancel={() => setEditingId(null)}
-                onDelete={handleDeleteTransaction}
-                type="income"
-                categoryIcons={CATEGORY_ICONS_Inc}
-                setEditingId={setEditingId}
-              />
-            ))}
-
-          {!showAll && filteredTransactions.length > 8 && (
             <button
-              onClick={() => setShowAll(true)}
-              className={styles.viewAllButton}
+              onClick={() => setShowModal(true)}
+              className={styles.addButton}
+              disabled={loading}
             >
-              <Eye size={18} /> View All {filteredTransactions.length}{" "}
-              Transactions
+              <Plus size={18} className="md:size-5" />{" "}
+              {loading ? "Processing..." : "Add Income"}
             </button>
-          )}
+          </div>
 
-          {filteredTransactions.length === 0 && (
-            <div className={styles.emptyStateContainer}>
-              <div className={styles.emptyStateIcon}>
-                <IndianRupee className="w-6 h-6 md:w-8 md:h-8 text-green-400" />
+          <div className={styles.timeFrameContainer}>
+            <TimeFrameSelector
+              timeFrame={timeFrame}
+              setTimeFrame={setTimeFrame}
+              options={["daily", "weekly", "monthly", "yearly"]}
+              color="teal"
+            />
+          </div>
+        </div>
+
+        <div className={styles.summaryGrid}>
+          <FinancialCard
+            icon={
+              <div className={styles.iconGreen}>
+                <IndianRupee
+                  className={`w-4 h-4 md:w-5 md:h-5 ${styles.textGreen}`}
+                />
               </div>
-              <p className={styles.emptyStateText}>
-                No income transactions found
-              </p>
-              <p className={styles.emptyStateSubtext}>
-                {filter === "all"
-                  ? "You haven't recorded any income yet"
-                  : `No ${filter} transactions found`}
-              </p>
+            }
+            label="Total Income"
+            value={`₹${Number(totalIncome || 0).toLocaleString()}`}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-900 flex items-center">
+                <Calendar className="w-3 h-3 mr-1" /> {timeFrameRange.label}
+              </div>
+            }
+            borderColor={styles.borderGreen}
+          />
+
+          <FinancialCard
+            icon={
+              <div className={styles.iconBlue}>
+                <BarChart2
+                  className={`w-4 h-4 md:w-5 md:h-5 ${styles.textBlue}`}
+                />
+              </div>
+            }
+            label="Average Income"
+            value={`₹${Number(averageIncome || 0).toLocaleString()}`}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-500 flex items-center">
+                <Calendar className="w-3 h-3 mr-1" /> {transactionsCount}{" "}
+                transactions
+              </div>
+            }
+            borderColor={styles.borderPurple}
+          />
+
+          <FinancialCard
+            icon={
+              <div className={styles.iconPurple}>
+                <TrendingUp
+                  className={`w-4 h-4 md:w-5 md:h-5 ${styles.textPurple}`}
+                />
+              </div>
+            }
+            label="Transactions"
+            value={transactionsCount}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-500  flex items-center">
+                <Calendar className="w-3 h-3 mr-1" />
+                {filter === "all" ? "All records" : "Filtered records"}
+              </div>
+            }
+            borderColor={styles.borderRose}
+          />
+        </div>
+
+        <IncomeChart
+          chartData={chartData}
+          timeFrame={timeFrame}
+          timeFrameRange={timeFrameRange}
+        />
+
+        <div className={styles.listContainer}>
+          <div className={styles.header}>
+            <h3 className={styles.sectionTitle}>
+              <IndianRupee className="w-5 h-5 md:w-6 md:h-6 text-green-500" />
+              Income Transactions
+              <span className="text-sm text-gray-500 font-normal">
+                {" "}
+                ({timeFrameRange.label})
+              </span>
+            </h3>
+
+            <FilterSection
+              filter={filter}
+              setFilter={setFilter}
+              handleExport={handleExport}
+            />
+          </div>
+
+          <div className={styles.transactionList}>
+            {filteredTransactions
+              .slice(0, showAll ? filteredTransactions.length : 8)
+              .map((transaction) => (
+                <TransactionItem
+                  key={transaction.id}
+                  transaction={transaction}
+                  isEditing={editingId === transaction.id}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  onSave={handleEditTransaction}
+                  onCancel={() => setEditingId(null)}
+                  onDelete={handleDeleteClick}
+                  type="income"
+                  categoryIcons={CATEGORY_ICONS_Inc}
+                  setEditingId={setEditingId}
+                />
+              ))}
+
+            {!showAll && filteredTransactions.length > 8 && (
               <button
-                onClick={() => setShowModal(true)}
-                className={styles.emptyStateButton}
+                onClick={() => setShowAll(true)}
+                className={styles.viewAllButton}
               >
-                <Plus size={16} className="md:size-5" /> Add Income
+                <Eye size={18} /> View All {filteredTransactions.length}{" "}
+                Transactions
+              </button>
+            )}
+
+            {filteredTransactions.length === 0 && (
+              <div className={styles.emptyStateContainer}>
+                <div className={styles.emptyStateIcon}>
+                  <IndianRupee className="w-6 h-6 md:w-8 md:h-8 text-green-400" />
+                </div>
+                <p className={styles.emptyStateText}>
+                  No income transactions found
+                </p>
+                <p className={styles.emptyStateSubtext}>
+                  {filter === "all"
+                    ? "You haven't recorded any income yet"
+                    : `No ${filter} transactions found`}
+                </p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className={styles.emptyStateButton}
+                >
+                  <Plus size={16} className="md:size-5" /> Add Income
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <AddTransactionModal
+          showModal={showModal}
+          setShowModal={setShowModal}
+          newTransaction={newTransaction}
+          setNewTransaction={setNewTransaction}
+          handleAddTransaction={handleAddTransaction}
+          loading={loading}
+          type="income"
+          title="Add New Income"
+          buttonText="Add Income"
+          categories={["Salary", "Extra_Income", "Freelance", "Side_Hustles"]}
+          color="teal"
+        />
+      </div>
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
+          {/* Overlay click to close */}
+          <div
+            className="absolute inset-0"
+            onClick={() => setShowDeleteModal(false)}
+          />
+
+          {/* Bottom Sheet */}
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl animate-[slideUp_0.25s_ease-out]">
+            {/* Drag Handle */}
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-5" />
+
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="text-red-600 w-7 h-7" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-center text-xl font-semibold text-gray-900">
+              Delete this income?
+            </h2>
+
+            <p className="text-center text-sm text-gray-500 mt-1">
+              This action cannot be undone
+            </p>
+
+            {/* Transaction Preview Card */}
+            <div className="mt-5 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
+              <p className="font-medium text-gray-800">
+                {
+                  filteredTransactions.find((t) => t.id === deleteId)
+                    ?.description
+                }
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                ₹{filteredTransactions.find((t) => t.id === deleteId)?.amount}
+              </p>
+            </div>
+
+            {/* Warning badge */}
+            <div className="mt-3 flex justify-center">
+              <span className="text-xs bg-red-50 text-red-600 px-3 py-1 rounded-full">
+                Permanent action
+              </span>
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium active:scale-95 transition"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDelete}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white font-medium 
+                     active:scale-95 transition shadow-md hover:bg-red-700"
+              >
+                {loading ? "Deleting..." : "Delete"}
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-
-      <AddTransactionModal
-        showModal={showModal}
-        setShowModal={setShowModal}
-        newTransaction={newTransaction}
-        setNewTransaction={setNewTransaction}
-        handleAddTransaction={handleAddTransaction}
-        loading={loading}
-        type="income"
-        title="Add New Income"
-        buttonText="Add Income"
-        categories={[
-          "Salary",
-          "Extra_Income",
-          "Freelance",
-          "Side_Hustles",
-        ]}
-        color="teal"
-      />
-    </div>
+      )}
+    </>
   );
 };
 

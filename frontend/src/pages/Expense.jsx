@@ -1,5 +1,11 @@
 /* eslint-disable no-unused-vars */
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  Suspense,
+} from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   Plus,
@@ -10,6 +16,7 @@ import {
   TrendingDown,
   Filter,
   BarChart2,
+  Trash2,
 } from "lucide-react";
 import {
   AreaChart,
@@ -26,7 +33,7 @@ import { exportToExcel } from "../utils/exportUtils";
 import FinancialCard from "../components/FinancialCard";
 import TimeFrameSelector from "../components/TimeFrame";
 import TransactionItem from "../components/TransactionItem";
-import AddTransactionModal from "../components/Add";
+const AddTransactionModal = React.lazy(() => import("../components/Add"));
 import { getTimeFrameRange, generateChartPoints } from "../components/Helpers";
 import { CATEGORY_ICONS } from "../assets/color";
 import { expensePageStyles as styles } from "../assets/dummyStyles";
@@ -76,30 +83,35 @@ const ExpensePage = () => {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+const [deleteId, setDeleteId] = useState(null);
+const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const options = [
-    { value: "all", label: "All Transactions" },
-    { value: "month", label: "This Month" },
-    { value: "year", label: "This Year" },
-       { value: "Food", label: "Food" },
-       { value: "Transport", label: "Transport" },
-       { value: "Shopping", label: "Shopping" },
-       { value: "Entertainment", label: "Entertainment" },
-       { value: "Utilities", label: "Utilities" },
-       { value: "Healthcare", label: "Healthcare" },
-       { value: "Housing", label: "Housing" },
-       { value: "Investment", label: "Investment" },
-       { value: "Fuel", label: "Fuel" },
-       
-       { value: "Annual_Expense", label: "Annual Expense" },
-       { value: "Kids_Needs", label: "Kids Needs" },
-       { value: "Service", label: "Vehicle Expenses" },
-       { value: "Personal_Care_Expenses", label: "Personal Care Expenses" },
-   
-       { value: "Dairy", label: "Dairy" },
-       { value: "Junk_Food", label: "Junk Food" },
-       { value: "Grocery", label: "Grocery" },
-  ];
+  const options = useMemo(
+    () => [
+      { value: "all", label: "All Transactions" },
+      { value: "month", label: "This Month" },
+      { value: "year", label: "This Year" },
+      { value: "Food", label: "Food" },
+      { value: "Transport", label: "Transport" },
+      { value: "Shopping", label: "Shopping" },
+      { value: "Entertainment", label: "Entertainment" },
+      { value: "Utilities", label: "Utilities" },
+      { value: "Healthcare", label: "Healthcare" },
+      { value: "Housing", label: "Housing" },
+      { value: "Investment", label: "Investment" },
+      { value: "Fuel", label: "Fuel" },
+
+      { value: "Annual_Expense", label: "Annual Expense" },
+      { value: "Kids_Needs", label: "Kids Needs" },
+      { value: "Service", label: "Vehicle Expenses" },
+      { value: "Personal_Care_Expenses", label: "Personal Care Expenses" },
+
+      { value: "Dairy", label: "Dairy" },
+      { value: "Junk_Food", label: "Junk Food" },
+      { value: "Grocery", label: "Grocery" },
+    ],
+    [],
+  );
 
   const [editForm, setEditForm] = useState({
     description: "",
@@ -153,11 +165,6 @@ const ExpensePage = () => {
     fetchOverview(timeFrame);
   }, [fetchOverview, timeFrame]);
 
-  // Re-fetch overview when timeframe changes
-  useEffect(() => {
-    if (filter === "month" && !timeFrame) setTimeFrame("monthly");
-    fetchOverview(timeFrame);
-  }, [timeFrame, selectedMonth, filter, setTimeFrame, fetchOverview]);
 
   // Time frame range and chart points
   const timeFrameRange = useMemo(
@@ -199,32 +206,27 @@ const ExpensePage = () => {
   );
 
   // Filter logic — month/year use current calendar by default
-  const filteredTransactions = useMemo(() => {
-    if (filter === "all") return timeFrameTransactions;
+const filteredTransactions = useMemo(() => {
+  if (filter === "all") return timeFrameTransactions;
 
-    const now = new Date();
-    const yearFromSelectedMonth = selectedMonth ? new Date(selectedMonth).getFullYear() : null;
-    const monthFromSelectedMonth = selectedMonth ? new Date(selectedMonth).getMonth() : null;
-    const yearFromTimeFrame = timeFrameRange?.start ? new Date(timeFrameRange.start).getFullYear() : null;
-    const monthFromTimeFrame = timeFrameRange?.start ? new Date(timeFrameRange.start).getMonth() : null;
+  const now = new Date();
+  const compareYear = now.getFullYear();
+  const compareMonth = now.getMonth();
 
-    return timeFrameTransactions.filter(t => {
-      const transDate = new Date(t.date);
-      
-      if (filter === "month") {
-        const compareYear = yearFromSelectedMonth ?? yearFromTimeFrame ?? now.getFullYear();
-        const compareMonth = monthFromSelectedMonth ?? monthFromTimeFrame ?? now.getMonth();
-        return transDate.getFullYear() === compareYear && transDate.getMonth() === compareMonth;
-      }
+  return timeFrameTransactions.filter((t) => {
+    const d = new Date(t.date);
 
-      if (filter === "year") {
-        const compareYear = yearFromSelectedMonth ?? yearFromTimeFrame ?? now.getFullYear();
-        return transDate.getFullYear() === compareYear;
-      }
+    if (filter === "month") {
+      return d.getFullYear() === compareYear && d.getMonth() === compareMonth;
+    }
 
-      return t.category.toLowerCase() === filter.toLowerCase();
-    });
-  }, [timeFrameTransactions, filter, selectedMonth, timeFrameRange]);
+    if (filter === "year") {
+      return d.getFullYear() === compareYear;
+    }
+
+    return t.category.toLowerCase() === filter.toLowerCase();
+  });
+}, [timeFrameTransactions, filter]);
 
   // Calculate totals
   const totalExpense = useMemo(
@@ -238,23 +240,38 @@ const ExpensePage = () => {
   );
 
   // Prepare chart data
-  const chartData = useMemo(() => {
-    const data = chartPoints.map(point => ({ ...point, expense: 0 }));
+ const chartData = useMemo(() => {
+   if (!filteredTransactions.length) return [];
 
-    filteredTransactions.forEach(transaction => {
-      const transDate = new Date(transaction.date);
-      const point = data.find(d =>
-        timeFrame === "daily"
-          ? d.hour === transDate.getHours()
-          : timeFrame === "yearly"
-          ? d.date.getMonth() === transDate.getMonth()
-          : d.date.getDate() === transDate.getDate() && d.date.getMonth() === transDate.getMonth()
-      );
-      point && (point.expense += Math.round(Number(transaction.amount)));
-    });
+   const map = new Map();
 
-    return data;
-  }, [filteredTransactions, chartPoints, timeFrame]);
+   for (const t of filteredTransactions) {
+     const d = new Date(t.date);
+
+     const key =
+       timeFrame === "daily"
+         ? d.getHours()
+         : timeFrame === "yearly"
+           ? d.getMonth()
+           : `${d.getDate()}-${d.getMonth()}`;
+
+     map.set(key, (map.get(key) || 0) + Number(t.amount));
+   }
+
+   return chartPoints.map((point) => {
+     const key =
+       timeFrame === "daily"
+         ? point.hour
+         : timeFrame === "yearly"
+           ? point.date.getMonth()
+           : `${point.date.getDate()}-${point.date.getMonth()}`;
+
+     return {
+       ...point,
+       expense: map.get(key) || 0,
+     };
+   });
+ }, [filteredTransactions, chartPoints, timeFrame]);
 
   // API request handler
   const handleApiRequest = async (method, url, data = null) => {
@@ -286,89 +303,81 @@ const ExpensePage = () => {
   };
 
   // Add expense -> POST /expense/add
- const handleAddTransaction = async () => {
-   if (!newTransaction.description || !newTransaction.amount) return;
+const handleAddTransaction = useCallback(async () => {
+  if (!newTransaction.description || !newTransaction.amount) return;
 
-   const payload = {
-     description: newTransaction.description.trim(),
-     amount: parseFloat(newTransaction.amount),
-     category: newTransaction.category,
-     date: toIsoWithClientTime(newTransaction.date),
-   };
+  const payload = {
+    description: newTransaction.description.trim(),
+    amount: parseFloat(newTransaction.amount),
+    category: newTransaction.category,
+    date: toIsoWithClientTime(newTransaction.date),
+  };
 
-   // Optimistically update UI
-   const tempTransaction = {
-     id: `temp-${Date.now()}`, // temporary ID
-     ...payload,
-     type: "expense",
-   };
-   setOverview((prev) => ({
-     ...prev,
-     recentTransactions: [tempTransaction, ...prev.recentTransactions],
-   }));
+  const tempTransaction = {
+    id: `temp-${Date.now()}`,
+    ...payload,
+    type: "expense",
+  };
 
-   try {
-     setLoading(true);
-     await handleApiRequest("post", "/expense/add", payload);
+  // ✅ instant UI update
+  setOverview((prev) => ({
+    ...prev,
+    recentTransactions: [tempTransaction, ...prev.recentTransactions],
+  }));
 
-     // If added date is outside the current visible range, adjust view
-     const addedDate = new Date(payload.date);
-     const addedDateInRange =
-       addedDate >= timeFrameRange.start && addedDate <= timeFrameRange.end;
+  setShowModal(false); // close instantly
 
-     if (!addedDateInRange) {
-       setTimeFrame("monthly");
-       setSelectedMonth(
-         new Date(addedDate.getFullYear(), addedDate.getMonth(), 1),
-       );
-     }
+  // ✅ async (non-blocking)
+  handleApiRequest("post", "/expense/add", payload).catch(() => {
+    // rollback if failed
+    setOverview((prev) => ({
+      ...prev,
+      recentTransactions: prev.recentTransactions.filter(
+        (t) => t.id !== tempTransaction.id,
+      ),
+    }));
+  });
 
-     setNewTransaction({
-       date: new Date().toISOString().split("T")[0],
-       description: "",
-       amount: "",
-       type: "expense",
-       category: "Food",
-     });
-     setShowModal(false);
-   await Promise.allSettled([refreshTransactions(), fetchOverview(timeFrame)]);
-   } catch (err) {
-     // Rollback UI change
-     setOverview((prev) => ({
-       ...prev,
-       recentTransactions: prev.recentTransactions.filter(
-         (t) => t.id !== tempTransaction.id,
-       ),
-     }));
-   } finally {
-     setLoading(false);
-   }
- };
+  // reset form
+  setNewTransaction({
+    date: new Date().toISOString().split("T")[0],
+    description: "",
+    amount: "",
+    type: "expense",
+    category: "Food",
+  });
+}, [newTransaction, handleApiRequest]);
 
   // Edit expense -> PUT /expense/update/:id
-  const handleEditTransaction = async () => {
-    if (!editingId || !editForm.description || !editForm.amount) return;
+ const handleEditTransaction = useCallback(async () => {
+   if (!editingId || !editForm.description || !editForm.amount) return;
 
-    try {
-      const payload = {
-        description: editForm.description.trim(),
-        amount: parseFloat(editForm.amount),
-        category: editForm.category,
-        date: toIsoWithClientTime(editForm.date),
-      };
+   const payload = {
+     description: editForm.description.trim(),
+     amount: parseFloat(editForm.amount),
+     category: editForm.category,
+     date: toIsoWithClientTime(editForm.date),
+   };
 
-      await handleApiRequest('put', `/expense/update/${editingId}`, payload);
-      setEditingId(null);
-    } catch (err) {
-      // Error handled in handleApiRequest
-    }
-  };
+   await handleApiRequest("put", `/expense/update/${editingId}`, payload);
+   setEditingId(null);
+ }, [editingId, editForm]);
 
   // Delete expense -> DELETE /expense/delete/:id
-  const handleDeleteTransaction = async (id) => {
-    if (!id || !window.confirm("Are you sure you want to delete this expense?")) return;
-    await handleApiRequest('delete', `/expense/delete/${id}`);
-  };
+const handleDeleteTransaction = (id) => {
+  if (!id) return;
+  setDeleteId(id);
+  setShowDeleteModal(true);
+};
+
+const confirmDelete = async () => {
+  if (!deleteId) return;
+
+  await handleApiRequest("delete", `/expense/delete/${deleteId}`);
+
+  setShowDeleteModal(false);
+  setDeleteId(null);
+};
 
   // Export -> GET /expense/downloadexcel (server) with client fallback
   const handleExport = async () => {
@@ -416,305 +425,384 @@ const ExpensePage = () => {
 
 
   return (
-    <div className={styles.container}>
-      <div className={styles.headerCard}>
-        <div className={styles.headerContainer}>
-          <div>
-            <h1 className={styles.headerTitle}>Expense Overview</h1>
-            <p className={styles.headerSubtitle}>
-              Track and manage your expenses
-            </p>
+    <>
+      <div className={styles.container}>
+        <div className={styles.headerCard}>
+          <div className={styles.headerContainer}>
+            <div>
+              <h1 className={styles.headerTitle}>Expense Overview</h1>
+              <p className={styles.headerSubtitle}>
+                Track and manage your expenses
+              </p>
+            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className={styles.addButton}
+              disabled={loading}
+            >
+              <Plus size={20} /> {loading ? "Processing..." : "Add Expense"}
+            </button>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className={styles.addButton}
-            disabled={loading}
-          >
-            <Plus size={20} /> {loading ? "Processing..." : "Add Expense"}
-          </button>
+
+          <div className={styles.timeframePositioning}>
+            <TimeFrameSelector
+              timeFrame={timeFrame}
+              setTimeFrame={(frame) => {
+                setTimeFrame(frame);
+                setSelectedMonth(null);
+              }}
+              options={["daily", "weekly", "monthly", "yearly"]}
+              color="orange"
+            />
+          </div>
         </div>
 
-        <div className={styles.timeframePositioning}>
-          <TimeFrameSelector
-            timeFrame={timeFrame}
-            setTimeFrame={(frame) => {
-              setTimeFrame(frame);
-              setSelectedMonth(null);
-            }}
-            options={["daily", "weekly", "monthly", "yearly"]}
-            color="orange"
+        <div className={styles.cardsGrid}>
+          <FinancialCard
+            icon={
+              <div className={styles.iconOrange}>
+                <IndianRupee className={`w-5 h-5 ${styles.textOrange}`} />
+              </div>
+            }
+            label="Total Expenses"
+            value={`₹${totalExpense.toLocaleString()}`}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-500 flex items-center">
+                <Calendar className="w-3 h-3 mr-1" /> {timeFrameRange.label}
+              </div>
+            }
+            borderColor={styles.borderOrange}
+          />
+
+          <FinancialCard
+            icon={
+              <div className={styles.iconAmber}>
+                <BarChart2 className={`w-5 h-5 ${styles.textAmber}`} />
+              </div>
+            }
+            label="Average Expense"
+            value={`₹${averageExpense.toLocaleString()}`}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-500 flex items-center">
+                <Calendar className="w-3 h-3 mr-1" />{" "}
+                {filteredTransactions.length} transactions
+              </div>
+            }
+            borderColor={styles.borderAmber}
+          />
+
+          <FinancialCard
+            icon={
+              <div className={styles.iconYellow}>
+                <TrendingDown className={`w-5 h-5 ${styles.textYellow}`} />
+              </div>
+            }
+            label="Transactions"
+            value={filteredTransactions.length}
+            additionalContent={
+              <div className="mt-2 text-xs text-gray-500 flex items-center">
+                <Calendar className="w-3 h-3 mr-1" />{" "}
+                {filter === "all" ? "All records" : "Filtered records"}
+              </div>
+            }
+            borderColor={styles.borderYellow}
           />
         </div>
-      </div>
 
-      <div className={styles.cardsGrid}>
-        <FinancialCard
-          icon={
-            <div className={styles.iconOrange}>
-              <IndianRupee className={`w-5 h-5 ${styles.textOrange}`} />
-            </div>
-          }
-          label="Total Expenses"
-          value={`₹${totalExpense.toLocaleString()}`}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-500 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" /> {timeFrameRange.label}
-            </div>
-          }
-          borderColor={styles.borderOrange}
-        />
+        <div className={styles.chartContainer}>
+          <div className={styles.chartHeader}>
+            <h3 className={styles.chartTitle}>
+              <BarChart2 className="w-6 h-6 text-orange-500" />
+              {timeFrame === "daily"
+                ? "Hourly"
+                : timeFrame === "yearly"
+                  ? "Monthly"
+                  : "Daily"}{" "}
+              Expense Trends
+              <span className="text-sm text-gray-500 font-normal">
+                {" "}
+                ({timeFrameRange.label})
+              </span>
+            </h3>
+          </div>
 
-        <FinancialCard
-          icon={
-            <div className={styles.iconAmber}>
-              <BarChart2 className={`w-5 h-5 ${styles.textAmber}`} />
-            </div>
-          }
-          label="Average Expense"
-          value={`₹${averageExpense.toLocaleString()}`}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-500 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" />{" "}
-              {filteredTransactions.length} transactions
-            </div>
-          }
-          borderColor={styles.borderAmber}
-        />
-
-        <FinancialCard
-          icon={
-            <div className={styles.iconYellow}>
-              <TrendingDown className={`w-5 h-5 ${styles.textYellow}`} />
-            </div>
-          }
-          label="Transactions"
-          value={filteredTransactions.length}
-          additionalContent={
-            <div className="mt-2 text-xs text-gray-500 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" />{" "}
-              {filter === "all" ? "All records" : "Filtered records"}
-            </div>
-          }
-          borderColor={styles.borderYellow}
-        />
-      </div>
-
-      <div className={styles.chartContainer}>
-        <div className={styles.chartHeader}>
-          <h3 className={styles.chartTitle}>
-            <BarChart2 className="w-6 h-6 text-orange-500" />
-            {timeFrame === "daily"
-              ? "Hourly"
-              : timeFrame === "yearly"
-                ? "Monthly"
-                : "Daily"}{" "}
-            Expense Trends
-            <span className="text-sm text-gray-500 font-normal">
-              {" "}
-              ({timeFrameRange.label})
-            </span>
-          </h3>
-        </div>
-
-        <div className={styles.chartHeight}>
-          <ResponsiveContainer>
-            <AreaChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-            >
-              <defs>
-                <linearGradient
-                  id="expenseGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="5%" stopColor="#ff9800" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#ff9800" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#f3f4f6"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#6b7280", fontSize: 12 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#6b7280", fontSize: 12 }}
-                width={60}
-                tickFormatter={(value) => `₹${value.toLocaleString()}`}
-              />
-              <Tooltip
-                formatter={(value) => [
-                  `₹${Math.round(value).toLocaleString()}`,
-                  "Expense",
-                ]}
-                contentStyle={styles.tooltipContent}
-              />
-              <Area
-                type="monotone"
-                dataKey="expense"
-                stroke="#ff9800"
-                fill="url(#expenseGradient)"
-                strokeWidth={2}
-                activeDot={{ r: 6, fill: "#ff9800" }}
-              />
-              {chartData.map(
-                (point, index) =>
-                  point.isCurrent && (
-                    <ReferenceLine
-                      key={index}
-                      x={point.label}
-                      stroke="#ff5722"
-                      strokeWidth={2}
-                      strokeDasharray="3 3"
-                    />
-                  ),
-              )}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className={styles.transactionsContainer}>
-        <div className={styles.transactionsHeader}>
-          <h3 className={styles.transactionsTitle}>
-            <IndianRupee className="w-6 h-6 -mx-1.5 lg:-mx-2 md:mx-0 text-orange-500" />
-            Expense Transactions
-            <span className="text-sm text-gray-500 font-normal">
-              {" "}
-              ({timeFrameRange.label})
-            </span>
-          </h3>
-          <div className="flex flex-col sm:flex-row gap-2 md:gap-3 w-full sm:w-auto">
-            <div className="relative w-full sm:w-auto">
-              <button
-                onClick={() => setIsOpen(!isOpen)}
-                className={styles.filterSelect}
+          <div className={styles.chartHeight}>
+            <ResponsiveContainer>
+              <AreaChart
+                data={chartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
               >
-                {options.find((o) => o.value === filter)?.label}
-              </button>
-
-              {isOpen && (
-                <div className="absolute z-10 mt-1 w-auto bg-white border rounded shadow max-h-56 overflow-y-auto">
-                  {options.map((item) => (
-                    <div
-                      key={item.value}
-                      onClick={() => {
-                        setFilter(item.value);
-                        setIsOpen(false);
-                      }}
-                      className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
-                    >
-                      {item.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button onClick={handleExport} className={styles.exportButton}>
-              <Download size={18} /> Export
-            </button>
+                <defs>
+                  <linearGradient
+                    id="expenseGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor="#ff9800" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#ff9800" stopOpacity={0.1} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#f3f4f6"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#6b7280", fontSize: 12 }}
+                  width={60}
+                  tickFormatter={(value) => `₹${value.toLocaleString()}`}
+                />
+                <Tooltip
+                  formatter={(value) => [
+                    `₹${Math.round(value).toLocaleString()}`,
+                    "Expense",
+                  ]}
+                  contentStyle={styles.tooltipContent}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="expense"
+                  stroke="#ff9800"
+                  fill="url(#expenseGradient)"
+                  strokeWidth={2}
+                  activeDot={{ r: 6, fill: "#ff9800" }}
+                />
+                {chartData.map(
+                  (point, index) =>
+                    point.isCurrent && (
+                      <ReferenceLine
+                        key={index}
+                        x={point.label}
+                        stroke="#ff5722"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                      />
+                    ),
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        <div className={styles.transactionsList}>
-          {filteredTransactions
-            .slice(0, showAll ? filteredTransactions.length : 5)
-            .map((transaction) => (
-              <TransactionItem
-                key={transaction.id}
-                transaction={transaction}
-                isEditing={editingId === transaction.id}
-                editForm={editForm}
-                setEditForm={setEditForm}
-                onSave={handleEditTransaction}
-                onCancel={() => setEditingId(null)}
-                onDelete={handleDeleteTransaction}
-                type="expense"
-                categoryIcons={CATEGORY_ICONS}
-                setEditingId={setEditingId}
-                containerClass={styles.transactionItemContainer}
-                amountClass={styles.transactionAmount}
-                iconClass={styles.transactionIcon}
-              />
-            ))}
+        <div className={styles.transactionsContainer}>
+          <div className={styles.transactionsHeader}>
+            <h3 className={styles.transactionsTitle}>
+              <IndianRupee className="w-6 h-6 -mx-1.5 lg:-mx-2 md:mx-0 text-orange-500" />
+              Expense Transactions
+              <span className="text-sm text-gray-500 font-normal">
+                {" "}
+                ({timeFrameRange.label})
+              </span>
+            </h3>
+            <div className="flex flex-col sm:flex-row gap-2 md:gap-3 w-full sm:w-auto">
+              <div className="relative w-full sm:w-auto">
+                <button
+                  onClick={() => setIsOpen(!isOpen)}
+                  className={styles.filterSelect}
+                >
+                  {options.find((o) => o.value === filter)?.label}
+                </button>
 
-          {!showAll && filteredTransactions.length > 5 && (
-            <button
-              onClick={() => setShowAll(true)}
-              className={styles.viewAllButton}
-            >
-              <Eye size={18} /> View All {filteredTransactions.length}{" "}
-              Transactions
-            </button>
-          )}
-
-          {filteredTransactions.length === 0 && (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyStateIcon}>
-                <IndianRupee className="w-8 h-8 text-orange-400" />
+                {isOpen && (
+                  <div className="absolute z-10 mt-1 w-auto bg-white border rounded shadow max-h-56 overflow-y-auto">
+                    {options.map((item) => (
+                      <div
+                        key={item.value}
+                        onClick={() => {
+                          setFilter(item.value);
+                          setIsOpen(false);
+                        }}
+                        className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+                      >
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className={styles.emptyStateText}>
-                No expense transactions found
-              </p>
-              <p className={styles.emptyStateSubtext}>
-                {filter === "all"
-                  ? "You haven't recorded any expenses yet"
-                  : `No ${filter} transactions found`}
-              </p>
-              <button
-                onClick={() => setShowModal(true)}
-                className={styles.addButton}
-              >
-                <Plus size={20} /> Add Expense
+
+              <button onClick={handleExport} className={styles.exportButton}>
+                <Download size={18} /> Export
               </button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <AddTransactionModal
-        showModal={showModal}
-        setShowModal={setShowModal}
-        newTransaction={newTransaction}
-        setNewTransaction={setNewTransaction}
-        handleAddTransaction={handleAddTransaction}
-        loading={loading}
-        type="expense"
-        title="Add New Expense"
-        buttonText="Add Expense"
-        categories={[
-          "Investment",
-          "Food",
-          "Transport",
-          "Shopping",
-          "Entertainment",
-          "Utilities",
-          "Healthcare",
-          "Housing",
-          "Annual_Expense",
-          "Kids_Needs",
-          "Service",
-          "Fuel",
-          "Personal_Care_Expenses",
-          "Dairy",
-          "Junk_Food",
-          "Grocery",
-          "Other",
-        ]}
-        color="orange"
-      />
-    </div>
+          <div className={styles.transactionsList}>
+            {filteredTransactions
+              .slice(0, showAll ? filteredTransactions.length : 5)
+              .map((transaction) => (
+                <TransactionItem
+                  key={transaction.id}
+                  transaction={transaction}
+                  isEditing={editingId === transaction.id}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  onSave={handleEditTransaction}
+                  onCancel={() => setEditingId(null)}
+                  onDelete={handleDeleteTransaction}
+                  type="expense"
+                  categoryIcons={CATEGORY_ICONS}
+                  setEditingId={setEditingId}
+                  containerClass={styles.transactionItemContainer}
+                  amountClass={styles.transactionAmount}
+                  iconClass={styles.transactionIcon}
+                />
+              ))}
+
+            {!showAll && filteredTransactions.length > 5 && (
+              <button
+                onClick={() => setShowAll(true)}
+                className={styles.viewAllButton}
+              >
+                <Eye size={18} /> View All {filteredTransactions.length}{" "}
+                Transactions
+              </button>
+            )}
+
+            {filteredTransactions.length === 0 && (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyStateIcon}>
+                  <IndianRupee className="w-8 h-8 text-orange-400" />
+                </div>
+                <p className={styles.emptyStateText}>
+                  No expense transactions found
+                </p>
+                <p className={styles.emptyStateSubtext}>
+                  {filter === "all"
+                    ? "You haven't recorded any expenses yet"
+                    : `No ${filter} transactions found`}
+                </p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className={styles.addButton}
+                >
+                  <Plus size={20} /> Add Expense
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <Suspense fallback={<div>Loading...</div>}>
+          <AddTransactionModal
+            showModal={showModal}
+            setShowModal={setShowModal}
+            newTransaction={newTransaction}
+            setNewTransaction={setNewTransaction}
+            handleAddTransaction={handleAddTransaction}
+            loading={loading}
+            type="expense"
+            title="Add New Expense"
+            buttonText="Add Expense"
+            categories={[
+              "Investment",
+              "Food",
+              "Transport",
+              "Shopping",
+              "Entertainment",
+              "Utilities",
+              "Healthcare",
+              "Housing",
+              "Annual_Expense",
+              "Kids_Needs",
+              "Service",
+              "Fuel",
+              "Personal_Care_Expenses",
+              "Dairy",
+              "Junk_Food",
+              "Grocery",
+              "Other",
+            ]}
+            color="orange"
+          />
+        </Suspense>
+      </div>
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
+          {/* Overlay click to close */}
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              setShowDeleteModal(false);
+              setDeleteId(null);
+            }}
+          />
+
+          {/* Bottom Sheet */}
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl p-6 shadow-2xl animate-[slideUp_0.25s_ease-out]">
+            {/* Drag Handle */}
+            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-5" />
+
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="text-red-600 w-7 h-7" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-center text-xl font-semibold text-gray-900">
+              Delete this expense?
+            </h2>
+
+            <p className="text-center text-sm text-gray-500 mt-1">
+              This action cannot be undone
+            </p>
+
+            {/* Transaction Preview */}
+            <div className="mt-5 bg-gray-50 border border-gray-200 rounded-2xl p-4 text-center">
+              <p className="font-medium text-gray-800">
+                {
+                  filteredTransactions.find((t) => t.id === deleteId)
+                    ?.description
+                }
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                ₹{filteredTransactions.find((t) => t.id === deleteId)?.amount}
+              </p>
+            </div>
+
+            {/* Warning badge */}
+            <div className="mt-3 flex justify-center">
+              <span className="text-xs bg-red-50 text-red-600 px-3 py-1 rounded-full">
+                Permanent action
+              </span>
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteId(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium active:scale-95 transition"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDelete}
+                disabled={loading}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white font-medium 
+                     active:scale-95 transition shadow-md hover:bg-red-700"
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

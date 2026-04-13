@@ -18,6 +18,16 @@
      background: rgba(0, 0, 0, 0.2);
 }
 
+@keyframes slideUp {
+     from {
+          transform: translateY(100%);
+     }
+
+     to {
+          transform: translateY(0);
+     }
+}
+
 .modal {
      position: fixed;
      top: 50%;
