@@ -410,7 +410,7 @@ const Layout = ({ onLogout, user }) => {
             </div>
             <p className={styles.statCards.cardFooter}>
               <span className="text-teal-600 font-medium">
-                +₹{stats.last30DaysSavings.toLocaleString()}
+                +₹ {stats.last30DaysSavings.toLocaleString()}
               </span>{" "}
               this month
             </p>
