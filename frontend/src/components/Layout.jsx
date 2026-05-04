@@ -90,9 +90,13 @@ const filterTransactions = (transactions, frame) => {
       return transactions.filter((t) => new Date(t.date) >= startOfWeek);
     }
     case "monthly":
-      return transactions.filter(
-        (t) => new Date(t.date).getMonth() === now.getMonth(),
-      );
+      return transactions.filter((t) => {
+        const d = new Date(t.date);
+        return (
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear()
+        );
+      });
     default:
       return transactions;
   }
@@ -230,87 +234,103 @@ const Layout = ({ onLogout, user }) => {
        [transactions, timeFrame],
      );
 
-     const stats = useMemo(() => {
-       const now = new Date();
-       const thirtyDaysAgo = new Date(now);
-       thirtyDaysAgo.setDate(now.getDate() - 30);
+   const stats = useMemo(() => {
+     const now = new Date();
 
-       const last30DaysTransactions = transactions.filter(
-         (t) => new Date(t.date) >= thirtyDaysAgo,
-       );
+     // ✅ Current Month
+     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+     const endOfThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-       const last30DaysIncome = last30DaysTransactions
-         .filter((t) => t.type === "income")
-         .reduce((sum, t) => sum + Number(t.amount), 0);
+     // ✅ Previous Month
+     const startOfLastMonth = new Date(
+       now.getFullYear(),
+       now.getMonth() - 1,
+       1,
+     );
+     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-       const last30DaysExpenses = last30DaysTransactions
-         .filter((t) => t.type === "expense")
-         .reduce((sum, t) => sum + Number(t.amount), 0);
+     // ✅ Filter transactions
+     const thisMonthTransactions = transactions.filter((t) => {
+       const d = new Date(t.date);
+       return d >= startOfThisMonth && d < endOfThisMonth;
+     });
 
-       const allTimeIncome = transactions
-         .filter((t) => t.type === "income")
-         .reduce((sum, t) => sum + Number(t.amount), 0);
+     const lastMonthTransactions = transactions.filter((t) => {
+       const d = new Date(t.date);
+       return d >= startOfLastMonth && d < endOfLastMonth;
+     });
 
-       const allTimeExpenses = transactions
-         .filter((t) => t.type === "expense")
-         .reduce((sum, t) => sum + Number(t.amount), 0);
+     // ✅ Income
+     const thisMonthIncome = thisMonthTransactions
+       .filter((t) => t.type === "income")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-       const savingsRate =
-         last30DaysIncome > 0
-           ? Math.round(
-               ((last30DaysIncome - last30DaysExpenses) / last30DaysIncome) *
-                 100,
-             )
-           : 0;
+     const lastMonthIncome = lastMonthTransactions
+       .filter((t) => t.type === "income")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-       const last60DaysAgo = new Date(now);
-       last60DaysAgo.setDate(now.getDate() - 60);
+     // ✅ Expense
+     const thisMonthExpenses = thisMonthTransactions
+       .filter((t) => t.type === "expense")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-       const previous30DaysTransactions = transactions.filter((t) => {
-         const date = new Date(t.date);
-         return date >= last60DaysAgo && date < thirtyDaysAgo;
-       });
+     const lastMonthExpenses = lastMonthTransactions
+       .filter((t) => t.type === "expense")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-       const previous30DaysExpenses = previous30DaysTransactions
-         .filter((t) => t.type === "expense")
-         .reduce((sum, t) => sum + Number(t.amount), 0);
+     // ✅ % Change Fix (important)
+     const incomeChange =
+       lastMonthIncome === 0
+         ? thisMonthIncome > 0
+           ? 100
+           : 0
+         : Math.round(
+             ((thisMonthIncome - lastMonthIncome) / lastMonthIncome) * 100,
+           );
 
-       const expenseChange =
-         previous30DaysExpenses > 0
-           ? Math.round(
-               ((last30DaysExpenses - previous30DaysExpenses) /
-                 previous30DaysExpenses) *
-                 100,
-             )
-           : 0;
+     const expenseChange =
+       lastMonthExpenses === 0
+         ? thisMonthExpenses > 0
+           ? 100
+           : 0
+         : Math.round(
+             ((thisMonthExpenses - lastMonthExpenses) / lastMonthExpenses) *
+               100,
+           );
 
-           const previous30DaysIncome = previous30DaysTransactions
-             .filter((t) => t.type === "income")
-             .reduce((sum, t) => sum + Number(t.amount), 0);
+     // ✅ All time
+     const allTimeIncome = transactions
+       .filter((t) => t.type === "income")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-           const incomeChange =
-             previous30DaysIncome > 0
-               ? Math.round(
-                   ((last30DaysIncome - previous30DaysIncome) /
-                     previous30DaysIncome) *
-                     100,
-                 )
-               : 0;
+     const allTimeExpenses = transactions
+       .filter((t) => t.type === "expense")
+       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-       return {
-         totalTransactions: transactions.length,
-         last30DaysIncome,
-         last30DaysExpenses,
-         last30DaysSavings: last30DaysIncome - last30DaysExpenses,
-         allTimeIncome,
-         allTimeExpenses,
-         allTimeSavings: allTimeIncome - allTimeExpenses,
-         last30DaysCount: last30DaysTransactions.length,
-         savingsRate,
-         expenseChange,
-         incomeChange,
-       };
-     }, [transactions]);
+     const savingsRate =
+       thisMonthIncome > 0
+         ? Math.round(
+             ((thisMonthIncome - thisMonthExpenses) / thisMonthIncome) * 100,
+           )
+         : 0;
+
+     return {
+       totalTransactions: transactions.length,
+
+       // ✅ Replace old 30-day values
+       last30DaysIncome: thisMonthIncome,
+       last30DaysExpenses: thisMonthExpenses,
+       last30DaysSavings: thisMonthIncome - thisMonthExpenses,
+
+       allTimeIncome,
+       allTimeExpenses,
+       allTimeSavings: allTimeIncome - allTimeExpenses,
+
+       savingsRate,
+       expenseChange,
+       incomeChange,
+     };
+   }, [transactions]);
 
      const timeFrameLabel = useMemo(
        () =>
@@ -347,7 +367,7 @@ const Layout = ({ onLogout, user }) => {
              }, {}),
          )
            .sort((a, b) => b[1] - a[1])
-           .slice(0, 15),
+           .slice(0, 7),
        [transactions],
      );
 
@@ -399,7 +419,7 @@ const Layout = ({ onLogout, user }) => {
           <div className={styles.statCards.incomeCard}>
             <div className={styles.statCards.cardHeader}>
               <div>
-                <p className={styles.statCards.cardTitle}>Monthly Income</p>
+                <p className={styles.statCards.cardTitle}>This Month Income</p>
                 <p className={styles.statCards.cardValue}>
                   {" "}
                   ₹
@@ -432,7 +452,7 @@ const Layout = ({ onLogout, user }) => {
           <div className={styles.statCards.expenseCard}>
             <div className={styles.statCards.cardHeader}>
               <div>
-                <p className={styles.statCards.cardTitle}>Monthly Expense</p>
+                <p className={styles.statCards.cardTitle}>This Month Expense</p>
                 <p className={styles.statCards.cardValue}>
                   {" "}
                   ₹
