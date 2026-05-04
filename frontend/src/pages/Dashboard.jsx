@@ -432,9 +432,9 @@ const renderCustomizedLabel = ({
           additionalContent={
             <div className="flex items-center gap-2 mt-2 text-sm">
               <span className={dashboardStyles.balanceBadge}>
-                +₹ {Math.round(displayIncome).toLocaleString()}
+                + ₹ {Math.round(displayIncome).toLocaleString()}
               </span>
-              <span>-₹ {Math.round(displayExpenses).toLocaleString()}</span>
+              <span>- ₹ {Math.round(displayExpenses).toLocaleString()}</span>
             </div>
           }
         />
