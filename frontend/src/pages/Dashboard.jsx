@@ -130,20 +130,20 @@ const Dashboard = () => {
     ]);
   }, [currentTimeFrameData, timeFrame]);
 
-  const displayIncome =
-    timeFrame === "monthly" && typeof overviewMeta.monthlyIncome === "number"
-      ? overviewMeta.monthlyIncome
-      : currentTimeFrameData.income;
+const displayIncome =
+  timeFrame === "monthly" && typeof overviewMeta.monthlyIncome === "number"
+    ? overviewMeta.monthlyIncome
+    : currentTimeFrameData.income;
 
-  const displayExpenses =
-    timeFrame === "monthly" && typeof overviewMeta.monthlyExpense === "number"
-      ? overviewMeta.monthlyExpense
-      : currentTimeFrameData.expenses;
+const displayExpenses =
+  timeFrame === "monthly" && typeof overviewMeta.monthlyExpense === "number"
+    ? overviewMeta.monthlyExpense
+    : currentTimeFrameData.expenses;
 
-  const displaySavings =
-    timeFrame === "monthly" && typeof overviewMeta.savings === "number"
-      ? overviewMeta.savings
-      : currentTimeFrameData.savings;
+const displaySavings =
+  timeFrame === "monthly" && typeof overviewMeta.savings === "number"
+    ? overviewMeta.savings
+    : currentTimeFrameData.savings;
 
   const expenseChange = useMemo(() => {
     const prev = prevTimeFrameData.expenses;
@@ -428,13 +428,13 @@ const renderCustomizedLabel = ({
             </div>
           }
           label="Total Balance"
-          value={`₹ ${Math.round(displayIncome - displayExpenses).toLocaleString()}`}
+          value={`₹${Math.round(displayIncome - displayExpenses).toLocaleString()}`}
           additionalContent={
             <div className="flex items-center gap-2 mt-2 text-sm">
               <span className={dashboardStyles.balanceBadge}>
-                + ₹ {Math.round(displayIncome).toLocaleString()}
+                + ₹{Math.round(displayIncome).toLocaleString()}
               </span>
-              <span>- ₹ {Math.round(displayExpenses).toLocaleString()}</span>
+              <span>- ₹{Math.round(displayExpenses).toLocaleString()}</span>
             </div>
           }
         />
