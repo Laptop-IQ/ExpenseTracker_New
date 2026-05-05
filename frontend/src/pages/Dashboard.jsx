@@ -79,16 +79,13 @@ const Dashboard = () => {
   const timeFrameRange = useMemo(() => getTimeFrameRange(timeFrame), [timeFrame]);
   const prevTimeFrameRange = useMemo(() => getPreviousTimeFrameRange(timeFrame), [timeFrame]);
 
-  const isDateInRange = (date, start, end) => {
-    const transactionDate = new Date(date);
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    transactionDate.setHours(0, 0, 0, 0);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-    
-    return transactionDate >= startDate && transactionDate <= endDate;
-  };
+const isDateInRange = (date, start, end) => {
+  const d = new Date(date).getTime();
+  const s = new Date(start).setHours(0, 0, 0, 0);
+  const e = new Date(end).setHours(23, 59, 59, 999);
+
+  return d >= s && d <= e;
+};
 
   const filteredTransactions = useMemo(
     () => (outletTransactions || []).filter((t) => 
@@ -135,25 +132,38 @@ const displayIncome =
     ? overviewMeta.monthlyIncome
     : currentTimeFrameData.income;
 
-const displayExpenses =
-  timeFrame === "monthly" && typeof overviewMeta.monthlyExpense === "number"
-    ? overviewMeta.monthlyExpense
-    : currentTimeFrameData.expenses;
+const displayExpenses = useMemo(() => {
+  if (timeFrame === "monthly") {
+    return currentTimeFrameData.expenses; // same source as prev
+  }
+  return currentTimeFrameData.expenses;
+}, [timeFrame, currentTimeFrameData.expenses]);
 
 const displaySavings =
   timeFrame === "monthly" && typeof overviewMeta.savings === "number"
     ? overviewMeta.savings
     : currentTimeFrameData.savings;
 
-  const expenseChange = useMemo(() => {
-    const prev = prevTimeFrameData.expenses;
-    const curr = displayExpenses;
-    if (!prev) {
-      if (!curr) return 0;
-      return 100;
+const expenseChange = useMemo(() => {
+  let prev;
+
+  if (timeFrame === "monthly") {
+    prev = overviewMeta.previousMonthExpense;
+
+    // fallback
+    if (!prev || prev === 0) {
+      prev = prevTimeFrameData.expenses;
     }
-    return Math.round(((curr - prev) / prev) * 100);
-  }, [prevTimeFrameData, displayExpenses]);
+  } else {
+    prev = prevTimeFrameData.expenses;
+  }
+
+  const curr = displayExpenses;
+
+  if (!prev) return 0;
+
+  return Math.round(((curr - prev) / prev) * 100);
+}, [overviewMeta, prevTimeFrameData, displayExpenses, timeFrame]);
 
   const financialOverviewData = useMemo(() => {
     if (
@@ -266,10 +276,17 @@ const displaySavings =
           ...prev,
           monthlyIncome: Number(data.monthlyIncome || 0),
           monthlyExpense: Number(data.monthlyExpense || 0),
+
+          // ✅ ADD THIS
+          previousMonthIncome: Number(data.previousMonthIncome || 0),
+          previousMonthExpense: Number(data.previousMonthExpense || 0),
+          previousMonthSavings: Number(data.previousMonthSavings || 0),
+
           savings:
             typeof data.savings !== "undefined"
               ? Number(data.savings)
-              : Number(data.monthlyIncome || 0) - Number(data.monthlyExpense || 0),
+              : Number(data.monthlyIncome || 0) -
+                Number(data.monthlyExpense || 0),
           savingsRate:
             typeof data.savingsRate !== "undefined" ? data.savingsRate : null,
           spendByCategory: data.spendByCategory || {},
@@ -306,9 +323,11 @@ const displaySavings =
       setLoading(false);
     }
   };
-  useEffect(() => {
+useEffect(() => {
+  if (timeFrame === "monthly") {
     fetchDashboardOverview();
-  }, [timeFrame]);
+  }
+}, [timeFrame]);
 
 const handleAddTransaction = async () => {
   if (!newTransaction.description || !newTransaction.amount) return;
@@ -449,19 +468,31 @@ const renderCustomizedLabel = ({
           additionalContent={
             <div
               className={`mt-2 text-xs flex items-center gap-1 ${
-                expenseChange >= 0 ? trendStyles.positive : trendStyles.negative
+                expenseChange === null
+                  ? ""
+                  : expenseChange >= 0
+                    ? trendStyles.positive
+                    : trendStyles.negative
               }`}
             >
-              {expenseChange >= 0 ? (
+              {expenseChange === null ? null : expenseChange >= 0 ? (
                 <TrendingUp className="w-4 h-4" />
               ) : (
                 <TrendingDown className="w-4 h-4" />
               )}
-              <span>
-                {Math.abs(expenseChange)}%{" "}
-                {expenseChange >= 0 ? "increase" : "decrease"} from{" "}
-                {prevTimeFrameRange.label}
-              </span>
+              <div className="flex flex-col">
+                <span className="text-gray-500 text-[11px]">
+                  {prevTimeFrameRange.label}: ₹
+                  {Math.round(
+                    timeFrame === "monthly"
+                      ? overviewMeta.previousMonthExpense &&
+                        overviewMeta.previousMonthExpense !== 0
+                        ? overviewMeta.previousMonthExpense
+                        : prevTimeFrameData.expenses
+                      : prevTimeFrameData.expenses,
+                  ).toLocaleString()}
+                </span>
+              </div>
             </div>
           }
         />

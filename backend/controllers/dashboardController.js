@@ -5,43 +5,41 @@ export async function getDashboardOverview(req, res) {
   const userId = req.user._id;
 
   const now = new Date();
+
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  try {
-    // =========================
-    // 1. TOTAL INCOME (MONTH)
-    // =========================
-    const incomeAgg = await Income.aggregate([
-      {
-        $match: {
-          userId,
-          date: { $gte: startOfMonth, $lte: now },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$amount" },
-        },
-      },
-    ]);
+  const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfPrevMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    0,
+    23,
+    59,
+    59,
+  );
 
-    // =========================
-    // 2. TOTAL EXPENSE (MONTH)
-    // =========================
-    const expenseAgg = await Expense.aggregate([
-      {
-        $match: {
-          userId,
-          date: { $gte: startOfMonth, $lte: now },
+  try {
+    // ================= CURRENT MONTH =================
+
+    const [incomeAgg, expenseAgg] = await Promise.all([
+      Income.aggregate([
+        {
+          $match: {
+            userId,
+            date: { $gte: startOfMonth, $lte: now },
+          },
         },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$amount" },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      Expense.aggregate([
+        {
+          $match: {
+            userId,
+            date: { $gte: startOfMonth, $lte: now },
+          },
         },
-      },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
     ]);
 
     const monthlyIncome = incomeAgg[0]?.total || 0;
@@ -52,47 +50,62 @@ export async function getDashboardOverview(req, res) {
     const savingsRate =
       monthlyIncome === 0 ? 0 : Math.round((savings / monthlyIncome) * 100);
 
-    // =========================
-    // 3. RECENT INCOME
-    // =========================
-    const recentIncome = await Income.find({
-      userId,
-      date: { $gte: startOfMonth, $lte: now },
-    })
-      .sort({ date: -1 })
-      .limit(10)
-      .lean();
+    // ================= PREVIOUS MONTH =================
 
-    // =========================
-    // 4. RECENT EXPENSE
-    // =========================
-    const recentExpense = await Expense.find({
-      userId,
-      date: { $gte: startOfMonth, $lte: now },
-    })
-      .sort({ date: -1 })
-      .limit(10)
-      .lean();
+    const [prevIncomeAgg, prevExpenseAgg] = await Promise.all([
+      Income.aggregate([
+        {
+          $match: {
+            userId,
+            date: { $gte: startOfPrevMonth, $lte: endOfPrevMonth },
+          },
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      Expense.aggregate([
+        {
+          $match: {
+            userId,
+            date: { $gte: startOfPrevMonth, $lte: endOfPrevMonth },
+          },
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+    ]);
 
-    // =========================
-    // 5. MERGE TRANSACTIONS
-    // =========================
+    const previousMonthIncome = prevIncomeAgg[0]?.total || 0;
+    const previousMonthExpense = prevExpenseAgg[0]?.total || 0;
+    const previousMonthSavings = previousMonthIncome - previousMonthExpense;
+
+    // ================= RECENT =================
+
+    const [recentIncome, recentExpense] = await Promise.all([
+      Income.find({
+        userId,
+        date: { $gte: startOfMonth, $lte: now },
+      })
+        .sort({ date: -1 })
+        .limit(10)
+        .lean(),
+
+      Expense.find({
+        userId,
+        date: { $gte: startOfMonth, $lte: now },
+      })
+        .sort({ date: -1 })
+        .limit(10)
+        .lean(),
+    ]);
+
     const recentTransactions = [
-      ...recentIncome.map((i) => ({
-        ...i,
-        type: "income",
-      })),
-      ...recentExpense.map((e) => ({
-        ...e,
-        type: "expense",
-      })),
+      ...recentIncome.map((i) => ({ ...i, type: "income" })),
+      ...recentExpense.map((e) => ({ ...e, type: "expense" })),
     ]
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 10);
 
-    // =========================
-    // 6. EXPENSE BY CATEGORY
-    // =========================
+    // ================= CATEGORY =================
+
     const categoryAgg = await Expense.aggregate([
       {
         $match: {
@@ -115,9 +128,8 @@ export async function getDashboardOverview(req, res) {
         monthlyExpense === 0 ? 0 : Math.round((total / monthlyExpense) * 100),
     }));
 
-    // =========================
-    // RESPONSE
-    // =========================
+    // ================= RESPONSE =================
+
     return res.status(200).json({
       success: true,
       data: {
@@ -125,6 +137,11 @@ export async function getDashboardOverview(req, res) {
         monthlyExpense,
         savings,
         savingsRate,
+
+        previousMonthIncome,
+        previousMonthExpense,
+        previousMonthSavings,
+
         recentTransactions,
         expenseDistribution,
       },

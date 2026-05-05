@@ -332,15 +332,17 @@ const Layout = ({ onLogout, user }) => {
      };
    }, [transactions]);
 
-     const timeFrameLabel = useMemo(
-       () =>
-         timeFrame === "daily"
-           ? "Today"
-           : timeFrame === "weekly"
-             ? "This Week"
-             : "This Month",
-       [timeFrame],
-     );
+    const timeFrameLabel = useMemo(
+      () =>
+        timeFrame === "daily"
+          ? "Today"
+          : timeFrame === "weekly"
+            ? "This Week"
+            : timeFrame === "yearly"
+              ? "This Year"
+              : "This Month",
+      [timeFrame],
+    );
 
      const outletContext = {
        transactions: filteredTransactions,
