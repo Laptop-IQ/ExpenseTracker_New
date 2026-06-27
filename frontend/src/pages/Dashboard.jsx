@@ -511,7 +511,7 @@ function PieTooltip({ active, payload }) {
       style={{ background: "#0d1526", border: "1px solid #1e2d4a" }}
     >
       <p className="text-[10px] mb-0.5" style={{ color: "#4a5568" }}>
-        {payload[0].name}
+        {payload[0].name?.replace(/_/g, " ")}
       </p>
       <p
         className="text-sm font-bold tabular-nums"
@@ -681,6 +681,323 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   );
 }
 
+/* ── Budget Breakdown (interactive hover) ───────────────────────────────── */
+function BudgetBreakdown({ sortedPieData, pieTotal, displayExpenses }) {
+  const [activeIndex, setActiveIndex] = useState(null);
+  const listRef = useRef(null);
+  const rowRefs = useRef([]);
+
+  // When pie slice hovered → scroll that row into view
+  const handlePieEnter = useCallback((_, index) => {
+    setActiveIndex(index);
+    const el = rowRefs.current[index];
+    if (el && listRef.current) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
+  const handlePieLeave = useCallback(() => setActiveIndex(null), []);
+
+  const emptyData = [{ name: "Empty", value: 1 }];
+  const chartData = sortedPieData.length > 0 ? sortedPieData : emptyData;
+
+  return (
+    <div
+      className="dash-in-2 rounded-2xl p-5"
+      style={{
+        background: "#0E1320",
+        border: "1px solid #1a2035",
+        boxShadow: "0 4px 32px rgba(0,0,0,0.4)",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
+      >
+        <h3
+          style={{
+            color: "#c9d1e8",
+            fontSize: 14,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            margin: 0,
+          }}
+        >
+          <PieChartIcon size={14} color="#7c3aed" /> Budget breakdown
+        </h3>
+        <button
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#0a0f1e",
+            border: "1px solid #1a2035",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.borderColor = "#7c3aed40")
+          }
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#1a2035")}
+        >
+          <ArrowUpRight size={13} color="#374151" />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          height: 230,
+          alignItems: "center",
+        }}
+      >
+        {/* LEFT 50% — Pie */}
+        <div
+          style={{
+            width: "50%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ position: "relative", width: 210, height: 210 }}>
+            <PieChart width={210} height={210}>
+              <Pie
+                data={chartData}
+                cx={105}
+                cy={105}
+                innerRadius={60}
+                outerRadius={90}
+                paddingAngle={sortedPieData.length > 0 ? 3 : 0}
+                dataKey="value"
+                onMouseEnter={handlePieEnter}
+                onMouseLeave={handlePieLeave}
+                isAnimationActive={true}
+              >
+                {chartData.map((_, i) => {
+                  const isActive = activeIndex === i;
+                  const color =
+                    sortedPieData.length > 0
+                      ? VIOLET_SHADES[i % VIOLET_SHADES.length]
+                      : "#1a2035";
+                  return (
+                    <Cell
+                      key={i}
+                      fill={color}
+                      stroke={isActive ? "#fff" : "#0E1320"}
+                      strokeWidth={isActive ? 2 : 1.5}
+                      opacity={activeIndex === null || isActive ? 1 : 0.35}
+                      style={{ cursor: "pointer", transition: "opacity 0.15s" }}
+                    />
+                  );
+                })}
+              </Pie>
+            </PieChart>
+
+            {/* Center label — shows hovered category or total */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              {activeIndex !== null && sortedPieData[activeIndex] ? (
+                <>
+                  <p
+                    style={{
+                      color: VIOLET_SHADES[activeIndex % VIOLET_SHADES.length],
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.12em",
+                      textTransform: "uppercase",
+                      margin: 0,
+                      maxWidth: 80,
+                      textAlign: "center",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {sortedPieData[activeIndex].name?.replace(/_/g, " ")}
+                  </p>
+                  <p
+                    style={{
+                      color: "#e2e8f0",
+                      fontSize: 15,
+                      fontWeight: 800,
+                      margin: "2px 0 0",
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    {fmtINR(sortedPieData[activeIndex].value)}
+                  </p>
+                  <p style={{ color: "#6b7280", fontSize: 10, margin: 0 }}>
+                    {pieTotal > 0
+                      ? Math.round(
+                          (sortedPieData[activeIndex].value / pieTotal) * 100,
+                        )
+                      : 0}
+                    %
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p
+                    style={{
+                      color: "#374151",
+                      fontSize: 9,
+                      fontWeight: 600,
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      margin: 0,
+                    }}
+                  >
+                    Total
+                  </p>
+                  <p
+                    style={{
+                      color: "#e2e8f0",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      margin: 0,
+                    }}
+                  >
+                    {fmtINR(displayExpenses)}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{
+            width: 1,
+            height: "85%",
+            background: "#1a2035",
+            flexShrink: 0,
+          }}
+        />
+
+        {/* RIGHT 50% — sorted single-column list */}
+        <div
+          ref={listRef}
+          style={{
+            width: "50%",
+            height: "100%",
+            overflowY: "auto",
+            paddingLeft: 20,
+            paddingRight: 6,
+            flexShrink: 0,
+          }}
+        >
+          {sortedPieData.length > 0 ? (
+            sortedPieData.map((item, i) => {
+              const pct =
+                pieTotal > 0 ? Math.round((item.value / pieTotal) * 100) : 0;
+              const color = VIOLET_SHADES[i % VIOLET_SHADES.length];
+              const isActive = activeIndex === i;
+              return (
+                <div
+                  key={item.name}
+                  ref={(el) => (rowRefs.current[i] = el)}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingTop: 8,
+                    paddingBottom: 8,
+                    paddingLeft: 8,
+                    paddingRight: 8,
+                    borderBottom: "1px solid #0f1729",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    background: isActive ? `${color}12` : "transparent",
+                    transition: "background 0.15s",
+                  }}
+                >
+                  {/* Color dot */}
+                  <span
+                    style={{
+                      width: isActive ? 10 : 8,
+                      height: isActive ? 10 : 8,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background: color,
+                      boxShadow: isActive ? `0 0 6px ${color}` : "none",
+                      transition: "all 0.15s",
+                    }}
+                  />
+                  {/* Category name */}
+                  <span
+                    style={{
+                      fontSize: 11,
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      color: isActive ? "#e2e8f0" : "#6b7280",
+                      fontWeight: isActive ? 600 : 400,
+                      transition: "color 0.15s",
+                    }}
+                  >
+                    {item.name?.replace(/_/g, " ")}
+                  </span>
+                  {/* Pct + value */}
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      fontVariantNumeric: "tabular-nums",
+                      color: isActive ? color : "#9ca3af",
+                      transition: "color 0.15s",
+                    }}
+                  >
+                    {pct}% · {fmtINR(item.value)}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <div
+              style={{
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <p style={{ color: "#1e2d4a", fontSize: 14 }}>No expense data</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Dashboard ───────────────────────────────────────────────────────────── */
 const Dashboard = () => {
   const {
@@ -699,11 +1016,9 @@ const Dashboard = () => {
   const [showAllExpense, setShowAllExpense] = useState(false);
   const [toasts, setToasts] = useState([]);
 
-  // Real saving goals (from /goals API)
   const [savingGoals, setSavingGoals] = useState([]);
   const [goalsLoading, setGoalsLoading] = useState(true);
 
-  // Pop-out modal states
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
 
@@ -728,7 +1043,6 @@ const Dashboard = () => {
     return d >= s && d <= e;
   }, []);
 
-  // previous_year range computed inline (Jan 1 – Dec 31 of last year)
   const previousYearRange = useMemo(() => {
     const prevYear = new Date().getFullYear() - 1;
     return {
@@ -952,7 +1266,6 @@ const Dashboard = () => {
     if (timeFrame === "monthly") fetchDashboardOverview();
   }, [timeFrame, fetchDashboardOverview]);
 
-  // ── Saving goals (real data from /goals) ──────────────────────────────
   const fetchSavingGoals = useCallback(async () => {
     setGoalsLoading(true);
     try {
@@ -1267,136 +1580,21 @@ const Dashboard = () => {
         </div>
 
         {/* ── Budget pie ───────────────────────────────────────────────── */}
-        <div
-          className="dash-in-2 rounded-2xl p-5"
-          style={{
-            background: "#0E1320",
-            border: "1px solid #1a2035",
-            boxShadow: "0 4px 32px rgba(0,0,0,0.4)",
-          }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3
-              className="text-sm font-semibold flex items-center gap-2"
-              style={{ color: "#c9d1e8" }}
-            >
-              <PieChartIcon size={14} color="#7c3aed" /> Budget breakdown
-            </h3>
-            <button
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-              style={{ background: "#0a0f1e", border: "1px solid #1a2035" }}
-            >
-              <ArrowUpRight size={13} color="#374151" />
-            </button>
-          </div>
+        {(() => {
+          // sort descending by value, keep original index for color
+          const sortedPieData = [...pieData]
+            .map((item, originalIndex) => ({ ...item, originalIndex }))
+            .sort((a, b) => b.value - a.value);
+          const pieTotal = sortedPieData.reduce((s, d) => s + d.value, 0);
 
-          <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
-            <div
-              className="relative shrink-0"
-              style={{ width: 200, height: 200 }}
-            >
-              <ResponsiveContainer width={200} height={200}>
-                <PieChart>
-                  <Pie
-                    data={
-                      pieData.length > 0
-                        ? pieData
-                        : [{ name: "Empty", value: 1 }]
-                    }
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="56%"
-                    outerRadius="80%"
-                    paddingAngle={3}
-                    dataKey="value"
-                    labelLine={false}
-                  >
-                    {(pieData.length > 0
-                      ? pieData
-                      : [{ name: "Empty", value: 1 }]
-                    ).map((_, i) => (
-                      <Cell
-                        key={i}
-                        fill={
-                          pieData.length > 0
-                            ? VIOLET_SHADES[i % VIOLET_SHADES.length]
-                            : "#1a2035"
-                        }
-                        stroke="#0E1320"
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
-                  {pieData.length > 0 && <Tooltip content={<PieTooltip />} />}
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                <p
-                  className="text-[9px] font-semibold uppercase tracking-widest"
-                  style={{ color: "#374151" }}
-                >
-                  Total
-                </p>
-                <p
-                  className="text-sm font-bold tabular-nums"
-                  style={{ color: "#e2e8f0" }}
-                >
-                  {fmtINR(displayExpenses)}
-                </p>
-              </div>
-            </div>
-
-            {pieData.length > 0 ? (
-              <div className="flex-1 w-full">
-                <div
-                  className="grid gap-x-6 gap-y-2"
-                  style={{
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(160px, 1fr))",
-                  }}
-                >
-                  {pieData.map((item, i) => {
-                    const total = pieData.reduce((s, d) => s + d.value, 0);
-                    const pct =
-                      total > 0 ? Math.round((item.value / total) * 100) : 0;
-                    return (
-                      <div
-                        key={item.name}
-                        className="flex items-center gap-2 py-1.5"
-                        style={{ borderBottom: "1px solid #0f1729" }}
-                      >
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{
-                            background: VIOLET_SHADES[i % VIOLET_SHADES.length],
-                          }}
-                        />
-                        <span
-                          className="text-[11px] flex-1 truncate"
-                          style={{ color: "#374151" }}
-                        >
-                          {item.name}
-                        </span>
-                        <span
-                          className="text-[11px] font-bold tabular-nums shrink-0"
-                          style={{ color: "#9ca3af" }}
-                        >
-                          {pct}% · {fmtINR(item.value)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center py-8">
-                <p className="text-sm" style={{ color: "#1e2d4a" }}>
-                  No expense data
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+          return (
+            <BudgetBreakdown
+              sortedPieData={sortedPieData}
+              pieTotal={pieTotal}
+              displayExpenses={displayExpenses}
+            />
+          );
+        })()}
 
         {/* ── Recent transactions ──────────────────────────────────────── */}
         <div
