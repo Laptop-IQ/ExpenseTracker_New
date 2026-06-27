@@ -1,7 +1,20 @@
 import React, { memo, useCallback, useState, useEffect } from "react";
-import { profileStyles } from "../assets/dummyStyles";
 import Modal from "react-modal";
-import { Eye, EyeOff, User, X, Lock, Camera, Trash2 } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  User,
+  X,
+  Lock,
+  Camera,
+  Trash2,
+  Check,
+  AlertCircle,
+  Shield,
+  LogOut,
+  Edit3,
+  Save,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Cropper from "react-easy-crop";
@@ -13,49 +26,94 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 Modal.setAppElement("#root");
 
-// Password Input (memoized)
-const PasswordInput = memo(
-  ({ name, label, value, error, showField, onToggle, onChange, disabled }) => (
-    <div>
-      <label className={profileStyles.passwordLabel}>{label}</label>
-      <div className={profileStyles.passwordContainer}>
-        <input
-          type={showField ? "text" : "password"}
-          name={name}
-          value={value}
-          onChange={onChange}
-          className={`${profileStyles.inputWithError} ${
-            error ? "border-red-300" : "border-gray-200"
-          }`}
-          placeholder={`Enter ${label.toLowerCase()}`}
-          disabled={disabled}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className={profileStyles.passwordToggle}
-          disabled={disabled}
-        >
-          {showField ? (
-            <EyeOff className="w-5 h-5" />
-          ) : (
-            <Eye className="w-5 h-5" />
-          )}
-        </button>
-      </div>
-      {error && <p className={profileStyles.errorText}>{error}</p>}
-    </div>
-  ),
-);
+/* ── Dark input style helper ──────────────────────────────────────────────── */
+function darkInput(hasError = false, focused = false) {
+  return {
+    background: hasError
+      ? "rgba(239,68,68,0.07)"
+      : focused
+        ? "#0d1526"
+        : "#0a0f1e",
+    border: `1px solid ${hasError ? "#ef444450" : focused ? "#7c3aed60" : "#1a2035"}`,
+    borderRadius: 12,
+    color: "#e2e8f0",
+    outline: "none",
+    transition: "all 0.2s",
+    boxShadow: focused && !hasError ? "0 0 0 3px #7c3aed12" : "none",
+    width: "100%",
+    padding: "10px 14px",
+    fontSize: 14,
+  };
+}
 
+/* ── Password Input ────────────────────────────────────────────────────────── */
+const PasswordInput = memo(
+  ({ name, label, value, error, showField, onToggle, onChange, disabled }) => {
+    const [focused, setFocused] = useState(false);
+    return (
+      <div>
+        <label
+          style={{
+            display: "block",
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+            color: "#374151",
+            marginBottom: 6,
+          }}
+        >
+          {label}
+        </label>
+        <div style={{ position: "relative" }}>
+          <input
+            type={showField ? "text" : "password"}
+            name={name}
+            value={value}
+            onChange={onChange}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder={`Enter ${label.toLowerCase()}`}
+            disabled={disabled}
+            style={{ ...darkInput(!!error, focused), paddingRight: 44 }}
+          />
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={disabled}
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#4a5568",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {showField ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+        {error && (
+          <p style={{ color: "#ef4444", fontSize: 10, marginTop: 4 }}>
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  },
+);
 PasswordInput.displayName = "PasswordInput";
 
+/* ── Profile ───────────────────────────────────────────────────────────────── */
 const Profile = ({ onUpdateProfile, onLogout }) => {
   const navigate = useNavigate();
   const [user, setUser] = useState({ name: "", email: "", joinDate: "" });
   const [tempUser, setTempUser] = useState({ ...user });
   const [editMode, setEditMode] = useState(false);
-  const token = localStorage.getItem("token");
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
     current: "",
@@ -69,6 +127,7 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
   });
   const [passwordErrors, setPasswordErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const [profileImage, setProfileImage] = useState(null);
   const [previewImage, setPreviewImage] = useState("");
@@ -77,8 +136,8 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
   const getAuthToken = useCallback(() => localStorage.getItem("token"), []);
+  const { addNotification, removeNotification } = useNotifications();
 
-  // Generic API request
   const handleApiRequest = useCallback(
     async (method, endpoint, data = null) => {
       const token = getAuthToken();
@@ -97,7 +156,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
         const response = await axios(config);
         return response.data;
       } catch (error) {
-        console.error(`${method} request error:`, error);
         if (error.response?.status === 401) navigate("/login");
         throw error;
       } finally {
@@ -107,9 +165,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
     [getAuthToken, navigate],
   );
 
-  const { addNotification, removeNotification } = useNotifications();
-
-  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -126,7 +181,22 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
     fetchUserData();
   }, [handleApiRequest]);
 
-  // Input handlers
+  useEffect(() => {
+    const savedUser = JSON.parse(localStorage.getItem("user"));
+    if (savedUser) setUser(savedUser);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("user", JSON.stringify(user));
+  }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (previewImage) URL.revokeObjectURL(previewImage);
+      if (profileImage) URL.revokeObjectURL(profileImage);
+    };
+  }, [previewImage, profileImage]);
+
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setTempUser((prev) => ({ ...prev, [name]: value }));
@@ -155,19 +225,18 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
         setEditMode(false);
         addNotification("Profile updated successfully");
       }
-    } catch (err) {
+    } catch {
       addNotification("Failed to update profile");
     }
   };
 
   const compressImage = async (file) => {
     try {
-      const options = {
+      return await imageCompression(file, {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 800,
         useWebWorker: true,
-      };
-      return await imageCompression(file, options);
+      });
     } catch {
       return file;
     }
@@ -175,19 +244,14 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
 
   const handleImageChange = async (eOrFile) => {
     const file = eOrFile?.target?.files ? eOrFile.target.files[0] : eOrFile;
-
     if (!file) return;
-
     const compressed = await compressImage(file);
-
     setProfileImage(compressed);
     setPreviewImage(URL.createObjectURL(compressed));
     setEditMode(true);
   };
 
-  // Cropper
-  const onCropComplete = (croppedArea, croppedAreaPixels) =>
-    setCroppedAreaPixels(croppedAreaPixels);
+  const onCropComplete = (_, cap) => setCroppedAreaPixels(cap);
 
   const getCroppedImg = async (imageSrc, crop) => {
     const image = new Image();
@@ -213,50 +277,31 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
     );
   };
 
-  useEffect(
-    () => () => {
-      if (previewImage) URL.revokeObjectURL(previewImage);
-    },
-    [previewImage],
-  );
-
   const handleImageUpload = async (e) => {
     e.preventDefault();
     if (!profileImage || !croppedAreaPixels) {
       addNotification("Please select and crop an image first");
       return;
     }
-
     setLoading(true);
-
     try {
-      // 1️⃣ Crop the image
       const croppedBlob = await getCroppedImg(previewImage, croppedAreaPixels);
       if (!croppedBlob) throw new Error("Failed to crop image");
-
-      // 2️⃣ Prepare Cloudinary FormData
       const formData = new FormData();
       formData.append("file", croppedBlob, "profile.jpg");
-
       const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
       if (!uploadPreset || !cloudName)
         throw new Error("Cloudinary config missing");
-
       formData.append("upload_preset", uploadPreset);
-
-      // 3️⃣ Upload to Cloudinary
       const cloudRes = await axios.post(
         `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
         formData,
       );
-
       const imageUrl = cloudRes.data.secure_url;
       if (!imageUrl) throw new Error("Cloudinary did not return image URL");
-
-      // 4️⃣ Send URL + name + email to backend
       const token = localStorage.getItem("token");
-      const backendRes = await axios.put(
+      await axios.put(
         `${API_BASE}/user/profile`,
         {
           profilePic: imageUrl,
@@ -270,8 +315,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
           },
         },
       );
-
-      // 5️⃣ Update UI immediately
       setUser((prev) => ({ ...prev, profilePic: imageUrl }));
       setTempUser((prev) => ({ ...prev, profilePic: imageUrl }));
       setProfileImage(null);
@@ -279,7 +322,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
       setEditMode(false);
       addNotification("Profile image updated successfully!");
     } catch (err) {
-      console.error("Upload error:", err);
       addNotification("Upload failed");
     } finally {
       setLoading(false);
@@ -288,39 +330,18 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    handleImageChange(file);
+    handleImageChange(e.dataTransfer.files[0]);
   };
-
   const handleDragOver = (e) => e.preventDefault();
-
   const handleCancelImageEdit = () => {
     setPreviewImage("");
     setProfileImage(null);
   };
-
-  useEffect(() => {
-    const savedUser = JSON.parse(localStorage.getItem("user"));
-    if (savedUser) setUser(savedUser);
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("user", JSON.stringify(user));
-  }, [user]);
-
-  useEffect(() => {
-    return () => {
-      if (previewImage) URL.revokeObjectURL(previewImage);
-      if (profileImage) URL.revokeObjectURL(profileImage);
-    };
-  }, [previewImage, profileImage]);
-
   const handleCancelEdit = useCallback(() => {
     setTempUser(user);
     setEditMode(false);
   }, [user]);
 
-  // Password validation
   const validatePassword = useCallback(() => {
     const errors = {};
     if (!passwordData.current) errors.current = "Current password is required";
@@ -346,7 +367,7 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
       setPasswordData({ current: "", new: "", confirm: "" });
       setPasswordErrors({});
       setShowPassword({ current: false, new: false, confirm: false });
-    } catch (error) {
+    } catch {
       addNotification("Failed to change password");
     }
   };
@@ -365,87 +386,401 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
     }
   }, [loading]);
 
-const handleRemoveProfilePic = () => {
-  const id = Date.now();
-
-  addNotification(
-    <div className="flex flex-row sm:flex-row items-center gap-3">
-      <p className="flex-1 text-sm font-medium">
-        Are you sure you want to remove your profile picture?
-      </p>
-
-      <div className="flex gap-2 mt-2 sm:mt-0">
+  const handleRemoveProfilePic = () => {
+    const id = Date.now();
+    addNotification(
+      <div className="flex flex-row items-center gap-3">
+        <p className="flex-1 text-sm font-medium">
+          Remove your profile picture?
+        </p>
         <button
           onClick={async () => {
             try {
               const token = localStorage.getItem("token");
-
               await axios.delete(`${API_BASE}/user/profile/photo`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
-
               setUser((prev) => ({ ...prev, profilePic: "" }));
               setTempUser((prev) => ({ ...prev, profilePic: "" }));
-
               addNotification("Profile image removed!", "success");
-            } catch (err) {
+            } catch {
               addNotification("Failed to remove image", "error");
             } finally {
-              removeNotification(id); // ✅ now works
+              removeNotification(id);
             }
           }}
           className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
         >
           Confirm
         </button>
-      </div>
-    </div>,
-    "warning",
-    { id, duration: 0 }, // ✅ IMPORTANT
-  );
-};
+      </div>,
+      "warning",
+      { id, duration: 0 },
+    );
+  };
+
+  /* ── Avatar initials ──────────────────────────────────────────────────── */
+  const initials = user.name
+    ? user.name
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
 
   return (
-    <div className={profileStyles.container}>
-      <div className={profileStyles.mainContainer}>
-        <div className={profileStyles.header}>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        .profile-root * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+
+        @keyframes fadeUp {
+          from { transform: translateY(16px); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+        @keyframes avatarPop {
+          from { transform: scale(0.88); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+        @keyframes modalIn {
+          from { transform: translateY(16px) scale(0.98); opacity: 0; }
+          to   { transform: translateY(0)    scale(1);    opacity: 1; }
+        }
+
+        .fade-up   { animation: fadeUp 0.4s ease both; }
+        .fade-up-2 { animation: fadeUp 0.4s 0.08s ease both; }
+        .fade-up-3 { animation: fadeUp 0.4s 0.16s ease both; }
+        .avatar-pop { animation: avatarPop 0.5s cubic-bezier(0.34,1.4,0.64,1) both; }
+
+        .profile-root ::-webkit-scrollbar       { width: 4px; }
+        .profile-root ::-webkit-scrollbar-track { background: #080B12; }
+        .profile-root ::-webkit-scrollbar-thumb { background: #1e2d4a; border-radius: 2px; }
+
+        .profile-card {
+          background: #0E1320;
+          border: 1px solid #1a2035;
+          border-radius: 20px;
+          box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+        }
+        .profile-input {
+          background: #0a0f1e;
+          border: 1px solid #1a2035;
+          border-radius: 12px;
+          color: #e2e8f0;
+          outline: none;
+          transition: all 0.2s;
+          width: 100%;
+          padding: 10px 14px;
+          font-size: 14px;
+        }
+        .profile-input:focus {
+          background: #0d1526;
+          border-color: #7c3aed60;
+          box-shadow: 0 0 0 3px #7c3aed12;
+        }
+        .profile-input::placeholder { color: #374151; }
+
+        .dark-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(4,6,12,0.80);
+          backdrop-filter: blur(12px);
+          z-index: 9998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .dark-modal-content {
+          background: #0d1526;
+          border: 1px solid #1a2035;
+          border-top: 3px solid #7c3aed;
+          border-radius: 20px;
+          width: 100%;
+          max-width: 420px;
+          box-shadow: 0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(124,58,237,0.12);
+          animation: modalIn 0.28s cubic-bezier(0.34,1.1,0.64,1) both;
+        }
+        .avatar-hover-overlay {
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.55);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          opacity: 0;
+          transition: opacity 0.25s ease;
+        }
+        .avatar-wrapper:hover .avatar-hover-overlay { opacity: 1; }
+
+        .icon-btn {
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          border: none; cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .icon-btn:active { transform: scale(0.9); }
+
+        .stat-pill {
+          background: #0a0f1e;
+          border: 1px solid #1a2035;
+          border-radius: 12px;
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      `}</style>
+
+      <div
+        className="profile-root"
+        style={{
+          minHeight: "100vh",
+          background: "#080B12",
+          color: "#e2e8f0",
+          padding: "24px 16px",
+        }}
+      >
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          {/* ── Hero / Avatar section ─────────────────────────────────── */}
           <div
-            className="relative group w-24 h-24"
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
+            className="profile-card fade-up"
+            style={{
+              padding: "40px 32px 32px",
+              marginBottom: 20,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
           >
-            {/* Profile Image */}
-            <div className={profileStyles.avatar}>
+            {/* Background glow */}
+            <div
+              style={{
+                position: "absolute",
+                top: -60,
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 300,
+                height: 300,
+                background:
+                  "radial-gradient(circle, #7c3aed18 0%, transparent 70%)",
+                pointerEvents: "none",
+              }}
+            />
+
+            {/* Avatar */}
+            <div
+              className="avatar-pop avatar-wrapper"
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              style={{
+                position: "relative",
+                width: 100,
+                height: 100,
+                marginBottom: 16,
+                flexShrink: 0,
+              }}
+            >
               {user.profilePic ? (
                 <img
-                  src={previewImage || user.profilePic || ""}
+                  src={user.profilePic}
                   alt="Profile"
-                  className="w-40 h-40 mx-1 mb-20 object-cover rounded-lg border-3 blur-box border-amber-50"
+                  style={{
+                    width: 100,
+                    height: 100,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "3px solid #7c3aed50",
+                    boxShadow: "0 0 24px #7c3aed30",
+                  }}
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-gray-200 -mt-16 flex items-center justify-center">
-                  <User className="w-12 h-12 text-gray-400" />
+                <div
+                  style={{
+                    width: 100,
+                    height: 100,
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #7c3aed, #9333ea)",
+                    border: "3px solid #7c3aed50",
+                    boxShadow: "0 0 24px #7c3aed30",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 32,
+                    fontWeight: 800,
+                    color: "#fff",
+                    letterSpacing: "-1px",
+                  }}
+                >
+                  {initials}
                 </div>
               )}
+
+              {/* Hover overlay */}
+              <div className="avatar-hover-overlay">
+                <label
+                  className="icon-btn"
+                  style={{
+                    background: "rgba(255,255,255,0.15)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Camera size={16} color="#fff" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                {user.profilePic && (
+                  <button
+                    className="icon-btn"
+                    onClick={handleRemoveProfilePic}
+                    style={{ background: "rgba(239,68,68,0.25)" }}
+                  >
+                    <Trash2 size={16} color="#fca5a5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {previewImage && (
-              <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-                <div className="bg-white rounded-xl p-4 w-[320px] shadow-xl">
-                  {/* Crop Area */}
-                  <div className="relative w-full h-64 bg-black rounded-lg overflow-hidden">
-                    <Cropper
-                      image={previewImage}
-                      crop={crop}
-                      zoom={zoom}
-                      aspect={1}
-                      onCropChange={setCrop}
-                      onZoomChange={setZoom}
-                      onCropComplete={onCropComplete}
-                    />
-                  </div>
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                color: "#f0f4ff",
+                marginBottom: 4,
+                letterSpacing: "-0.5px",
+              }}
+            >
+              {user.name || "Loading…"}
+            </h1>
+            <p style={{ fontSize: 13, color: "#374151", marginBottom: 20 }}>
+              {user.email || "Loading…"}
+            </p>
 
-                  {/* Zoom */}
+            {/* Stats row */}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                justifyContent: "center",
+              }}
+            >
+              {[
+                {
+                  label: "Member since",
+                  value: user.joinDate
+                    ? new Date(user.joinDate).getFullYear()
+                    : "—",
+                  color: "#7c3aed",
+                },
+                { label: "Status", value: "Active", color: "#1AFFD5" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="stat-pill">
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: 11, color: "#4a5568" }}>
+                    {label}
+                  </span>
+                  <span
+                    style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af" }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Image crop modal ─────────────────────────────────────── */}
+          {previewImage && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 9999,
+                background: "rgba(4,6,12,0.88)",
+                backdropFilter: "blur(12px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: "#0d1526",
+                  border: "1px solid #1a2035",
+                  borderTop: "3px solid #7c3aed",
+                  borderRadius: 20,
+                  width: "100%",
+                  maxWidth: 360,
+                  padding: 20,
+                  boxShadow: "0 32px 80px rgba(0,0,0,0.8)",
+                  animation: "modalIn 0.28s ease both",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#c9d1e8",
+                    marginBottom: 12,
+                  }}
+                >
+                  Crop your photo
+                </p>
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: 260,
+                    background: "#080B12",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Cropper
+                    image={previewImage}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={onCropComplete}
+                  />
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <label
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "#374151",
+                      display: "block",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Zoom
+                  </label>
                   <input
                     type="range"
                     min={1}
@@ -453,205 +788,525 @@ const handleRemoveProfilePic = () => {
                     step={0.1}
                     value={zoom}
                     onChange={(e) => setZoom(Number(e.target.value))}
-                    className="w-full mt-3"
+                    style={{ width: "100%", accentColor: "#7c3aed" }}
                   />
+                </div>
 
-                  {/* Buttons */}
-                  <div className="mt-4 flex justify-between gap-2">
-                    <button
-                      onClick={handleImageUpload}
-                      disabled={loading}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded"
-                    >
-                      {loading ? "Uploading..." : "Save"}
-                    </button>
-
-                    <button
-                      onClick={handleCancelImageEdit}
-                      disabled={loading}
-                      className="flex-1 bg-gray-300 hover:bg-gray-400 py-2 rounded"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                  <button
+                    onClick={handleImageUpload}
+                    disabled={loading}
+                    style={{
+                      flex: 2,
+                      padding: "10px 0",
+                      borderRadius: 12,
+                      border: "none",
+                      background: "linear-gradient(135deg, #7c3aed, #9333ea)",
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.6 : 1,
+                      boxShadow: "0 0 16px #7c3aed30",
+                    }}
+                  >
+                    {loading ? "Uploading…" : "Save photo"}
+                  </button>
+                  <button
+                    onClick={handleCancelImageEdit}
+                    disabled={loading}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      borderRadius: 12,
+                      background: "#0a0f1e",
+                      border: "1px solid #1a2035",
+                      color: "#6b7280",
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
-            )}
-            {/* 🔥 Hover Overlay */}
-            {!previewImage && (
-              <div className="absolute inset-14 mt-8 px-7 bg-black bg-opacity-50 rounded-lg flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                {/* Upload Button */}
-                <label className="cursor-pointer bg-white p-2 rounded-full hover:bg-gray-200 transition">
-                  <Camera className="w-5 h-5 text-black" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
+            </div>
+          )}
 
-                {/* Remove Button */}
-                {user.profilePic && (
-                  <button
-                    onClick={handleRemoveProfilePic}
-                    className="bg-red-500 p-2 rounded-full hover:bg-red-600 transition"
+          {/* ── Two-column cards ─────────────────────────────────────── */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+              gap: 20,
+            }}
+          >
+            {/* ── Personal Info Card ──────────────────────────────────── */}
+            <div className="profile-card fade-up-2" style={{ padding: 24 }}>
+              {/* Header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: "#7c3aed18",
+                      border: "1px solid #7c3aed30",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                   >
-                    <Trash2 className="w-5 h-5 text-white" />
-                  </button>
-                )}
-
-                {loading && previewImage && (
-                  <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center">
-                    <div className="bg-white px-6 py-4 rounded-lg shadow-lg">
-                      <p className="text-gray-700 font-medium animate-pulse">
-                        Uploading image...
-                      </p>
-                    </div>
+                    <User size={14} color="#7c3aed" />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="text-center -mt-32 mb-10">
-          <h1 className={profileStyles.userName}>
-            {user.name || "Loading..."}
-          </h1>
-          <p className={profileStyles.userEmail}>
-            {user.email || "Loading..."}
-          </p>
-        </div>
-        <div className={profileStyles.content}>
-          <div className={profileStyles.grid}>
-            {/* Personal Info Card */}
-            <div className={profileStyles.card}>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className={profileStyles.cardTitle}>
-                  <User className={profileStyles.icon} /> Personal Information
-                </h2>
+                  <h2
+                    style={{ fontSize: 13, fontWeight: 700, color: "#c9d1e8" }}
+                  >
+                    Personal Information
+                  </h2>
+                </div>
+
                 {!editMode && (
                   <button
                     onClick={() => setEditMode(true)}
-                    className={profileStyles.editButton}
                     disabled={loading}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "6px 12px",
+                      borderRadius: 10,
+                      background: "#0a0f1e",
+                      border: "1px solid #1a2035",
+                      color: "#6b7280",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "#7c3aed40";
+                      e.currentTarget.style.color = "#a78bfa";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "#1a2035";
+                      e.currentTarget.style.color = "#6b7280";
+                    }}
                   >
-                    {loading ? "Loading..." : "Edit"}
+                    <Edit3 size={11} /> Edit
                   </button>
                 )}
               </div>
 
               {editMode ? (
-                <div className="space-y-4">
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 14 }}
+                >
                   <div>
-                    <label className={profileStyles.label}>Full Name</label>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.15em",
+                        color: "#374151",
+                        marginBottom: 6,
+                      }}
+                    >
+                      Full Name
+                    </label>
                     <input
                       type="text"
                       name="name"
                       value={tempUser.name}
                       onChange={handleInputChange}
-                      className={profileStyles.input}
                       disabled={loading}
+                      className="profile-input"
+                      placeholder="Your full name"
                     />
                   </div>
                   <div>
-                    <label className={profileStyles.label}>Email Address</label>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.15em",
+                        color: "#374151",
+                        marginBottom: 6,
+                      }}
+                    >
+                      Email Address
+                    </label>
                     <input
                       type="email"
                       name="email"
                       value={tempUser.email}
                       onChange={handleInputChange}
-                      className={profileStyles.input}
                       disabled={loading}
+                      className="profile-input"
+                      placeholder="your@email.com"
                     />
                   </div>
-                  <div className="flex gap-3 pt-4">
+
+                  <div style={{ display: "flex", gap: 10, paddingTop: 8 }}>
                     <button
                       onClick={handleProfileUpdate}
-                      className={profileStyles.buttonPrimary}
                       disabled={loading}
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        padding: "10px 0",
+                        borderRadius: 12,
+                        border: "none",
+                        background: "linear-gradient(135deg, #7c3aed, #9333ea)",
+                        color: "#fff",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: loading ? "not-allowed" : "pointer",
+                        opacity: loading ? 0.6 : 1,
+                        boxShadow: "0 0 16px #7c3aed30",
+                      }}
                     >
-                      {loading ? "Saving..." : "Save Changes"}
+                      <Save size={13} /> {loading ? "Saving…" : "Save Changes"}
                     </button>
                     <button
                       onClick={handleCancelEdit}
-                      className={profileStyles.buttonSecondary}
                       disabled={loading}
+                      style={{
+                        flex: 1,
+                        padding: "10px 0",
+                        borderRadius: 12,
+                        background: "#0a0f1e",
+                        border: "1px solid #1a2035",
+                        color: "#6b7280",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
                     >
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div>
-                    <p className={profileStyles.label}>Full Name</p>
-                    <p className="font-medium text-gray-800">{user.name}</p>
-                  </div>
-                  <div>
-                    <p className={profileStyles.label}>Email Address</p>
-                    <p className="font-medium text-gray-800">{user.email}</p>
-                  </div>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 16 }}
+                >
+                  {[
+                    { label: "Full Name", value: user.name },
+                    { label: "Email Address", value: user.email },
+                  ].map(({ label, value }) => (
+                    <div
+                      key={label}
+                      style={{
+                        padding: "12px 14px",
+                        background: "#0a0f1e",
+                        border: "1px solid #1a2035",
+                        borderRadius: 12,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.15em",
+                          color: "#374151",
+                          marginBottom: 4,
+                        }}
+                      >
+                        {label}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#c9d1e8",
+                        }}
+                      >
+                        {value || "—"}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
-              <div className="border-t border-teal-500 p-4 mt-10"></div>
-              <div className="center-container mt-1 flex items-center justify-center">
+
+              {/* Delete account */}
+              <div
+                style={{
+                  borderTop: "1px solid #0f1729",
+                  marginTop: 24,
+                  paddingTop: 20,
+                }}
+              >
                 <DeleteAccount />
               </div>
             </div>
 
-            {/* Account Security Card */}
-            <div className={profileStyles.card}>
-              <h2 className={profileStyles.cardTitle}>
-                <Lock className={profileStyles.icon} /> Account Security
-              </h2>
-              <div className="space-y-4">
-                <div className={profileStyles.securityItem}>
-                  <p className={profileStyles.securityText}>Password</p>
-                  <button
-                    onClick={() => setShowPasswordModal(true)}
-                    className={profileStyles.changeButton}
-                    disabled={loading}
-                  >
-                    Change
-                  </button>
+            {/* ── Account Security Card ────────────────────────────────── */}
+            <div className="profile-card fade-up-3" style={{ padding: 24 }}>
+              {/* Header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 24,
+                }}
+              >
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: "#1AFFD518",
+                    border: "1px solid #1AFFD530",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Shield size={14} color="#1AFFD5" />
                 </div>
+                <h2 style={{ fontSize: 13, fontWeight: 700, color: "#c9d1e8" }}>
+                  Account Security
+                </h2>
               </div>
+
+              {/* Password row */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 16px",
+                  background: "#0a0f1e",
+                  border: "1px solid #1a2035",
+                  borderRadius: 12,
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Lock size={14} color="#374151" />
+                  <div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#9ca3af",
+                      }}
+                    >
+                      Password
+                    </p>
+                    <p style={{ fontSize: 10, color: "#374151" }}>
+                      Last changed: recently
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPasswordModal(true)}
+                  disabled={loading}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 10,
+                    background: "#0E1320",
+                    border: "1px solid #1a2035",
+                    color: "#6b7280",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#7c3aed40";
+                    e.currentTarget.style.color = "#a78bfa";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#1a2035";
+                    e.currentTarget.style.color = "#6b7280";
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* 2FA placeholder */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 16px",
+                  background: "#0a0f1e",
+                  border: "1px solid #1a2035",
+                  borderRadius: 12,
+                  marginBottom: 24,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Shield size={14} color="#374151" />
+                  <div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#9ca3af",
+                      }}
+                    >
+                      Two-Factor Auth
+                    </p>
+                    <p style={{ fontSize: 10, color: "#374151" }}>
+                      Add an extra layer of security
+                    </p>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    background: "#1e2d4a20",
+                    border: "1px solid #1e2d4a",
+                    color: "#374151",
+                  }}
+                >
+                  Soon
+                </span>
+              </div>
+
+              {/* Logout */}
               <button
                 onClick={handleLogout}
-                className={`${profileStyles.buttonPrimary} mt-6 w-full hover:opacity-90 transition-opacity`}
                 disabled={loading}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "12px 0",
+                  borderRadius: 14,
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.2)",
+                  color: "#f87171",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.6 : 1,
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(239,68,68,0.14)";
+                  e.currentTarget.style.borderColor = "rgba(239,68,68,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(239,68,68,0.08)";
+                  e.currentTarget.style.borderColor = "rgba(239,68,68,0.2)";
+                }}
               >
-                {loading ? "Processing..." : "Logout"}
+                <LogOut size={14} /> {loading ? "Processing…" : "Log out"}
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Change Password Modal */}
+      {/* ── Change Password Modal ─────────────────────────────────────────── */}
       <Modal
         isOpen={showPasswordModal}
         onRequestClose={closePasswordModal}
         contentLabel="Change Password"
-        className="modal"
-        overlayClassName="modal-overlay"
+        overlayClassName="dark-modal-overlay"
+        className="dark-modal-content"
         shouldCloseOnOverlayClick={!loading}
         shouldCloseOnEsc={!loading}
       >
-        <div className={profileStyles.modalContent}>
-          <div className={profileStyles.modalHeader}>
-            <h3 className={profileStyles.modalTitle}>Change Password</h3>
+        {/* Top accent line */}
+        <div
+          style={{
+            height: 2,
+            background: "linear-gradient(90deg, #7c3aed, #9333ea)",
+            borderRadius: "20px 20px 0 0",
+          }}
+        />
+
+        <div style={{ padding: "24px 24px 28px" }}>
+          {/* Header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 24,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  background: "#7c3aed18",
+                  border: "1px solid #7c3aed30",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Lock size={14} color="#7c3aed" />
+              </div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>
+                Change Password
+              </h3>
+            </div>
             <button
               onClick={closePasswordModal}
-              className="text-gray-500 hover:text-gray-800 disabled:opacity-50"
               disabled={loading}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: "#0a0f1e",
+                border: "1px solid #1a2035",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: "#6b7280",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#ef444440";
+                e.currentTarget.style.background = "rgba(239,68,68,0.08)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#1a2035";
+                e.currentTarget.style.background = "#0a0f1e";
+              }}
             >
-              <X className="w-6 h-6" />
+              <X size={13} />
             </button>
           </div>
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4 lg:-mx-20">
+          <form
+            onSubmit={handlePasswordSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: 16 }}
+          >
             <PasswordInput
               name="current"
               label="Current Password"
@@ -683,19 +1338,45 @@ const handleRemoveProfilePic = () => {
               disabled={loading}
             />
 
-            <div className="flex gap-3 pt-4">
+            <div style={{ display: "flex", gap: 10, paddingTop: 8 }}>
               <button
                 type="submit"
-                className={profileStyles.buttonPrimary}
                 disabled={loading}
+                style={{
+                  flex: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "11px 0",
+                  borderRadius: 12,
+                  border: "none",
+                  background: "linear-gradient(135deg, #7c3aed, #9333ea)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.6 : 1,
+                  boxShadow: "0 0 16px #7c3aed30",
+                }}
               >
-                {loading ? "Updating..." : "Update Password"}
+                {loading ? "Updating…" : "Update Password"}
               </button>
               <button
                 type="button"
                 onClick={closePasswordModal}
-                className={profileStyles.buttonSecondary}
                 disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: "11px 0",
+                  borderRadius: 12,
+                  background: "#0a0f1e",
+                  border: "1px solid #1a2035",
+                  color: "#6b7280",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
               >
                 Cancel
               </button>
@@ -703,7 +1384,7 @@ const handleRemoveProfilePic = () => {
           </form>
         </div>
       </Modal>
-    </div>
+    </>
   );
 };
 

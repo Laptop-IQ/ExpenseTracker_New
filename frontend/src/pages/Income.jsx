@@ -1,11 +1,3 @@
-/* ============================================================
-   IncomePage.jsx  —  Production-ready Income Tracker
-   All sub-components inlined. Drop-in replacement for your
-   existing Income.jsx. Wire API_BASE + useOutletContext as
-   before; everything else is self-contained.
-   ============================================================ */
-
-/* eslint-disable no-unused-vars */
 import React, {
   useState,
   useMemo,
@@ -51,18 +43,18 @@ import {
   ReferenceLine,
 } from "recharts";
 import axios from "axios";
+import {  learnCategory } from "../utils/smartCategoryAI";
+import AddTransactionModal from "../components/Add";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-// ─────────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────────
+
 const CATEGORY_COLOR = {
-  Salary: "#10b981",
-  Extra_Income: "#3b82f6",
-  Freelance: "#8b5cf6",
-  Side_Hustles: "#f59e0b",
-  Investment: "#06b6d4",
+  Salary: "#00e5a0",
+  Extra_Income: "#5b8dff",
+  Freelance: "#b97cff",
+  Side_Hustles: "#ffb347",
+  Investment: "#22d3ee",
 };
 
 const CATEGORY_ICONS = {
@@ -82,12 +74,12 @@ const INCOME_CATEGORIES = [
 ];
 
 const BAR_COLORS = [
-  "#10b981",
-  "#34d399",
-  "#059669",
-  "#6ee7b7",
-  "#a7f3d0",
-  "#d1fae5",
+  "#00e5a0",
+  "#00c882",
+  "#00a86b",
+  "#00e5a0cc",
+  "#00c88280",
+  "#00a86b60",
 ];
 
 const FILTER_OPTIONS = [
@@ -219,22 +211,22 @@ function Toast({ toasts }) {
         <div
           key={t.id}
           style={{ animation: "slideInRight .25s ease-out" }}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium
-            pointer-events-auto border backdrop-blur-sm
+          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium
+            pointer-events-auto border backdrop-blur-md
             ${
               t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                ? "bg-[#0d1f1a] border-[#00e5a030] text-[#00e5a0]"
                 : t.type === "error"
-                  ? "bg-red-50 border-red-200 text-red-800"
-                  : "bg-white border-gray-200 text-gray-800"
+                  ? "bg-[#1f0d0d] border-[#ff4d4d30] text-[#ff6b6b]"
+                  : "bg-[#13161e] border-[#252836] text-[#eef0f6]"
             }`}
         >
           {t.type === "success" ? (
-            <Check size={14} className="text-emerald-500 shrink-0" />
+            <Check size={14} className="shrink-0" />
           ) : t.type === "error" ? (
-            <AlertCircle size={14} className="text-red-500 shrink-0" />
+            <AlertCircle size={14} className="shrink-0" />
           ) : (
-            <Zap size={14} className="text-emerald-400 shrink-0" />
+            <Zap size={14} className="shrink-0" />
           )}
           {t.message}
         </div>
@@ -246,33 +238,46 @@ function Toast({ toasts }) {
 // ─────────────────────────────────────────────────────────────
 // STAT CARD
 // ─────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent = "#10b981", icon: Icon }) {
+function StatCard({ label, value, sub, accent = "#00e5a0", icon: Icon }) {
   return (
     <div
-      className="relative bg-white rounded-2xl p-4 lg:p-5 overflow-hidden border border-gray-100
-                    shadow-sm hover:shadow-md transition-shadow duration-200"
+      className="relative rounded-2xl p-5 overflow-hidden border transition-all duration-200 group"
+      style={{ background: "#13161e", borderColor: "#252836" }}
     >
+      {/* Glow on hover */}
       <div
-        className="absolute inset-x-0 top-0 h-[3px] rounded-t-2xl"
-        style={{ background: accent }}
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl pointer-events-none"
+        style={{
+          background: `radial-gradient(ellipse at top left, ${accent}08 0%, transparent 70%)`,
+        }}
       />
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight">
+
+      <div className="flex items-start justify-between mb-4">
+        <p
+          className="text-[10px] font-bold uppercase tracking-[0.15em]"
+          style={{ color: "#5e6378" }}
+        >
           {label}
         </p>
         {Icon && (
           <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center opacity-60"
-            style={{ background: accent + "18", color: accent }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: accent + "14", color: accent }}
           >
-            <Icon size={14} />
+            <Icon size={15} />
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900 tracking-tight leading-none">
+
+      <p
+        className="text-2xl font-bold tracking-tight"
+        style={{ color: "#eef0f6" }}
+      >
         {value}
       </p>
-      <p className="text-xs text-gray-400 mt-2">{sub}</p>
+      <p className="text-xs mt-1.5" style={{ color: "#5e6378" }}>
+        {sub}
+      </p>
     </div>
   );
 }
@@ -283,9 +288,14 @@ function StatCard({ label, value, sub, accent = "#10b981", icon: Icon }) {
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5 shadow-xl text-sm">
-      <p className="text-gray-400 text-xs mb-0.5">{label}</p>
-      <p className="font-bold text-emerald-500">
+    <div
+      className="rounded-xl px-3 py-2.5 shadow-2xl text-sm border"
+      style={{ background: "#1a1e29", borderColor: "#252836" }}
+    >
+      <p className="text-xs mb-0.5" style={{ color: "#5e6378" }}>
+        {label}
+      </p>
+      <p className="font-bold" style={{ color: "#00e5a0" }}>
         {fmtINR(Math.round(payload[0].value))}
       </p>
     </div>
@@ -296,10 +306,10 @@ function CustomTooltip({ active, payload, label }) {
 // CATEGORY PILL
 // ─────────────────────────────────────────────────────────────
 function CategoryPill({ cat }) {
-  const color = CATEGORY_COLOR[cat] ?? "#94a3b8";
+  const color = CATEGORY_COLOR[cat] ?? "#5e6378";
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
       style={{ background: color + "18", color }}
     >
       {cat.replace(/_/g, " ")}
@@ -312,17 +322,20 @@ function CategoryPill({ cat }) {
 // ─────────────────────────────────────────────────────────────
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   return (
-    <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+    <div
+      className="flex gap-1 p-1 rounded-xl w-fit"
+      style={{ background: "#0d0f14", border: "1px solid #252836" }}
+    >
       {TIME_FRAMES.map((f) => (
         <button
           key={f}
           onClick={() => setTimeFrame(f)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150
-            ${
-              timeFrame === f
-                ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+          className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150"
+          style={
+            timeFrame === f
+              ? { background: "#00e5a0", color: "#0d0f14" }
+              : { color: "#5e6378" }
+          }
         >
           {f.charAt(0).toUpperCase() + f.slice(1)}
         </button>
@@ -352,8 +365,12 @@ function FilterDropdown({ value, onChange }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200
-                   px-3 py-2.5 rounded-xl hover:border-emerald-300 hover:text-emerald-600 transition-colors"
+        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-all"
+        style={{
+          background: "#1a1e29",
+          border: "1px solid #252836",
+          color: "#5e6378",
+        }}
       >
         <SlidersHorizontal size={13} />
         <span className="max-w-[80px] truncate">{label}</span>
@@ -364,8 +381,12 @@ function FilterDropdown({ value, onChange }) {
       </button>
       {open && (
         <div
-          className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-2xl shadow-xl
-                        overflow-hidden z-30 animate-[fadeIn_.12s_ease-out]"
+          className="absolute right-0 mt-2 w-52 rounded-2xl shadow-2xl overflow-hidden z-30"
+          style={{
+            background: "#1a1e29",
+            border: "1px solid #252836",
+            animation: "fadeIn .12s ease-out",
+          }}
         >
           <div className="max-h-64 overflow-y-auto py-1.5">
             {FILTER_OPTIONS.map((opt) => (
@@ -375,12 +396,12 @@ function FilterDropdown({ value, onChange }) {
                   onChange(opt.value);
                   setOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center gap-2
-                  ${
-                    value === opt.value
-                      ? "bg-emerald-50 text-emerald-600 font-semibold"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
+                className="w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center gap-2"
+                style={
+                  value === opt.value
+                    ? { background: "#00e5a012", color: "#00e5a0" }
+                    : { color: "#5e6378" }
+                }
               >
                 {CATEGORY_COLOR[opt.value] && (
                   <span
@@ -418,44 +439,64 @@ function IncomeBreakdown({ transactions }) {
 
   if (!breakdown.length)
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center justify-center gap-2 min-h-[160px]">
-        <Sparkles size={22} className="text-gray-200" />
-        <p className="text-xs text-gray-400">No income sources yet</p>
+      <div
+        className="rounded-2xl border p-5 flex flex-col items-center justify-center gap-3 min-h-[160px]"
+        style={{ background: "#13161e", borderColor: "#252836" }}
+      >
+        <Sparkles size={22} style={{ color: "#252836" }} />
+        <p className="text-xs" style={{ color: "#5e6378" }}>
+          No income sources yet
+        </p>
       </div>
     );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-        <Sparkles size={15} className="text-emerald-400" />
+    <div
+      className="rounded-2xl border p-5"
+      style={{ background: "#13161e", borderColor: "#252836" }}
+    >
+      <h3
+        className="text-sm font-bold mb-5 flex items-center gap-2"
+        style={{ color: "#eef0f6" }}
+      >
+        <Sparkles size={15} style={{ color: "#00e5a0" }} />
         Income sources
       </h3>
-      <div className="space-y-3.5">
-        {breakdown.map(({ cat, amt, pct }) => (
-          <div key={cat}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="flex items-center gap-1.5 text-xs text-gray-600 font-medium">
+      <div className="space-y-4">
+        {breakdown.map(({ cat, amt, pct }) => {
+          const color = CATEGORY_COLOR[cat] ?? "#5e6378";
+          return (
+            <div key={cat}>
+              <div className="flex items-center justify-between mb-2">
                 <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: CATEGORY_COLOR[cat] ?? "#94a3b8" }}
-                />
-                {cat.replace(/_/g, " ")}
-              </span>
-              <span className="text-xs font-bold text-gray-700">
-                {fmtINR(amt)}
-              </span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  className="flex items-center gap-2 text-xs font-medium"
+                  style={{ color: "#eef0f6" }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: color }}
+                  />
+                  {cat.replace(/_/g, " ")}
+                </span>
+                <span className="text-xs font-bold" style={{ color }}>
+                  {fmtINR(amt)}
+                </span>
+              </div>
               <div
-                className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{
-                  width: `${pct}%`,
-                  background: CATEGORY_COLOR[cat] ?? "#94a3b8",
-                }}
-              />
+                className="h-1 rounded-full overflow-hidden"
+                style={{ background: "#1a1e29" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${color}, ${color}80)`,
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -475,7 +516,7 @@ function TransactionItem({
   setEditingId,
 }) {
   const [errors, setErrors] = useState({ description: "", amount: "" });
-  const color = CATEGORY_COLOR[transaction.category] ?? "#94a3b8";
+  const color = CATEGORY_COLOR[transaction.category] ?? "#5e6378";
   const icon = CATEGORY_ICONS[transaction.category] ?? (
     <IndianRupee className="w-4 h-4" />
   );
@@ -492,8 +533,14 @@ function TransactionItem({
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3.5 transition-colors
-      ${isEditing ? "bg-emerald-50/50" : "hover:bg-gray-50/70"}`}
+      className="flex items-center gap-3 px-4 py-4 transition-all duration-150"
+      style={{ background: isEditing ? "#1a1e29" : "transparent" }}
+      onMouseEnter={(e) => {
+        if (!isEditing) e.currentTarget.style.background = "#1a1e2960";
+      }}
+      onMouseLeave={(e) => {
+        if (!isEditing) e.currentTarget.style.background = "transparent";
+      }}
     >
       {/* Icon */}
       <div
@@ -506,7 +553,7 @@ function TransactionItem({
       {/* Content */}
       <div className="flex-1 min-w-0">
         {isEditing ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div>
               <input
                 type="text"
@@ -514,12 +561,16 @@ function TransactionItem({
                 onChange={(e) =>
                   setEditForm((p) => ({ ...p, description: e.target.value }))
                 }
-                className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white outline-none transition-colors
-                  ${errors.description ? "border-red-300" : "border-gray-200 focus:border-emerald-400"}`}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none transition-colors"
+                style={{
+                  background: "#0d0f14",
+                  border: `1px solid ${errors.description ? "#ff4d4d" : "#252836"}`,
+                  color: "#eef0f6",
+                }}
                 placeholder="Description"
               />
               {errors.description && (
-                <p className="text-[10px] text-red-500 mt-0.5">
+                <p className="text-[10px] mt-0.5" style={{ color: "#ff6b6b" }}>
                   {errors.description}
                 </p>
               )}
@@ -532,13 +583,20 @@ function TransactionItem({
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, amount: e.target.value }))
                   }
-                  className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white outline-none transition-colors
-                    ${errors.amount ? "border-red-300" : "border-gray-200 focus:border-emerald-400"}`}
+                  className="w-full text-sm px-3 py-2 rounded-lg outline-none transition-colors"
+                  style={{
+                    background: "#0d0f14",
+                    border: `1px solid ${errors.amount ? "#ff4d4d" : "#252836"}`,
+                    color: "#eef0f6",
+                  }}
                   placeholder="Amount"
                   min="1"
                 />
                 {errors.amount && (
-                  <p className="text-[10px] text-red-500 mt-0.5">
+                  <p
+                    className="text-[10px] mt-0.5"
+                    style={{ color: "#ff6b6b" }}
+                  >
                     {errors.amount}
                   </p>
                 )}
@@ -548,10 +606,15 @@ function TransactionItem({
                 onChange={(e) =>
                   setEditForm((p) => ({ ...p, category: e.target.value }))
                 }
-                className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white outline-none focus:border-emerald-400 text-gray-700"
+                className="text-xs px-2 py-2 rounded-lg outline-none"
+                style={{
+                  background: "#0d0f14",
+                  border: "1px solid #252836",
+                  color: "#eef0f6",
+                }}
               >
                 {INCOME_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
+                  <option key={c} value={c} style={{ background: "#0d0f14" }}>
                     {c.replace(/_/g, " ")}
                   </option>
                 ))}
@@ -560,18 +623,21 @@ function TransactionItem({
           </div>
         ) : (
           <>
-            <p className="text-sm font-semibold text-gray-800 truncate">
+            <p
+              className="text-sm font-semibold truncate"
+              style={{ color: "#eef0f6" }}
+            >
               {transaction.description}
             </p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] text-gray-400">
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[11px]" style={{ color: "#5e6378" }}>
                 {new Date(transaction.date).toLocaleDateString("en-IN", {
                   day: "numeric",
                   month: "short",
                   year: "numeric",
                 })}
               </span>
-              <span className="text-gray-300">·</span>
+              <span style={{ color: "#252836" }}>·</span>
               <CategoryPill cat={transaction.category} />
             </div>
           </>
@@ -589,8 +655,8 @@ function TransactionItem({
                   onSave();
                 }
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-white bg-emerald-500
-                         px-3 py-1.5 rounded-lg hover:bg-emerald-600 active:scale-95 transition-all"
+              className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95"
+              style={{ background: "#00e5a0", color: "#0d0f14" }}
             >
               <Save size={12} /> Save
             </button>
@@ -599,15 +665,22 @@ function TransactionItem({
                 setErrors({ description: "", amount: "" });
                 onCancel();
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-gray-500 bg-gray-100
-                         px-3 py-1.5 rounded-lg hover:bg-gray-200 active:scale-95 transition-all"
+              className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95"
+              style={{
+                background: "#1a1e29",
+                color: "#5e6378",
+                border: "1px solid #252836",
+              }}
             >
               <X size={12} /> Cancel
             </button>
           </>
         ) : (
           <>
-            <span className="text-sm font-bold text-emerald-500 mr-1">
+            <span
+              className="text-sm font-bold mr-1"
+              style={{ color: "#00e5a0" }}
+            >
               +₹
               {Number(transaction.amount).toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
@@ -624,16 +697,32 @@ function TransactionItem({
                 });
                 setEditingId(transaction.id);
               }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400
-                         hover:bg-emerald-50 hover:text-emerald-500 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+              style={{ color: "#363a4e" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#00e5a012";
+                e.currentTarget.style.color = "#00e5a0";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#363a4e";
+              }}
               title="Edit"
             >
               <Edit2 size={13} />
             </button>
             <button
               onClick={() => onDelete(transaction.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400
-                         hover:bg-red-50 hover:text-red-500 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+              style={{ color: "#363a4e" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#ff4d4d12";
+                e.currentTarget.style.color = "#ff6b6b";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#363a4e";
+              }}
               title="Delete"
             >
               <Trash2 size={13} />
@@ -652,35 +741,58 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ background: "#0d0f14cc" }}
         onClick={onClose}
       />
       <div
-        className="relative w-full max-w-sm bg-white rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl
-                      animate-[slideUp_.25s_ease-out] sm:mx-4"
+        className="relative w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl sm:mx-4"
+        style={{
+          background: "#13161e",
+          border: "1px solid #252836",
+          animation: "slideUp .25s ease-out",
+        }}
       >
-        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5 sm:hidden" />
+        <div
+          className="w-10 h-1 rounded-full mx-auto mb-5 sm:hidden"
+          style={{ background: "#252836" }}
+        />
         <div className="flex justify-center mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-            <Trash2 size={22} className="text-red-500" />
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center"
+            style={{ background: "#ff4d4d12" }}
+          >
+            <Trash2 size={22} style={{ color: "#ff6b6b" }} />
           </div>
         </div>
-        <h2 className="text-center text-base font-bold text-gray-900">
+        <h2
+          className="text-center text-base font-bold"
+          style={{ color: "#eef0f6" }}
+        >
           Delete this income?
         </h2>
-        <p className="text-center text-xs text-gray-400 mt-1 mb-4">
+        <p
+          className="text-center text-xs mt-1 mb-4"
+          style={{ color: "#5e6378" }}
+        >
           This action cannot be undone
         </p>
         {transaction && (
-          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 mb-5">
+          <div
+            className="rounded-xl px-4 py-3 mb-5"
+            style={{ background: "#1a1e29", border: "1px solid #252836" }}
+          >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-semibold text-gray-800 text-sm truncate">
+                <p
+                  className="font-semibold text-sm truncate"
+                  style={{ color: "#eef0f6" }}
+                >
                   {transaction.description}
                 </p>
                 <CategoryPill cat={transaction.category} />
               </div>
-              <p className="font-bold text-emerald-500 shrink-0">
+              <p className="font-bold shrink-0" style={{ color: "#00e5a0" }}>
                 {fmtINR(transaction.amount)}
               </p>
             </div>
@@ -689,205 +801,26 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold
-                       hover:bg-gray-200 active:scale-95 transition"
+            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95"
+            style={{
+              background: "#1a1e29",
+              color: "#5e6378",
+              border: "1px solid #252836",
+            }}
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-semibold
-                       hover:bg-red-600 active:scale-95 transition shadow-md shadow-red-100
-                       disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 disabled:opacity-50"
+            style={{
+              background: "#ff4d4d20",
+              color: "#ff6b6b",
+              border: "1px solid #ff4d4d30",
+            }}
           >
             {loading ? "Deleting…" : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// ADD INCOME MODAL
-// ─────────────────────────────────────────────────────────────
-function AddIncomeModal({
-  showModal,
-  setShowModal,
-  newTransaction,
-  setNewTransaction,
-  handleAddTransaction,
-  loading,
-}) {
-  const [errors, setErrors] = useState({ description: "", amount: "" });
-
-  const validate = () => {
-    const e = { description: "", amount: "" };
-    if (!newTransaction.description?.trim())
-      e.description = "Description is required";
-    const a = parseFloat(newTransaction.amount);
-    if (!newTransaction.amount) e.amount = "Amount is required";
-    else if (isNaN(a) || a <= 0) e.amount = "Enter a valid amount";
-    setErrors(e);
-    return !e.description && !e.amount;
-  };
-
-  const handleSubmit = () => {
-    if (validate()) {
-      setErrors({ description: "", amount: "" });
-      handleAddTransaction();
-    }
-  };
-
-  if (!showModal) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => setShowModal(false)}
-      />
-      <div
-        className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl
-                      animate-[slideUp_.25s_ease-out] sm:mx-4 max-h-[90vh] overflow-y-auto"
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-white z-10 px-6 pt-4 pb-3 border-b border-gray-50">
-          <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3 sm:hidden" />
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">
-              Add new income
-            </h2>
-            <button
-              onClick={() => setShowModal(false)}
-              className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center
-                         hover:bg-gray-200 transition-colors"
-            >
-              <X size={15} className="text-gray-500" />
-            </button>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Description
-            </label>
-            <input
-              type="text"
-              value={newTransaction.description}
-              onChange={(e) =>
-                setNewTransaction((p) => ({
-                  ...p,
-                  description: e.target.value,
-                }))
-              }
-              placeholder="e.g. Monthly salary"
-              className={`w-full px-3.5 py-3 text-sm rounded-xl border outline-none transition-colors
-                ${errors.description ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50 focus:border-emerald-400 focus:bg-white"}`}
-            />
-            {errors.description && (
-              <p className="text-xs text-red-500 mt-1">{errors.description}</p>
-            )}
-          </div>
-
-          {/* Amount + Date */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Amount (₹)
-              </label>
-              <input
-                type="number"
-                value={newTransaction.amount}
-                onChange={(e) =>
-                  setNewTransaction((p) => ({ ...p, amount: e.target.value }))
-                }
-                placeholder="0"
-                min="1"
-                className={`w-full px-3.5 py-3 text-sm rounded-xl border outline-none transition-colors
-                  ${errors.amount ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50 focus:border-emerald-400 focus:bg-white"}`}
-              />
-              {errors.amount && (
-                <p className="text-xs text-red-500 mt-1">{errors.amount}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                Date
-              </label>
-              <input
-                type="date"
-                value={newTransaction.date}
-                onChange={(e) =>
-                  setNewTransaction((p) => ({ ...p, date: e.target.value }))
-                }
-                className="w-full px-3.5 py-3 text-sm rounded-xl border border-gray-200 bg-gray-50 outline-none
-                           focus:border-emerald-400 focus:bg-white transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Category
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {INCOME_CATEGORIES.map((cat) => {
-                const color = CATEGORY_COLOR[cat] ?? "#94a3b8";
-                const icon = CATEGORY_ICONS[cat] ?? (
-                  <IndianRupee className="w-3.5 h-3.5" />
-                );
-                const active = newTransaction.category === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() =>
-                      setNewTransaction((p) => ({ ...p, category: cat }))
-                    }
-                    className={`flex items-center gap-2 py-2.5 px-3 rounded-xl border text-xs
-                      font-semibold transition-all active:scale-95
-                      ${
-                        active
-                          ? "border-transparent text-white"
-                          : "border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200"
-                      }`}
-                    style={
-                      active ? { background: color, borderColor: color } : {}
-                    }
-                  >
-                    <span style={active ? {} : { color }}>{icon}</span>
-                    {cat.replace(/_/g, " ")}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-50 px-6 py-4 flex gap-3">
-          <button
-            onClick={() => setShowModal(false)}
-            className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold
-                       hover:bg-gray-200 active:scale-95 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold
-                       bg-gradient-to-r from-emerald-500 to-teal-500
-                       hover:from-emerald-600 hover:to-teal-600
-                       active:scale-95 transition-all shadow-md shadow-emerald-200
-                       disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <Plus size={15} />
-            {loading ? "Saving…" : "Add Income"}
           </button>
         </div>
       </div>
@@ -906,7 +839,6 @@ const Income = () => {
     refreshTransactions = () => {},
   } = useOutletContext();
 
-  /* ── Local state ── */
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -929,7 +861,6 @@ const Income = () => {
     category: "Salary",
   });
 
-  /* ── Helpers ── */
   const addToast = useCallback((message, type = "info") => {
     const id = Date.now();
     setToasts((p) => [...p, { id, message, type }]);
@@ -941,7 +872,6 @@ const Income = () => {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
-  /* ── Derived data ── */
   const timeFrameRange = useMemo(
     () => getTimeFrameRange(timeFrame),
     [timeFrame],
@@ -1005,7 +935,6 @@ const Income = () => {
     return list;
   }, [timeFrameTransactions, filter, search]);
 
-  /* ── Stats ── */
   const totalIncome = useMemo(
     () =>
       filteredTransactions.reduce(
@@ -1030,7 +959,6 @@ const Income = () => {
     [filteredTransactions],
   );
 
-  /* ── Chart data ── */
   const chartData = useMemo(() => {
     const data = chartPoints.map((p) => ({ ...p, income: 0 }));
     filteredTransactions.forEach((t) => {
@@ -1048,7 +976,6 @@ const Income = () => {
     return data;
   }, [filteredTransactions, chartPoints, timeFrame]);
 
-  /* ── CRUD handlers ── */
   const handleAddTransaction = useCallback(async () => {
     if (!newTransaction.description || !newTransaction.amount) return;
     const payload = {
@@ -1057,7 +984,6 @@ const Income = () => {
       category: newTransaction.category,
       date: toIsoWithClientTime(newTransaction.date),
     };
-    const tempId = `temp-${Date.now()}`;
     setShowModal(false);
     setNewTransaction({
       date: new Date().toISOString().split("T")[0],
@@ -1071,6 +997,7 @@ const Income = () => {
       await axios.post(`${API_BASE}/income/add`, payload, {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       });
+      learnCategory(payload.description, payload.category);
       refreshTransactions();
     } catch (err) {
       addToast(
@@ -1094,6 +1021,7 @@ const Income = () => {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       });
       setEditingId(null);
+      learnCategory(payload.description, payload.category);
       addToast("Income updated!", "success");
       refreshTransactions();
     } catch (err) {
@@ -1153,7 +1081,6 @@ const Income = () => {
       : timeFrame === "yearly"
         ? "Monthly"
         : "Daily";
-
   const visibleTransactions = showAll
     ? filteredTransactions
     : filteredTransactions.slice(0, 10);
@@ -1178,30 +1105,48 @@ const Income = () => {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.35; }
         }
+        @keyframes shimmer {
+          0%   { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
       `}</style>
 
       <Toast toasts={toasts} />
 
-      <div className="min-h-screen bg-gray-50/70 px-3 py-5 sm:px-5 md:px-6 lg:px-8 space-y-4">
-        {/* ── HEADER ──────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="h-[3px] bg-gradient-to-r from-emerald-400 via-teal-400 to-green-500" />
+      <div
+        className="min-h-screen px-3 py-5 sm:px-5 md:px-6 lg:px-8 space-y-4"
+        style={{ background: "#0d0f14" }}
+      >
+        {/* ── HEADER ─────────────────────────────────────────────── */}
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ background: "#13161e", borderColor: "#252836" }}
+        >
           <div className="p-4 sm:p-5 md:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-400"
-                    style={{ animation: "pulseDot 2s ease-in-out infinite" }}
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      background: "#00e5a0",
+                      animation: "pulseDot 2s ease-in-out infinite",
+                    }}
                   />
-                  <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                    style={{ color: "#00e5a0" }}
+                  >
                     Income
                   </span>
                 </div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                <h1
+                  className="text-lg sm:text-xl font-bold tracking-tight"
+                  style={{ color: "#eef0f6" }}
+                >
                   Income Tracker
                 </h1>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs mt-0.5" style={{ color: "#5e6378" }}>
                   {timeFrameRange.label}
                 </p>
               </div>
@@ -1209,20 +1154,24 @@ const Income = () => {
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleExport}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-50
-                             border border-gray-200 px-3 py-2.5 rounded-xl
-                             hover:bg-gray-100 active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95"
+                  style={{
+                    background: "#1a1e29",
+                    border: "1px solid #252836",
+                    color: "#5e6378",
+                  }}
                 >
                   <Download size={13} />
                   <span className="hidden xs:inline">Export</span>
                 </button>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white
-                             bg-gradient-to-r from-emerald-500 to-teal-500
-                             px-4 py-2.5 rounded-xl
-                             hover:from-emerald-600 hover:to-teal-600
-                             active:scale-95 transition-all shadow-md shadow-emerald-200"
+                  className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl transition-all active:scale-95"
+                  style={{
+                    background: "#00e5a0",
+                    color: "#0d0f14",
+                    boxShadow: "0 0 20px #00e5a030",
+                  }}
                 >
                   <Plus size={14} />
                   Add Income
@@ -1242,48 +1191,54 @@ const Income = () => {
           </div>
         </div>
 
-        {/* ── STAT CARDS ──────────────────────────────────────────── */}
+        {/* ── STAT CARDS ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             label="Total Income"
             value={fmtINR(totalIncome)}
             sub={timeFrameRange.label}
-            accent="#10b981"
+            accent="#00e5a0"
             icon={TrendingUp}
           />
           <StatCard
             label="Avg / Transaction"
             value={fmtINR(averageIncome)}
             sub={`${filteredTransactions.length} transactions`}
-            accent="#3b82f6"
+            accent="#5b8dff"
             icon={BarChart2}
           />
           <StatCard
             label="Highest Single"
             value={fmtINR(highestIncome)}
             sub="biggest income"
-            accent="#8b5cf6"
+            accent="#b97cff"
             icon={ArrowUpRight}
           />
           <StatCard
             label="Total Count"
             value={filteredTransactions.length}
             sub={filter === "all" ? "all records" : "filtered"}
-            accent="#f59e0b"
+            accent="#ffb347"
             icon={IndianRupee}
           />
         </div>
 
-        {/* ── CHART + BREAKDOWN ───────────────────────────────────── */}
+        {/* ── CHART + BREAKDOWN ──────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Bar Chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div
+            className="lg:col-span-2 rounded-2xl border p-5"
+            style={{ background: "#13161e", borderColor: "#252836" }}
+          >
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                <BarChart2 size={15} className="text-emerald-400" />
+              <h3
+                className="text-sm font-bold flex items-center gap-2"
+                style={{ color: "#eef0f6" }}
+              >
+                <BarChart2 size={15} style={{ color: "#00e5a0" }} />
                 {chartLabel} trends
               </h3>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs" style={{ color: "#5e6378" }}>
                 {timeFrameRange.label}
               </span>
             </div>
@@ -1295,26 +1250,26 @@ const Income = () => {
                 >
                   <CartesianGrid
                     strokeDasharray="3 3"
-                    stroke="#f1f5f9"
+                    stroke="#1a1e29"
                     vertical={false}
                   />
                   <XAxis
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    tick={{ fill: "#363a4e", fontSize: 10 }}
                     interval="preserveStartEnd"
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    tick={{ fill: "#363a4e", fontSize: 10 }}
                     width={50}
                     tickFormatter={fmtINR}
                   />
                   <Tooltip
                     content={<CustomTooltip />}
-                    cursor={{ fill: "#f0fdf4", radius: 6 }}
+                    cursor={{ fill: "#00e5a008", radius: 6 }}
                   />
                   <Bar dataKey="income" radius={[6, 6, 0, 0]} maxBarSize={28}>
                     {chartData.map((_, i) => (
@@ -1326,10 +1281,10 @@ const Income = () => {
                       <ReferenceLine
                         key={i}
                         x={pt.label}
-                        stroke="#10b981"
-                        strokeWidth={1.5}
+                        stroke="#00e5a0"
+                        strokeWidth={1}
                         strokeDasharray="4 3"
-                        strokeOpacity={0.5}
+                        strokeOpacity={0.4}
                       />
                     ) : null,
                   )}
@@ -1338,21 +1293,29 @@ const Income = () => {
             </div>
           </div>
 
-          {/* Income Breakdown */}
           <IncomeBreakdown transactions={filteredTransactions} />
         </div>
 
-        {/* ── TRANSACTIONS LIST ────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* ── TRANSACTIONS LIST ───────────────────────────────────── */}
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ background: "#13161e", borderColor: "#252836" }}
+        >
           {/* List header */}
           <div
-            className="px-4 sm:px-5 py-3.5 border-b border-gray-50
-                          flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            className="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            style={{ borderBottom: "1px solid #1a1e29" }}
           >
-            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <IndianRupee size={14} className="text-emerald-400" />
+            <h3
+              className="text-sm font-bold flex items-center gap-2"
+              style={{ color: "#eef0f6" }}
+            >
+              <IndianRupee size={14} style={{ color: "#00e5a0" }} />
               Transactions
-              <span className="bg-emerald-50 text-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: "#00e5a014", color: "#00e5a0" }}
+              >
                 {filteredTransactions.length}
               </span>
             </h3>
@@ -1361,15 +1324,19 @@ const Income = () => {
               <div className="relative">
                 <Search
                   size={12}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ color: "#363a4e" }}
                 />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search…"
-                  className="pl-8 pr-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl
-                             w-32 sm:w-36 focus:w-44 sm:focus:w-48 transition-all
-                             outline-none focus:border-emerald-300 focus:bg-white placeholder-gray-400"
+                  className="pl-8 pr-3 py-2.5 text-xs rounded-xl w-32 sm:w-36 focus:w-44 sm:focus:w-48 transition-all outline-none"
+                  style={{
+                    background: "#1a1e29",
+                    border: "1px solid #252836",
+                    color: "#eef0f6",
+                  }}
                 />
               </div>
               <FilterDropdown
@@ -1383,34 +1350,48 @@ const Income = () => {
           </div>
 
           {/* Rows */}
-          <div className="divide-y divide-gray-50/80">
+          <div style={{ borderTop: "1px solid #1a1e29" }}>
             {visibleTransactions.length > 0 ? (
-              visibleTransactions.map((transaction) => (
-                <TransactionItem
-                  key={transaction.id}
-                  transaction={transaction}
-                  isEditing={editingId === transaction.id}
-                  editForm={editForm}
-                  setEditForm={setEditForm}
-                  onSave={handleEditTransaction}
-                  onCancel={() => setEditingId(null)}
-                  onDelete={(id) => {
-                    const tx = filteredTransactions.find((t) => t.id === id);
-                    setDeleteTarget(tx ?? { id });
-                  }}
-                  setEditingId={setEditingId}
-                />
-              ))
+              <div>
+                {visibleTransactions.map((transaction, i) => (
+                  <div
+                    key={transaction.id}
+                    style={i > 0 ? { borderTop: "1px solid #1a1e29" } : {}}
+                  >
+                    <TransactionItem
+                      transaction={transaction}
+                      isEditing={editingId === transaction.id}
+                      editForm={editForm}
+                      setEditForm={setEditForm}
+                      onSave={handleEditTransaction}
+                      onCancel={() => setEditingId(null)}
+                      onDelete={(id) => {
+                        const tx = filteredTransactions.find(
+                          (t) => t.id === id,
+                        );
+                        setDeleteTarget(tx ?? { id });
+                      }}
+                      setEditingId={setEditingId}
+                    />
+                  </div>
+                ))}
+              </div>
             ) : (
               /* Empty State */
               <div className="py-16 flex flex-col items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center">
-                  <IndianRupee size={22} className="text-emerald-300" />
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: "#1a1e29" }}
+                >
+                  <IndianRupee size={22} style={{ color: "#363a4e" }} />
                 </div>
-                <p className="text-gray-600 font-bold text-sm">
+                <p className="font-bold text-sm" style={{ color: "#eef0f6" }}>
                   No income found
                 </p>
-                <p className="text-gray-400 text-xs text-center max-w-xs px-4">
+                <p
+                  className="text-xs text-center max-w-xs px-4"
+                  style={{ color: "#5e6378" }}
+                >
                   {filter === "all" && !search
                     ? "You haven't recorded any income yet. Add your first one."
                     : `No results for the current filter${search ? ` and "${search}"` : ""}.`}
@@ -1418,9 +1399,12 @@ const Income = () => {
                 {filter === "all" && !search && (
                   <button
                     onClick={() => setShowModal(true)}
-                    className="mt-1 flex items-center gap-1.5 text-xs font-bold text-white
-                               bg-gradient-to-r from-emerald-500 to-teal-500
-                               px-4 py-2.5 rounded-xl active:scale-95 transition-all shadow-md shadow-emerald-200"
+                    className="mt-1 flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl active:scale-95 transition-all"
+                    style={{
+                      background: "#00e5a0",
+                      color: "#0d0f14",
+                      boxShadow: "0 0 16px #00e5a030",
+                    }}
                   >
                     <Plus size={13} />
                     Add your first income
@@ -1434,9 +1418,16 @@ const Income = () => {
           {!showAll && filteredTransactions.length > 10 && (
             <button
               onClick={() => setShowAll(true)}
-              className="w-full py-4 text-xs font-bold text-emerald-500
-                         hover:bg-emerald-50/60 transition-colors flex items-center justify-center gap-2
-                         border-t border-gray-50"
+              className="w-full py-4 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              style={{ color: "#5e6378", borderTop: "1px solid #1a1e29" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#1a1e29";
+                e.currentTarget.style.color = "#00e5a0";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#5e6378";
+              }}
             >
               <Eye size={13} />
               View all {filteredTransactions.length} transactions
@@ -1445,9 +1436,14 @@ const Income = () => {
           {showAll && filteredTransactions.length > 10 && (
             <button
               onClick={() => setShowAll(false)}
-              className="w-full py-4 text-xs font-bold text-gray-400
-                         hover:bg-gray-50 transition-colors flex items-center justify-center gap-2
-                         border-t border-gray-50"
+              className="w-full py-4 text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              style={{ color: "#5e6378", borderTop: "1px solid #1a1e29" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#1a1e29";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
             >
               <EyeOff size={13} />
               Show less
@@ -1457,16 +1453,17 @@ const Income = () => {
       </div>
 
       {/* ── ADD MODAL ─────────────────────────────────────────────── */}
-      <AddIncomeModal
+      <AddTransactionModal
         showModal={showModal}
         setShowModal={setShowModal}
         newTransaction={newTransaction}
         setNewTransaction={setNewTransaction}
         handleAddTransaction={handleAddTransaction}
         loading={loading}
+        lockType="income"
       />
 
-      {/* ── DELETE CONFIRM ────────────────────────────────────────── */}
+      {/* ── DELETE CONFIRM ─────────────────────────────────────────── */}
       {deleteTarget && (
         <DeleteModal
           transaction={deleteTarget}

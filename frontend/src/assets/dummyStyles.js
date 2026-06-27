@@ -639,18 +639,18 @@ export const sidebarStyles = {
   },
 
   sidebarInner: {
-    base: "bg-gradient-to-r from-blue-50 to-cyan-200 border-r border-blue-400 shadow-r shadow-blue-200 h-full flex flex-col",
+    base: "bg-slate-900 border-r border-slate-700/60 shadow-xl shadow-black/40 h-full flex flex-col",
   },
 
   // User profile section
   userProfileContainer: {
-    base: "p-5 border-b pt-20 md:pt-5 lg:pt-5 xl:pt-5 border-gray-100 rounded-full",
+    base: "p-5 border-b pt-20 md:pt-5 lg:pt-5 xl:pt-5 border-slate-800 rounded-full",
     collapsed: "px-3",
     expanded: "px-6",
   },
 
   userInitials: {
-    base: "w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center text-white font-bold text-xl",
+    base: "w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold text-xl border-2 border-slate-700",
   },
 
   // Menu items
@@ -659,73 +659,76 @@ export const sidebarStyles = {
   },
 
   menuItem: {
-    base: "relative flex items-center gap-3 py-3 rounded-lg font-medium transition-all duration-200",
-    active: "text-black bg-white",
-    inactive: "text-black hover:text-teal-700 hover:bg-gray-50",
+    base: "relative flex items-center gap-3 py-3 rounded-xl font-medium transition-all duration-200",
+    active:
+      "text-sky-400 bg-gradient-to-r from-blue-600/15 to-cyan-500/10 border border-blue-500/25",
+    inactive: "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
     collapsed: "justify-center px-0 mx-1",
     expanded: "px-4",
   },
 
   menuIcon: {
-    active: "text-black",
-    inactive: "text-gray-600",
+    active: "text-sky-400",
+    inactive: "text-slate-500",
   },
 
   activeIndicator:
-    "absolute right-4 w-2 h-2 bg-teal-400 rounded-full animate-ping",
+    "absolute right-4 w-2 h-2 bg-cyan-400 rounded-full animate-ping",
 
   // Toggle button
   toggleButton: {
-    base: "absolute -right-3 top-12 z-20 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center text-gray-500 hover:text-teal-600 hover:border-teal-400 hover:bg-teal-50 transition-all",
+    base: "absolute -right-3 top-12 z-20 w-6 h-6 bg-slate-800 border border-slate-600 rounded-full flex items-center justify-center text-slate-500 hover:text-sky-400 hover:border-sky-500 hover:bg-slate-700 transition-all",
   },
 
   // Footer section
   footerContainer: {
-    base: "border-t border-teal-500 p-4 mt-24",
+    base: "border-t border-slate-800 p-4 mt-24",
     collapsed: "px-3",
     expanded: "px-6",
   },
 
   footerLink: {
-    base: "w-full flex items-center px-3 py-2 rounded-lg font-medium text-gray-600 hover:text-teal-700 hover:bg-gray-100 transition-all duration-200",
+    base: "w-full flex items-center px-3 py-2 rounded-xl font-medium text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-all duration-200",
     expanded: "gap-2",
     collapsed: "justify-center",
   },
 
   logoutButton: {
-    base: "w-full flex items-center px-3 py-2 rounded-lg font-medium text-gray-600 hover:text-red-600 hover:bg-red-100 transition-all duration-200",
+    base: "w-full flex items-center px-3 py-2 rounded-xl font-medium text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200",
     expanded: "gap-2",
     collapsed: "justify-center",
   },
+
   // Mobile sidebar
   mobileOverlay: "fixed inset-0 z-40 lg:hidden",
-  mobileBackdrop: "absolute inset-0 bg-black/30 backdrop-blur-sm",
+  mobileBackdrop: "absolute inset-0 bg-black/50 backdrop-blur-sm",
 
   mobileSidebar: {
-    base: "absolute left-0 top-0 bottom-0 w-4/5 max-w-sm bg-white shadow-2xl rounded-r-2xl overflow-hidden",
+    base: "absolute left-0 top-0 bottom-0 w-4/5 max-w-sm bg-slate-900 border-r border-slate-700/60 shadow-2xl rounded-r-2xl overflow-hidden",
   },
 
   mobileHeader:
-    "p-6 flex justify-between items-center border-b border-gray-100",
+    "p-6 flex justify-between items-center border-b border-slate-800",
   mobileUserContainer: "flex pt-28 items-center gap-3",
-  mobileCloseButton: "p-2 rounded-lg hover:bg-gray-100",
+  mobileCloseButton:
+    "p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200",
 
   mobileMenuList: "space-y-1",
   mobileMenuItem: {
     base: "flex items-center gap-4 px-6 py-4 font-medium",
-    active: "text-teal-600 bg-teal-50",
-    inactive: "text-gray-600 hover:bg-gray-50",
+    active: "text-sky-400 bg-blue-600/10 border-r-2 border-sky-400",
+    inactive: "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
   },
 
-  mobileFooter: "border-t border-gray-100 p-6",
+  mobileFooter: "border-t border-slate-800 p-6",
   mobileFooterLink:
-    "flex items-center gap-4 py-2 font-medium text-gray-600 hover:text-teal-700",
+    "flex items-center gap-4 py-2 font-medium text-slate-500 hover:text-slate-300",
   mobileLogoutButton:
-    "flex items-center gap-4 py-2 font-medium text-gray-600 hover:text-red-600 w-full",
+    "flex items-center gap-4 py-2 font-medium text-red-500 hover:text-red-400 w-full",
 
   // Mobile menu button
   mobileMenuButton:
-    "lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-cyan-500 to-teal-600 text-white rounded-full flex items-center justify-center shadow-xl",
+    "lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-blue-600 to-cyan-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-blue-900/40",
 };
 
 // Helper function to combine class names

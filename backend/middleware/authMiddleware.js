@@ -24,12 +24,12 @@ export const authMiddleware = (req, res, next) => {
 
     req.user = {
       id: decoded.id,
+      _id: decoded.id, // ← KEY FIX: makes req.user._id work everywhere
     };
 
     next();
   } catch (error) {
     console.error("JWT ERROR:", error.message);
-
     return res.status(401).json({
       success: false,
       message: "Invalid token",

@@ -13,6 +13,7 @@ import incomeRouter from "./routes/incomeRoute.js";
 import expenseRouter from "./routes/expenseRoute.js";
 import dashboardRouter from "./routes/dashboardRoute.js";
 import contactRoutes from "./routes/contactRoutes.js";
+import goalRoutes from "./routes/goalRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -82,6 +83,7 @@ app.use("/api/user", userRouter);
 app.use("/api/income", incomeRouter);
 app.use("/api/expense", expenseRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/goals", goalRoutes);
 
 // 🏠 Health check (important for uptime bots)
 app.get("/", (req, res) => {

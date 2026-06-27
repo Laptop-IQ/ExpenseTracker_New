@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import ContactUs from "./pages/ContactUs";
+import Goals from "./components/Goals";
 import VerifyOtp from "./components/VerifyOtp";
 import ForgotPassword from "./components/ForgotPassword";
 import Income from "./pages/Income";
@@ -265,6 +266,7 @@ useEffect(() => {
               }
             />
             <Route path="/ContactUs" element={<ContactUs />} />
+            <Route path="/goals" element={<Goals />} />
           </Route>
 
           <Route

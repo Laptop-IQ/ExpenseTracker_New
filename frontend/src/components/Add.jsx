@@ -1,10 +1,80 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { modalStyles } from "../assets/dummyStyles";
-import { X } from "lucide-react";
+import ReactDOM from "react-dom";
+import { X, Plus, Sparkles } from "lucide-react";
+import {
+  Wallet,
+  Banknote,
+  Briefcase,
+  Coins,
+  TrendingUp,
+  Utensils,
+  ShoppingBasket,
+  Milk,
+  Cookie,
+  Car,
+  Fuel,
+  Home,
+  Zap,
+  HeartPulse,
+  Wrench,
+  ShoppingCart,
+  Gift,
+  Scissors,
+  Baby,
+  Shield,
+  MoreHorizontal,
+} from "lucide-react";
 import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
 
-// ─── Private flag key (kept out of transaction shape) ───────────────────────
 const MANUAL_FLAG = "_manualCategory";
+
+const INCOME_CATS = [
+  { key: "Salary", icon: <Wallet size={15} />, color: "#1AFFD5" },
+  { key: "Extra_Income", icon: <Banknote size={15} />, color: "#3b82f6" },
+  { key: "Freelance", icon: <Briefcase size={15} />, color: "#a78bfa" },
+  { key: "Side_Hustles", icon: <Coins size={15} />, color: "#f59e0b" },
+  { key: "Investment", icon: <TrendingUp size={15} />, color: "#06b6d4" },
+];
+
+const EXPENSE_CATS = [
+  { key: "Food", icon: <Utensils size={15} />, color: "#f97316" },
+  { key: "Grocery", icon: <ShoppingBasket size={15} />, color: "#22c55e" },
+  { key: "Dairy", icon: <Milk size={15} />, color: "#fb923c" },
+  { key: "Junk_Food", icon: <Cookie size={15} />, color: "#e11d48" },
+  { key: "Transport", icon: <Car size={15} />, color: "#3b82f6" },
+  { key: "Fuel", icon: <Fuel size={15} />, color: "#f59e0b" },
+  { key: "Housing", icon: <Home size={15} />, color: "#8b5cf6" },
+  { key: "Utilities", icon: <Zap size={15} />, color: "#14b8a6" },
+  { key: "Healthcare", icon: <HeartPulse size={15} />, color: "#ef4444" },
+  { key: "Service", icon: <Wrench size={15} />, color: "#84cc16" },
+  { key: "Shopping", icon: <ShoppingCart size={15} />, color: "#a855f7" },
+  { key: "Entertainment", icon: <Gift size={15} />, color: "#ec4899" },
+  { key: "Investment", icon: <TrendingUp size={15} />, color: "#10b981" },
+  {
+    key: "Personal_Care_Expenses",
+    icon: <Scissors size={15} />,
+    color: "#f43f5e",
+  },
+  { key: "Kids_Needs", icon: <Baby size={15} />, color: "#06b6d4" },
+  { key: "Annual_Expense", icon: <Shield size={15} />, color: "#6366f1" },
+  { key: "Other", icon: <MoreHorizontal size={15} />, color: "#94a3b8" },
+];
+
+function inputStyle(hasError, focused, accent) {
+  return {
+    background: hasError
+      ? "rgba(239,68,68,0.07)"
+      : focused
+        ? "#0d1526"
+        : "#0a0f1e",
+    border: `1px solid ${hasError ? "#ef444450" : focused ? accent + "60" : "#1a2035"}`,
+    borderRadius: 12,
+    color: "#e2e8f0",
+    outline: "none",
+    transition: "all 0.2s",
+    boxShadow: focused && !hasError ? `0 0 0 3px ${accent}12` : "none",
+  };
+}
 
 const AddTransactionModal = ({
   showModal,
@@ -12,359 +82,732 @@ const AddTransactionModal = ({
   newTransaction,
   setNewTransaction,
   handleAddTransaction,
-  type = "both",
-  title = "Add New Transaction",
-  buttonText = "Add Transaction",
-  categories = [],
-  color = "teal",
+  loading = false,
+  lockType = null,
 }) => {
-  const colorClass = modalStyles.colorClasses[color];
-
-  // ─── AI STATE ────────────────────────────────────────────────────────────
-  const [ai, setAi] = useState({ category: null, confidence: 0 });
-  const [isThinking, setIsThinking] = useState(false);
-
+  const [errors, setErrors] = useState({ description: "", amount: "" });
+  const [aiDetection, setAiDetection] = useState(null);
+  const [focusedField, setFocusedField] = useState(null);
   const debounceRef = useRef(null);
-  const lastTextRef = useRef("");
-  const isMountedRef = useRef(true);
+  const isMounted = useRef(true);
 
-  // Track mount state to prevent setState after unmount
   useEffect(() => {
-    isMountedRef.current = true;
+    if (lockType && showModal) {
+      const defaultCat = lockType === "income" ? "Salary" : "Food";
+      setNewTransaction((p) => ({
+        ...p,
+        type: lockType,
+        category: p?.category || defaultCat,
+        [MANUAL_FLAG]: false,
+      }));
+    }
+  }, [lockType, showModal, setNewTransaction]);
+
+  const effectiveType = lockType ?? newTransaction?.type;
+  const isIncome = effectiveType === "income";
+  const accent = isIncome ? "#1AFFD5" : "#f97316";
+  const cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+
+  useEffect(() => {
+    isMounted.current = true;
     return () => {
-      isMountedRef.current = false;
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      isMounted.current = false;
+      clearTimeout(debounceRef.current);
     };
   }, []);
 
-  // ─── AI ENGINE ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!showModal) {
+      setAiDetection(null);
+      setErrors({ description: "", amount: "" });
+      setFocusedField(null);
+    }
+  }, [showModal]);
+
   useEffect(() => {
     const text = newTransaction?.description?.trim() ?? "";
-
-    if (!text) {
-      setAi({ category: null, confidence: 0 });
-      setIsThinking(false);
-      lastTextRef.current = "";
+    if (!text || newTransaction?.[MANUAL_FLAG]) {
+      setAiDetection(null);
       return;
     }
-
-    // Skip if text hasn't changed
-    if (lastTextRef.current === text) return;
-    lastTextRef.current = text;
-
-    setIsThinking(true);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
+    clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      if (!isMountedRef.current) return;
-
+      if (!isMounted.current) return;
       try {
         const result = smartDetectCategory(text);
-        const category =
-          result && typeof result === "object"
-            ? result.category
-            : (result ?? null);
-        const confidence =
-          result && typeof result === "object"
-            ? (result.confidence ?? 0.6)
-            : 0.6;
-
-        setAi({ category, confidence });
-
-        // Auto-select only on high confidence AND no manual override
-        setNewTransaction((prev) => {
-          if (prev?.[MANUAL_FLAG]) return prev;
-          if (confidence >= 0.8 && category) {
-            return { ...prev, category };
-          }
-          return prev;
-        });
-      } catch (err) {
-        // Silently fail — AI suggestion is non-critical
-        console.warn("[AddTransactionModal] smartDetectCategory error:", err);
-      } finally {
-        if (isMountedRef.current) setIsThinking(false);
+        const cat = result?.category ?? null;
+        const conf = result?.confidence ?? 0.6;
+        setAiDetection(cat ? { category: cat, confidence: conf } : null);
+        if (conf >= 0.8 && cat)
+          setNewTransaction((p) =>
+            p?.[MANUAL_FLAG] ? p : { ...p, category: cat },
+          );
+      } catch {
+        setAiDetection(null);
       }
-    }, 350);
-
+    }, 380);
     return () => clearTimeout(debounceRef.current);
   }, [newTransaction?.description, setNewTransaction]);
 
-  // ─── APPLY AI SUGGESTION ─────────────────────────────────────────────────
-  const applySuggestion = useCallback(() => {
-    if (!ai.category) return;
-
-    const description = newTransaction?.description?.trim();
-
-    setNewTransaction((prev) => ({
-      ...prev,
-      category: ai.category,
-      [MANUAL_FLAG]: true,
-    }));
-
-    if (description) {
-      learnCategory(description, ai.category);
-    }
-  }, [ai.category, newTransaction?.description, setNewTransaction]);
-
-  // ─── MANUAL CATEGORY SELECT ───────────────────────────────────────────────
-  const handleCategorySelect = useCallback(
-    (cat) => {
-      const description = newTransaction?.description?.trim();
-
-      setNewTransaction((prev) => ({
-        ...prev,
-        category: cat,
-        [MANUAL_FLAG]: true,
-      }));
-
-      if (description) {
-        learnCategory(description, cat);
-      }
-    },
-    [newTransaction?.description, setNewTransaction],
-  );
-
-  // ─── TYPE TOGGLE (clears category to avoid cross-type bleed) ─────────────
   const handleTypeToggle = useCallback(
     (t) => {
-      setNewTransaction((prev) => ({
-        ...prev,
+      const defaultCat = t === "income" ? "Salary" : "Food";
+      setNewTransaction((p) => ({
+        ...p,
         type: t,
-        category: "",
+        category: defaultCat,
         [MANUAL_FLAG]: false,
       }));
-      setAi({ category: null, confidence: 0 });
-      lastTextRef.current = "";
+      setAiDetection(null);
     },
     [setNewTransaction],
   );
 
-  // ─── SAFE SUBMIT (strips internal flags before handing off) ──────────────
+  const handleCatSelect = useCallback(
+    (cat) => {
+      setNewTransaction((p) => ({ ...p, category: cat, [MANUAL_FLAG]: true }));
+      setAiDetection(null);
+      const desc = newTransaction?.description?.trim();
+      if (desc) learnCategory(desc, cat);
+    },
+    [newTransaction?.description, setNewTransaction],
+  );
+
+  const validate = () => {
+    const e = { description: "", amount: "" };
+    if (!newTransaction?.description?.trim())
+      e.description = "Description is required";
+    const a = parseFloat(newTransaction?.amount);
+    if (!newTransaction?.amount) e.amount = "Amount is required";
+    else if (isNaN(a) || a <= 0) e.amount = "Enter a valid amount";
+    setErrors(e);
+    return !e.description && !e.amount;
+  };
+
   const handleSubmit = useCallback(() => {
-    setNewTransaction((prev) => {
-      // eslint-disable-next-line no-unused-vars
-      const { [MANUAL_FLAG]: _flag, ...clean } = prev ?? {};
+    if (!validate()) return;
+    const desc = newTransaction?.description?.trim();
+    if (desc) learnCategory(desc, newTransaction?.category);
+    setErrors({ description: "", amount: "" });
+    setNewTransaction((p) => {
+      const { [MANUAL_FLAG]: _, ...clean } = p ?? {};
       return clean;
     });
-    // Defer to next tick so state is flushed before parent reads it
     setTimeout(() => handleAddTransaction(), 0);
-  }, [handleAddTransaction, setNewTransaction]);
+  }, [newTransaction, handleAddTransaction, setNewTransaction]);
 
-  // ─── DATE BOUNDS ─────────────────────────────────────────────────────────
-  const today = new Date();
-  const currentDate = today.toISOString().split("T")[0];
-  const minDate = `${today.getFullYear()}-01-01`;
+  const today = new Date().toISOString().split("T")[0];
+  const minDate = `${new Date().getFullYear()}-01-01`;
 
-  // ─── GUARD ───────────────────────────────────────────────────────────────
   if (!showModal) return null;
 
-  return (
-    <div
-      className={`${modalStyles.overlay} flex items-end md:items-center`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
+  const modalContent = (
+    <>
+      <style>{`
+        @keyframes modalSlideUp {
+          from { transform: translateY(40px); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
+        }
+        @keyframes modalFadeIn {
+          from { transform: translateY(16px) scale(0.98); opacity: 0; }
+          to   { transform: translateY(0)    scale(1);    opacity: 1; }
+        }
+        @keyframes aiPop {
+          from { transform: scale(0.97); opacity: 0; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+
+        .modal-enter { animation: modalFadeIn 0.28s cubic-bezier(0.34,1.1,0.64,1) both; }
+        .ai-pop      { animation: aiPop 0.2s ease-out both; }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+          filter: invert(0.4) sepia(1) saturate(0.5);
+          cursor: pointer;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+        .cat-btn { transition: all 0.15s ease; }
+        .cat-btn:active { transform: scale(0.93); }
+
+        .modal-scroll::-webkit-scrollbar { width: 3px; }
+        .modal-scroll::-webkit-scrollbar-track { background: transparent; }
+        .modal-scroll::-webkit-scrollbar-thumb { background: #1e2d4a; border-radius: 2px; }
+      `}</style>
+
+      {/* ── Backdrop: always true fullscreen, ignores all parent transforms ── */}
       <div
-        className={`${modalStyles.modal} w-full md:max-w-lg h-[95vh] flex flex-col`}
+        onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 16px",
+          background: "rgba(4,6,12,0.80)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
       >
-        {/* HEADER */}
-        <div className="flex justify-between items-center p-4 border-b bg-white">
-          <h3 id="modal-title" className={modalStyles.modalTitle}>
-            {title}
-          </h3>
-          <button
-            type="button"
-            aria-label="Close modal"
-            onClick={() => setShowModal(false)}
-          >
-            <X size={22} />
-          </button>
-        </div>
-
-        {/* BODY — form handles Enter-key submission, footer button is the CTA */}
-        <form
-          id="transaction-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSubmit();
+        {/* ── Dialog ────────────────────────────────────────────────────── */}
+        <div
+          className="modal-enter"
+          style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 448,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            background: "#0d1526",
+            border: "1px solid #1a2035",
+            borderRadius: 20,
+            boxShadow:
+              "0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(124,58,237,0.12)",
+            maxHeight: "92vh",
           }}
-          className="flex-1 overflow-y-auto px-4 py-3 space-y-4"
-          noValidate
         >
-          {/* DESCRIPTION */}
-          <div>
-            <label htmlFor="txn-description" className={modalStyles.label}>
-              Description
-            </label>
-            <input
-              id="txn-description"
-              type="text"
-              value={newTransaction?.description ?? ""}
-              onChange={(e) =>
-                setNewTransaction((prev) => ({
-                  ...prev,
-                  description: e.target.value,
-                  // Reset manual flag when description changes so AI can re-suggest
-                  [MANUAL_FLAG]: false,
-                }))
-              }
-              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
-              placeholder="Enter description"
-              autoComplete="off"
-              required
-            />
+          {/* Accent top line */}
+          <div
+            style={{
+              height: 2,
+              width: "100%",
+              flexShrink: 0,
+              background: isIncome
+                ? "linear-gradient(90deg, #1AFFD5, #06b6d4)"
+                : "linear-gradient(90deg, #f97316, #f59e0b)",
+              boxShadow: isIncome ? "0 0 12px #1AFFD540" : "0 0 12px #f9731640",
+            }}
+          />
 
-            {/* AI HINT */}
-            <div className="mt-2 text-sm min-h-[32px]" aria-live="polite">
-              {isThinking ? (
-                <span className="text-gray-500">🤖 Thinking…</span>
-              ) : ai.category ? (
-                <div className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
-                  <span className="text-green-600">
-                    🤖 {ai.category}{" "}
-                    {ai.confidence
-                      ? `(${Math.round(ai.confidence * 100)}%)`
-                      : ""}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={applySuggestion}
-                    className="text-xs px-2 py-1 bg-green-500 text-white rounded-md"
-                    aria-label={`Apply AI suggestion: ${ai.category}`}
-                  >
-                    Apply
-                  </button>
-                </div>
-              ) : (
-                <span className="text-gray-400">
-                  Type a description for an AI suggestion
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* AMOUNT */}
-          <div>
-            <label htmlFor="txn-amount" className={modalStyles.label}>
-              Amount
-            </label>
-            <input
-              id="txn-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={newTransaction?.amount ?? ""}
-              onChange={(e) =>
-                setNewTransaction((prev) => ({
-                  ...prev,
-                  amount: e.target.value,
-                }))
-              }
-              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
-              placeholder="0.00"
-              required
-            />
-          </div>
-
-          {/* DATE */}
-          <div>
-            <label htmlFor="txn-date" className={modalStyles.label}>
-              Date
-            </label>
-            <input
-              id="txn-date"
-              type="date"
-              value={newTransaction?.date ?? ""}
-              onChange={(e) =>
-                setNewTransaction((prev) => ({
-                  ...prev,
-                  date: e.target.value,
-                }))
-              }
-              className={`${modalStyles.input(colorClass.ring)} h-11 border border-gray-900`}
-              min={minDate}
-              max={currentDate}
-              required
-            />
-          </div>
-
-          {/* TYPE TOGGLE */}
-          {type === "both" && (
-            <div
-              className="flex gap-2"
-              role="group"
-              aria-label="Transaction type"
-            >
-              {["income", "expense"].map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={newTransaction?.type === t}
-                  onClick={() => handleTypeToggle(t)}
-                  className={`flex-1 py-2 rounded-lg capitalize transition-colors ${
-                    newTransaction?.type === t
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-100 hover:bg-gray-200"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* CATEGORY */}
-          <div>
-            <label className={modalStyles.label}>Category</label>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Categories"
-            >
-              {categories.map((cat) => {
-                const isActive = newTransaction?.category === cat;
-                const isSuggested = ai.category === cat && !isActive;
-
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => handleCategorySelect(cat)}
-                    className={[
-                      "px-3 py-1.5 rounded-full text-sm border transition",
-                      isActive
-                        ? "bg-green-500 text-white border-green-500"
-                        : "bg-white border-gray-300 hover:border-gray-400",
-                      isSuggested ? "ring-2 ring-green-400 animate-pulse" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </form>
-
-        {/* FOOTER — single submit point */}
-        <div className="p-4 border-t bg-white">
-          <button
-            type="submit"
-            form="transaction-form"
-            className={`${modalStyles.submitButton(colorClass.button)} w-full py-3`}
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "16px 20px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderBottom: "1px solid #0f1729",
+            }}
           >
-            {buttonText}
-          </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.15em",
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  background: `${accent}15`,
+                  border: `1px solid ${accent}30`,
+                  color: accent,
+                }}
+              >
+                {isIncome ? "Income" : "Expense"}
+              </span>
+              <h2
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#e2e8f0",
+                  margin: 0,
+                }}
+              >
+                {isIncome ? "Add new income" : "Add new expense"}
+              </h2>
+            </div>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#0a0f1e",
+                border: "1px solid #1a2035",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#ef444440";
+                e.currentTarget.style.background = "rgba(239,68,68,0.08)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#1a2035";
+                e.currentTarget.style.background = "#0a0f1e";
+              }}
+            >
+              <X size={13} color="#6b7280" />
+            </button>
+          </div>
+
+          {/* ── Body ────────────────────────────────────────────────────── */}
+          <div
+            className="modal-scroll"
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "16px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+          >
+            {/* Description */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.15em",
+                  marginBottom: 6,
+                  color: "#374151",
+                }}
+              >
+                Description
+              </label>
+              <input
+                type="text"
+                value={newTransaction?.description ?? ""}
+                onChange={(e) =>
+                  setNewTransaction((p) => ({
+                    ...p,
+                    description: e.target.value,
+                    [MANUAL_FLAG]: false,
+                  }))
+                }
+                onFocus={() => setFocusedField("desc")}
+                onBlur={() => setFocusedField(null)}
+                placeholder={
+                  isIncome ? "e.g. Monthly salary" : "e.g. Lunch at café"
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  fontSize: 14,
+                  boxSizing: "border-box",
+                  ...inputStyle(
+                    !!errors.description,
+                    focusedField === "desc",
+                    accent,
+                  ),
+                }}
+              />
+              {errors.description && (
+                <p style={{ fontSize: 10, marginTop: 4, color: "#ef4444" }}>
+                  {errors.description}
+                </p>
+              )}
+
+              {/* AI hint */}
+              <div style={{ marginTop: 8, minHeight: 26 }} aria-live="polite">
+                {aiDetection ? (
+                  <div
+                    className="ai-pop"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 12px",
+                      borderRadius: 12,
+                      fontSize: 11,
+                      background: `${accent}10`,
+                      border: `1px solid ${accent}25`,
+                    }}
+                  >
+                    <Sparkles
+                      size={10}
+                      color={accent}
+                      style={{ flexShrink: 0 }}
+                    />
+                    <span style={{ flex: 1, color: "#6b7280" }}>
+                      Auto-selected{" "}
+                      <span style={{ fontWeight: 600, color: accent }}>
+                        {aiDetection.category.replace(/_/g, " ")}
+                      </span>{" "}
+                      <span style={{ color: "#374151" }}>(AI)</span>
+                    </span>
+                    <button
+                      onClick={() => setAiDetection(null)}
+                      style={{
+                        color: "#374151",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      color: "#1e3a5f",
+                    }}
+                  >
+                    <Sparkles size={9} style={{ color: "#1e3a5f" }} />
+                    Type a description for AI category suggestion
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Amount + Date */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    marginBottom: 6,
+                    color: "#374151",
+                  }}
+                >
+                  Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  value={newTransaction?.amount ?? ""}
+                  onChange={(e) =>
+                    setNewTransaction((p) => ({
+                      ...p,
+                      amount: e.target.value,
+                    }))
+                  }
+                  onFocus={() => setFocusedField("amount")}
+                  onBlur={() => setFocusedField(null)}
+                  placeholder="0"
+                  min="1"
+                  step="0.01"
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    fontSize: 14,
+                    boxSizing: "border-box",
+                    ...inputStyle(
+                      !!errors.amount,
+                      focusedField === "amount",
+                      accent,
+                    ),
+                  }}
+                />
+                {errors.amount && (
+                  <p style={{ fontSize: 10, marginTop: 4, color: "#ef4444" }}>
+                    {errors.amount}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    marginBottom: 6,
+                    color: "#374151",
+                  }}
+                >
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={newTransaction?.date ?? ""}
+                  onChange={(e) =>
+                    setNewTransaction((p) => ({ ...p, date: e.target.value }))
+                  }
+                  onFocus={() => setFocusedField("date")}
+                  onBlur={() => setFocusedField(null)}
+                  min={minDate}
+                  max={today}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    fontSize: 14,
+                    boxSizing: "border-box",
+                    ...inputStyle(false, focusedField === "date", accent),
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Type toggle */}
+            {!lockType && (
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.15em",
+                    marginBottom: 8,
+                    color: "#374151",
+                  }}
+                >
+                  Type
+                </label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 4,
+                    padding: 4,
+                    borderRadius: 12,
+                    background: "#0a0f1e",
+                    border: "1px solid #1a2035",
+                  }}
+                  role="group"
+                  aria-label="Transaction type"
+                >
+                  {["income", "expense"].map((t) => {
+                    const active = newTransaction?.type === t;
+                    const col = t === "income" ? "#1AFFD5" : "#f97316";
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => handleTypeToggle(t)}
+                        style={
+                          active
+                            ? {
+                                padding: "8px 0",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                textTransform: "capitalize",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                                background: `${col}18`,
+                                border: `1px solid ${col}35`,
+                                color: col,
+                                boxShadow: `0 0 8px ${col}20`,
+                              }
+                            : {
+                                padding: "8px 0",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                textTransform: "capitalize",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                                background: "transparent",
+                                border: "1px solid transparent",
+                                color: "#374151",
+                              }
+                        }
+                      >
+                        {t === "income" ? "↑ Income" : "↓ Expense"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Category grid */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.15em",
+                  marginBottom: 8,
+                  color: "#374151",
+                }}
+              >
+                Category
+              </label>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: 6,
+                }}
+              >
+                {cats.map(({ key, icon, color }) => {
+                  const active = newTransaction?.category === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleCatSelect(key)}
+                      className="cat-btn"
+                      style={
+                        active
+                          ? {
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "10px 8px",
+                              borderRadius: 12,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              background: `${color}20`,
+                              border: `1px solid ${color}50`,
+                              color: color,
+                              boxShadow: `0 0 10px ${color}20`,
+                            }
+                          : {
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "10px 8px",
+                              borderRadius: 12,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              background: "#0a0f1e",
+                              border: "1px solid #1a2035",
+                              color: "#374151",
+                            }
+                      }
+                      onMouseEnter={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.borderColor = `${color}30`;
+                          e.currentTarget.style.color = color;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.borderColor = "#1a2035";
+                          e.currentTarget.style.color = "#374151";
+                        }
+                      }}
+                    >
+                      <span style={{ color: active ? color : "inherit" }}>
+                        {icon}
+                      </span>
+                      {key.replace(/_/g, " ")}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Footer ──────────────────────────────────────────────────── */}
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "16px 20px",
+              display: "flex",
+              gap: 10,
+              borderTop: "1px solid #0f1729",
+            }}
+          >
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                flex: 1,
+                padding: "10px 0",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                background: "#0a0f1e",
+                border: "1px solid #1a2035",
+                color: "#6b7280",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#ef444430";
+                e.currentTarget.style.color = "#9ca3af";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#1a2035";
+                e.currentTarget.style.color = "#6b7280";
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              style={{
+                flex: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: "10px 0",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: "all 0.15s",
+                border: "none",
+                background: isIncome
+                  ? "linear-gradient(135deg, #0d9e75, #1AFFD5)"
+                  : "linear-gradient(135deg, #c2410c, #f97316)",
+                color: isIncome ? "#001a14" : "#fff",
+                boxShadow: isIncome
+                  ? "0 0 20px #1AFFD530, 0 4px 12px rgba(0,0,0,0.4)"
+                  : "0 0 20px #f9731630, 0 4px 12px rgba(0,0,0,0.4)",
+                opacity: loading ? 0.55 : 1,
+              }}
+            >
+              {loading ? (
+                <>
+                  <svg
+                    className="animate-spin"
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                  >
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Plus size={14} />
+                  {isIncome ? "Add Income" : "Add Expense"}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
+
+  // Portal: renders directly into <body>, bypasses all parent CSS transforms/overflow
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default AddTransactionModal;

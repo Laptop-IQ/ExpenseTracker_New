@@ -1,19 +1,12 @@
-/* ============================================================
-   ExpensePage.jsx  —  Production-ready Expense Tracker
-   All sub-components inlined. Drop-in replacement for your
-   existing ExpensePage. Wire API_BASE + useOutletContext as
-   before; everything else is self-contained.
-   ============================================================ */
-
 /* eslint-disable no-unused-vars */
 import React, {
   useState,
   useMemo,
   useEffect,
   useCallback,
-  Suspense,
   useRef,
 } from "react";
+import ReactDOM from "react-dom";
 import { useOutletContext } from "react-router-dom";
 import {
   Plus,
@@ -32,7 +25,6 @@ import {
   AlertCircle,
   Check,
   ArrowUpRight,
-  ArrowDownRight,
   Search,
   SlidersHorizontal,
   Edit2,
@@ -43,18 +35,16 @@ import {
   ShoppingCart,
   Gift,
   HeartPulse,
-  PiggyBank,
-  Briefcase,
   Fuel,
   Scissors,
   Baby,
   Shield,
   Milk,
   Wrench,
-  Wallet,
   Coins,
   ShoppingBasket,
   Cookie,
+  Sparkles,
 } from "lucide-react";
 import {
   AreaChart,
@@ -67,12 +57,11 @@ import {
   ReferenceLine,
 } from "recharts";
 import axios from "axios";
+import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-// ─────────────────────────────────────────────────────────────
-// CONSTANTS
-// ─────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 const CATEGORY_COLOR = {
   Food: "#f97316",
   Transport: "#3b82f6",
@@ -137,17 +126,13 @@ const FILTER_OPTIONS = [
   { value: "all", label: "All Transactions" },
   { value: "month", label: "This Month" },
   { value: "year", label: "This Year" },
-  ...EXPENSE_CATEGORIES.map((c) => ({
-    value: c,
-    label: c.replace(/_/g, " "),
-  })),
+  ...EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c.replace(/_/g, " ") })),
 ];
 
 const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
+const AI_DEBOUNCE_MS = 400;
 
-// ─────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function toIsoWithClientTime(dateValue) {
   if (!dateValue) return new Date().toISOString();
   if (typeof dateValue === "string" && dateValue.length === 10) {
@@ -169,32 +154,29 @@ function fmtINR(n) {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
 
-function getTimeFrameRange(timeFrame) {
+function getTimeFrameRange(tf) {
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
-  if (timeFrame === "daily")
-    return { start, end: new Date(now), label: "Today" };
-  if (timeFrame === "weekly") {
+  if (tf === "daily") return { start, end: new Date(now), label: "Today" };
+  if (tf === "weekly") {
     const s = new Date(start);
     s.setDate(start.getDate() - start.getDay());
     s.setHours(0, 0, 0, 0);
     return { start: s, end: new Date(now), label: "This Week" };
   }
-  if (timeFrame === "monthly") {
+  if (tf === "monthly")
     return {
       start: new Date(start.getFullYear(), start.getMonth(), 1),
       end: new Date(now),
       label: "This Month",
     };
-  }
-  if (timeFrame === "yearly") {
+  if (tf === "yearly")
     return {
       start: new Date(start.getFullYear(), 0, 1),
       end: new Date(now),
       label: "This Year",
     };
-  }
   return {
     start: new Date(start.getFullYear(), start.getMonth(), 1),
     end: new Date(now),
@@ -202,10 +184,10 @@ function getTimeFrameRange(timeFrame) {
   };
 }
 
-function generateChartPoints(timeFrame) {
+function generateChartPoints(tf) {
   const now = new Date();
   const points = [];
-  if (timeFrame === "daily") {
+  if (tf === "daily") {
     for (let i = 0; i < 24; i++) {
       const h = new Date(now);
       h.setHours(i, 0, 0, 0);
@@ -216,7 +198,7 @@ function generateChartPoints(timeFrame) {
         isCurrent: i === now.getHours(),
       });
     }
-  } else if (timeFrame === "weekly") {
+  } else if (tf === "weekly") {
     const s = new Date(now);
     s.setDate(now.getDate() - now.getDay());
     s.setHours(0, 0, 0, 0);
@@ -230,7 +212,7 @@ function generateChartPoints(timeFrame) {
           d.getDate() === now.getDate() && d.getMonth() === now.getMonth(),
       });
     }
-  } else if (timeFrame === "monthly") {
+  } else if (tf === "monthly") {
     const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     for (let i = 1; i <= days; i++) {
       const d = new Date(now.getFullYear(), now.getMonth(), i);
@@ -253,24 +235,21 @@ function generateChartPoints(timeFrame) {
   return points;
 }
 
-// ─────────────────────────────────────────────────────────────
-// TOAST
-// ─────────────────────────────────────────────────────────────
+// ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ toasts }) {
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
         <div
           key={t.id}
           style={{ animation: "slideInRight .25s ease-out" }}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium
-            pointer-events-auto border backdrop-blur-sm
+          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg text-sm font-medium pointer-events-auto border
             ${
               t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                ? "bg-white border-emerald-200 text-emerald-700 dark:bg-gray-800 dark:border-emerald-800/60 dark:text-emerald-400"
                 : t.type === "error"
-                  ? "bg-red-50 border-red-200 text-red-800"
-                  : "bg-white border-gray-200 text-gray-800"
+                  ? "bg-white border-red-200 text-red-700 dark:bg-gray-800 dark:border-red-800/60 dark:text-red-400"
+                  : "bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
             }`}
         >
           {t.type === "success" ? (
@@ -278,7 +257,7 @@ function Toast({ toasts }) {
           ) : t.type === "error" ? (
             <AlertCircle size={14} className="text-red-500 shrink-0" />
           ) : (
-            <Zap size={14} className="text-orange-400 shrink-0" />
+            <Zap size={14} className="text-violet-500 shrink-0" />
           )}
           {t.message}
         </div>
@@ -287,85 +266,78 @@ function Toast({ toasts }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// STAT CARD
-// ─────────────────────────────────────────────────────────────
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent = "#f97316", icon: Icon }) {
   return (
     <div
-      className="relative bg-white rounded-2xl p-4 lg:p-5 overflow-hidden border border-gray-100
-                    shadow-sm hover:shadow-md transition-shadow duration-200 group"
+      className="relative overflow-hidden bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 shadow-md shadow-orange-100/50 dark:shadow-black/30 hover:shadow-xl hover:shadow-orange-200/60 dark:hover:shadow-black/40 hover:-translate-y-1 transition-all duration-300"
+      style={{ animation: "glowPulse 4s ease-in-out infinite" }}
     >
-      <div
-        className="absolute inset-x-0 top-0 h-[3px] rounded-t-2xl"
-        style={{ background: accent }}
-      />
-      <div className="flex items-start justify-between mb-3">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight">
-          {label}
-        </p>
-        {Icon && (
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center opacity-60"
-            style={{ background: accent + "18", color: accent }}
-          >
-            <Icon size={14} />
-          </div>
-        )}
+      <div className="flex items-start justify-between mb-4">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          style={{ background: accent + "15" }}
+        >
+          {Icon && <Icon size={18} style={{ color: accent }} />}
+        </div>
+        <button className="w-7 h-7 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center justify-center transition-colors">
+          <ArrowUpRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-400" />
+        </button>
       </div>
-      <p className="text-2xl font-bold text-gray-900 tracking-tight leading-none">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] mb-1.5 text-gray-400 dark:text-gray-500">
+        {label}
+      </p>
+      <p className="text-2xl font-bold tracking-tight leading-none text-gray-900 dark:text-gray-100">
         {value}
       </p>
-      <p className="text-xs text-gray-400 mt-2">{sub}</p>
+      {sub && (
+        <p className="text-[11px] mt-2 truncate text-gray-400 dark:text-gray-500">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// CUSTOM CHART TOOLTIP
-// ─────────────────────────────────────────────────────────────
+// ─── Chart Tooltip ────────────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5 shadow-xl text-sm">
-      <p className="text-gray-400 text-xs mb-0.5">{label}</p>
-      <p className="font-bold text-orange-500">
+    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2.5 shadow-xl text-sm">
+      <p className="text-gray-400 dark:text-gray-500 text-xs mb-0.5">{label}</p>
+      <p className="font-bold text-orange-500 dark:text-orange-400">
         {fmtINR(Math.round(payload[0].value))}
       </p>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// CATEGORY PILL
-// ─────────────────────────────────────────────────────────────
+// ─── Category Pill ────────────────────────────────────────────────────────────
 function CategoryPill({ cat }) {
   const color = CATEGORY_COLOR[cat] ?? "#94a3b8";
   return (
     <span
       className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-      style={{ background: color + "18", color }}
+      style={{ background: color + "15", color }}
     >
       {cat.replace(/_/g, " ")}
     </span>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// TIMEFRAME SELECTOR
-// ─────────────────────────────────────────────────────────────
+// ─── TimeFrame Selector ───────────────────────────────────────────────────────
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   return (
-    <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+    <div className="flex gap-1 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-1 rounded-xl w-fit">
       {TIME_FRAMES.map((f) => (
         <button
           key={f}
           onClick={() => setTimeFrame(f)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200
             ${
               timeFrame === f
-                ? "bg-orange-500 text-white shadow-sm shadow-orange-200"
-                : "text-gray-500 hover:text-gray-700"
+                ? "bg-orange-500 text-white shadow-sm shadow-orange-200 dark:shadow-orange-900/40"
+                : "text-gray-500 hover:text-gray-700 hover:bg-white dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700"
             }`}
         >
           {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -375,9 +347,7 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// FILTER DROPDOWN
-// ─────────────────────────────────────────────────────────────
+// ─── Filter Dropdown ─────────────────────────────────────────────────────────
 function FilterDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -396,21 +366,29 @@ function FilterDropdown({ value, onChange }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200
-                   px-3 py-2.5 rounded-xl hover:border-orange-300 hover:text-orange-600 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
       >
-        <SlidersHorizontal size={13} />
-        <span className="max-w-[80px] truncate">{label}</span>
+        <div className="w-7 h-7 rounded-lg bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+          <SlidersHorizontal
+            size={13}
+            className="text-orange-500 dark:text-orange-400"
+          />
+        </div>
+        <div className="flex flex-col items-start">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-bold">
+            Filter
+          </span>
+          <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+            {label}
+          </span>
+        </div>
         <ChevronDown
-          size={12}
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
+          size={14}
+          className={`ml-auto text-gray-400 dark:text-gray-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
       {open && (
-        <div
-          className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-2xl shadow-xl
-                        overflow-hidden z-30 animate-[fadeIn_.12s_ease-out]"
-        >
+        <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl overflow-hidden z-30">
           <div className="max-h-64 overflow-y-auto py-1.5">
             {FILTER_OPTIONS.map((opt) => (
               <button
@@ -422,8 +400,8 @@ function FilterDropdown({ value, onChange }) {
                 className={`w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center gap-2
                   ${
                     value === opt.value
-                      ? "bg-orange-50 text-orange-600 font-semibold"
-                      : "text-gray-600 hover:bg-gray-50"
+                      ? "bg-orange-50 text-orange-600 font-semibold dark:bg-orange-500/10 dark:text-orange-400"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                   }`}
               >
                 {!["all", "month", "year"].includes(opt.value) && (
@@ -444,9 +422,7 @@ function FilterDropdown({ value, onChange }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// SPENDING BREAKDOWN
-// ─────────────────────────────────────────────────────────────
+// ─── Spending Breakdown ───────────────────────────────────────────────────────
 function SpendingBreakdown({ transactions }) {
   const breakdown = useMemo(() => {
     const map = {};
@@ -465,34 +441,43 @@ function SpendingBreakdown({ transactions }) {
 
   if (!breakdown.length)
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center justify-center gap-2 min-h-[160px]">
-        <Flame size={22} className="text-gray-200" />
-        <p className="text-xs text-gray-400">No category data yet</p>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 flex flex-col items-center justify-center gap-2 min-h-[160px] shadow-lg shadow-orange-100/30 dark:shadow-black/30">
+        <Flame size={22} className="text-gray-300 dark:text-gray-600" />
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          No category data yet
+        </p>
       </div>
     );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-        <Flame size={15} className="text-orange-400" />
-        Top categories
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+        <Flame size={15} className="text-orange-500 dark:text-orange-400" /> Top
+        categories
       </h3>
       <div className="space-y-3.5">
         {breakdown.map(({ cat, amt, pct }) => (
           <div key={cat}>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="flex items-center gap-1.5 text-xs text-gray-600 font-medium">
+              <span className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 font-medium">
                 <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: CATEGORY_COLOR[cat] ?? "#94a3b8" }}
-                />
+                  className="w-6 h-6 rounded-lg flex items-center justify-center"
+                  style={{
+                    background: (CATEGORY_COLOR[cat] ?? "#94a3b8") + "15",
+                    color: CATEGORY_COLOR[cat] ?? "#94a3b8",
+                  }}
+                >
+                  {CATEGORY_ICONS[cat] || (
+                    <IndianRupee className="w-3.5 h-3.5" />
+                  )}
+                </span>
                 {cat.replace(/_/g, " ")}
               </span>
-              <span className="text-xs font-bold text-gray-700">
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
                 {fmtINR(amt)}
               </span>
             </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{
@@ -508,9 +493,36 @@ function SpendingBreakdown({ transactions }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// TRANSACTION ITEM
-// ─────────────────────────────────────────────────────────────
+// ─── AI Badge ─────────────────────────────────────────────────────────────────
+function AiAutoDetectBadge({ detection, onDismiss }) {
+  if (!detection) return null;
+  const color = CATEGORY_COLOR[detection.category] ?? "#94a3b8";
+  return (
+    <div
+      className="flex items-center gap-2 mt-1.5 px-3 py-2 rounded-xl border text-xs"
+      style={{ background: color + "10", borderColor: color + "25" }}
+    >
+      <Sparkles size={11} style={{ color }} className="shrink-0" />
+      <span className="text-gray-500 dark:text-gray-400 flex-1">
+        Auto-selected{" "}
+        <span className="font-semibold" style={{ color }}>
+          {detection.category.replace(/_/g, " ")}
+        </span>{" "}
+        <span className="text-gray-400 dark:text-gray-500">
+          ({detection.source?.startsWith("memory") ? "memory" : "AI"})
+        </span>
+      </span>
+      <button
+        onClick={onDismiss}
+        className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+      >
+        <X size={11} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Transaction Item ─────────────────────────────────────────────────────────
 function TransactionItem({
   transaction,
   isEditing,
@@ -522,10 +534,28 @@ function TransactionItem({
   setEditingId,
 }) {
   const [errors, setErrors] = useState({ description: "", amount: "" });
+  const [editDetection, setEditDetection] = useState(null);
+  const editDebounceRef = useRef(null);
   const color = CATEGORY_COLOR[transaction.category] ?? "#94a3b8";
   const icon = CATEGORY_ICONS[transaction.category] ?? (
     <IndianRupee className="w-4 h-4" />
   );
+
+  const handleEditDescChange = (value) => {
+    setEditForm((p) => ({ ...p, description: value }));
+    clearTimeout(editDebounceRef.current);
+    if (value.trim().length < 3) {
+      setEditDetection(null);
+      return;
+    }
+    editDebounceRef.current = setTimeout(() => {
+      const result = smartDetectCategory(value);
+      if (result?.category && result.confidence >= 0.7) {
+        setEditForm((p) => ({ ...p, category: result.category }));
+        setEditDetection(result);
+      } else setEditDetection(null);
+    }, AI_DEBOUNCE_MS);
+  };
 
   const validate = () => {
     const e = { description: "", amount: "" };
@@ -537,20 +567,23 @@ function TransactionItem({
     return !e.description && !e.amount;
   };
 
+  const handleSave = () => {
+    if (!validate()) return;
+    setErrors({ description: "", amount: "" });
+    learnCategory(editForm.description, editForm.category);
+    onSave();
+  };
+
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3.5 transition-colors
-      ${isEditing ? "bg-orange-50/50" : "hover:bg-gray-50/70"}`}
+      className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${isEditing ? "bg-orange-50/50 dark:bg-orange-500/10" : "hover:bg-gray-50/80 dark:hover:bg-gray-700/40"}`}
     >
-      {/* Icon */}
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: color + "18", color }}
+        style={{ background: color + "15", color }}
       >
         {icon}
       </div>
-
-      {/* Content */}
       <div className="flex-1 min-w-0">
         {isEditing ? (
           <div className="space-y-1.5">
@@ -558,18 +591,20 @@ function TransactionItem({
               <input
                 type="text"
                 value={editForm.description}
-                onChange={(e) =>
-                  setEditForm((p) => ({ ...p, description: e.target.value }))
-                }
-                className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white outline-none transition-colors
-                  ${errors.description ? "border-red-300" : "border-gray-200 focus:border-orange-400"}`}
+                onChange={(e) => handleEditDescChange(e.target.value)}
+                className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 outline-none transition-colors placeholder-gray-300 dark:placeholder-gray-500
+                  ${errors.description ? "border-red-300 dark:border-red-700" : "border-gray-200 dark:border-gray-600 focus:border-orange-400 dark:focus:border-orange-500"}`}
                 placeholder="Description"
               />
               {errors.description && (
-                <p className="text-[10px] text-red-500 mt-0.5">
+                <p className="text-[10px] text-red-500 dark:text-red-400 mt-0.5">
                   {errors.description}
                 </p>
               )}
+              <AiAutoDetectBadge
+                detection={editDetection}
+                onDismiss={() => setEditDetection(null)}
+              />
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
@@ -579,23 +614,25 @@ function TransactionItem({
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, amount: e.target.value }))
                   }
-                  className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white outline-none transition-colors
-                    ${errors.amount ? "border-red-300" : "border-gray-200 focus:border-orange-400"}`}
+                  className={`w-full text-sm px-2.5 py-1.5 rounded-lg border bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 outline-none transition-colors placeholder-gray-300 dark:placeholder-gray-500
+                    ${errors.amount ? "border-red-300 dark:border-red-700" : "border-gray-200 dark:border-gray-600 focus:border-orange-400 dark:focus:border-orange-500"}`}
                   placeholder="Amount"
                   min="1"
                 />
                 {errors.amount && (
-                  <p className="text-[10px] text-red-500 mt-0.5">
+                  <p className="text-[10px] text-red-500 dark:text-red-400 mt-0.5">
                     {errors.amount}
                   </p>
                 )}
               </div>
               <select
                 value={editForm.category}
-                onChange={(e) =>
-                  setEditForm((p) => ({ ...p, category: e.target.value }))
-                }
-                className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white outline-none focus:border-orange-400 text-gray-700"
+                onChange={(e) => {
+                  setEditForm((p) => ({ ...p, category: e.target.value }));
+                  setEditDetection(null);
+                  learnCategory(editForm.description, e.target.value);
+                }}
+                className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 outline-none focus:border-orange-400 dark:focus:border-orange-500 text-gray-600 dark:text-gray-300"
               >
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -607,54 +644,46 @@ function TransactionItem({
           </div>
         ) : (
           <>
-            <p className="text-sm font-semibold text-gray-800 truncate">
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">
               {transaction.description}
             </p>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] text-gray-400">
+              <span className="text-[11px] text-gray-400 dark:text-gray-500">
                 {new Date(transaction.date).toLocaleDateString("en-IN", {
                   day: "numeric",
                   month: "short",
                   year: "numeric",
                 })}
               </span>
-              <span className="text-gray-300">·</span>
+              <span className="text-gray-200 dark:text-gray-600">·</span>
               <CategoryPill cat={transaction.category} />
             </div>
           </>
         )}
       </div>
-
-      {/* Actions */}
       <div className="flex items-center gap-2 shrink-0">
         {isEditing ? (
           <>
             <button
-              onClick={() => {
-                if (validate()) {
-                  setErrors({ description: "", amount: "" });
-                  onSave();
-                }
-              }}
-              className="flex items-center gap-1 text-xs font-semibold text-white bg-orange-500
-                         px-3 py-1.5 rounded-lg hover:bg-orange-600 active:scale-95 transition-all"
+              onClick={handleSave}
+              className="flex items-center gap-1 text-xs font-semibold text-white bg-orange-500 px-3 py-1.5 rounded-lg hover:bg-orange-600 active:scale-95 transition-all"
             >
               <Save size={12} /> Save
             </button>
             <button
               onClick={() => {
                 setErrors({ description: "", amount: "" });
+                setEditDetection(null);
                 onCancel();
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-gray-500 bg-gray-100
-                         px-3 py-1.5 rounded-lg hover:bg-gray-200 active:scale-95 transition-all"
+              className="flex items-center gap-1 text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition-all"
             >
               <X size={12} /> Cancel
             </button>
           </>
         ) : (
           <>
-            <span className="text-sm font-bold text-red-500 mr-1">
+            <span className="text-sm font-bold text-red-500 dark:text-red-400 mr-1">
               −₹
               {Number(transaction.amount).toLocaleString("en-IN", {
                 minimumFractionDigits: 2,
@@ -671,16 +700,14 @@ function TransactionItem({
                 });
                 setEditingId(transaction.id);
               }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400
-                         hover:bg-orange-50 hover:text-orange-500 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:text-gray-500 dark:hover:bg-orange-500/10 dark:hover:text-orange-400 transition-colors"
               title="Edit"
             >
               <Edit2 size={13} />
             </button>
             <button
               onClick={() => onDelete(transaction.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400
-                         hover:bg-red-50 hover:text-red-500 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors"
               title="Delete"
             >
               <Trash2 size={13} />
@@ -692,42 +719,72 @@ function TransactionItem({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// DELETE MODAL
-// ─────────────────────────────────────────────────────────────
+// ─── Delete Modal (Portal) ────────────────────────────────────────────────────
 function DeleteModal({ transaction, loading, onConfirm, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+  return ReactDOM.createPortal(
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+      }}
+    >
+      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(17,24,39,0.3)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+        }}
       />
+
+      {/* Sheet */}
       <div
-        className="relative w-full max-w-sm bg-white rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl
-                      animate-[slideUp_.25s_ease-out] sm:mx-4"
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 384,
+          margin: "0 16px 0",
+          borderRadius: "24px 24px 0 0",
+          padding: 24,
+          background: "var(--dm-bg, #fff)",
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+          animation: "slideUp .25s ease-out",
+        }}
+        className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 sm:rounded-2xl sm:mb-8"
       >
-        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5 sm:hidden" />
+        {/* drag handle */}
+        <div className="w-10 h-1 bg-gray-200 dark:bg-gray-600 rounded-full mx-auto mb-5 sm:hidden" />
         <div className="flex justify-center mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-            <Trash2 size={22} className="text-red-500" />
+          <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
+            <Trash2 size={22} className="text-red-500 dark:text-red-400" />
           </div>
         </div>
-        <h2 className="text-center text-base font-bold text-gray-900">
+        <h2 className="text-center text-base font-bold text-gray-900 dark:text-gray-100">
           Delete this expense?
         </h2>
-        <p className="text-center text-xs text-gray-400 mt-1 mb-4">
+        <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-1 mb-4">
           This action cannot be undone
         </p>
         {transaction && (
-          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 mb-5">
+          <div className="rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 px-4 py-3 mb-5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-semibold text-gray-800 text-sm truncate">
+                <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate">
                   {transaction.description}
                 </p>
                 <CategoryPill cat={transaction.category} />
               </div>
-              <p className="font-bold text-red-500 shrink-0">
+              <p className="font-bold text-red-500 dark:text-red-400 shrink-0">
                 {fmtINR(transaction.amount)}
               </p>
             </div>
@@ -736,29 +793,25 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold
-                       hover:bg-gray-200 active:scale-95 transition"
+            className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-semibold
-                       hover:bg-red-600 active:scale-95 transition shadow-md shadow-red-100
-                       disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 active:scale-95 transition shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? "Deleting…" : "Delete"}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// ADD / EDIT TRANSACTION MODAL
-// ─────────────────────────────────────────────────────────────
+// ─── Add Modal (Portal) ───────────────────────────────────────────────────────
 function AddTransactionModal({
   showModal,
   setShowModal,
@@ -768,6 +821,39 @@ function AddTransactionModal({
   loading,
 }) {
   const [errors, setErrors] = useState({ description: "", amount: "" });
+  const [aiDetection, setAiDetection] = useState(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (!showModal) {
+      setAiDetection(null);
+      setErrors({ description: "", amount: "" });
+      clearTimeout(debounceRef.current);
+    }
+  }, [showModal]);
+
+  const handleDescriptionChange = (value) => {
+    setNewTransaction((p) => ({ ...p, description: value }));
+    clearTimeout(debounceRef.current);
+    if (value.trim().length < 3) {
+      setAiDetection(null);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      const result = smartDetectCategory(value);
+      if (result?.category && result.confidence >= 0.7) {
+        setNewTransaction((p) => ({ ...p, category: result.category }));
+        setAiDetection(result);
+      } else setAiDetection(null);
+    }, AI_DEBOUNCE_MS);
+  };
+
+  const handleCategorySelect = (cat) => {
+    setNewTransaction((p) => ({ ...p, category: cat }));
+    setAiDetection(null);
+    if (newTransaction.description?.trim())
+      learnCategory(newTransaction.description, cat);
+  };
 
   const validate = () => {
     const e = { description: "", amount: "" };
@@ -781,37 +867,52 @@ function AddTransactionModal({
   };
 
   const handleSubmit = () => {
-    if (validate()) {
-      setErrors({ description: "", amount: "" });
-      handleAddTransaction();
-    }
+    if (!validate()) return;
+    setErrors({ description: "", amount: "" });
+    if (newTransaction.description?.trim())
+      learnCategory(newTransaction.description, newTransaction.category);
+    handleAddTransaction();
+    setAiDetection(null);
   };
 
   if (!showModal) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+  return ReactDOM.createPortal(
+    <div
+      onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        background: "rgba(17,24,39,0.3)",
+      }}
+    >
+      {/* Modal panel */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => setShowModal(false)}
-      />
-      <div
-        className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl
-                      animate-[slideUp_.25s_ease-out] sm:mx-4 max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-md bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-t-3xl sm:rounded-2xl shadow-2xl shadow-orange-200/30 dark:shadow-black/50 ring-1 ring-orange-100/20 dark:ring-gray-700/40 sm:mb-8 sm:mx-4 max-h-[90vh] overflow-y-auto"
+        style={{ animation: "slideUp .25s ease-out" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle */}
-        <div className="sticky top-0 bg-white z-10 px-6 pt-4 pb-3 border-b border-gray-50">
-          <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3 sm:hidden" />
+        {/* Header */}
+        <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 px-6 pt-4 pb-3 border-b border-gray-50 dark:border-gray-700">
+          <div className="w-10 h-1 bg-gray-200 dark:bg-gray-600 rounded-full mx-auto mb-3 sm:hidden" />
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
               Add new expense
             </h2>
             <button
               onClick={() => setShowModal(false)}
-              className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center
-                         hover:bg-gray-200 transition-colors"
+              className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              <X size={15} className="text-gray-500" />
+              <X size={15} className="text-gray-500 dark:text-gray-300" />
             </button>
           </div>
         </div>
@@ -819,31 +920,32 @@ function AddTransactionModal({
         <div className="p-6 space-y-4">
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            <label className="block text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">
               Description
             </label>
             <input
               type="text"
               value={newTransaction.description}
-              onChange={(e) =>
-                setNewTransaction((p) => ({
-                  ...p,
-                  description: e.target.value,
-                }))
-              }
+              onChange={(e) => handleDescriptionChange(e.target.value)}
               placeholder="e.g. Lunch at café"
-              className={`w-full px-3.5 py-3 text-sm rounded-xl border outline-none transition-colors
-                ${errors.description ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50 focus:border-orange-400 focus:bg-white"}`}
+              className={`w-full px-3.5 py-3 text-sm rounded-xl border bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 outline-none transition-colors placeholder-gray-300 dark:placeholder-gray-500
+                ${errors.description ? "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-500/10" : "border-gray-200 dark:border-gray-600 focus:border-orange-400 dark:focus:border-orange-500 focus:bg-white dark:focus:bg-gray-900"}`}
             />
             {errors.description && (
-              <p className="text-xs text-red-500 mt-1">{errors.description}</p>
+              <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                {errors.description}
+              </p>
             )}
+            <AiAutoDetectBadge
+              detection={aiDetection}
+              onDismiss={() => setAiDetection(null)}
+            />
           </div>
 
           {/* Amount + Date */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              <label className="block text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">
                 Amount (₹)
               </label>
               <input
@@ -854,15 +956,17 @@ function AddTransactionModal({
                 }
                 placeholder="0"
                 min="1"
-                className={`w-full px-3.5 py-3 text-sm rounded-xl border outline-none transition-colors
-                  ${errors.amount ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50 focus:border-orange-400 focus:bg-white"}`}
+                className={`w-full px-3.5 py-3 text-sm rounded-xl border bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 outline-none transition-colors placeholder-gray-300 dark:placeholder-gray-500
+                  ${errors.amount ? "border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-500/10" : "border-gray-200 dark:border-gray-600 focus:border-orange-400 dark:focus:border-orange-500 focus:bg-white dark:focus:bg-gray-900"}`}
               />
               {errors.amount && (
-                <p className="text-xs text-red-500 mt-1">{errors.amount}</p>
+                <p className="text-xs text-red-500 dark:text-red-400 mt-1">
+                  {errors.amount}
+                </p>
               )}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              <label className="block text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1.5">
                 Date
               </label>
               <input
@@ -871,15 +975,14 @@ function AddTransactionModal({
                 onChange={(e) =>
                   setNewTransaction((p) => ({ ...p, date: e.target.value }))
                 }
-                className="w-full px-3.5 py-3 text-sm rounded-xl border border-gray-200 bg-gray-50 outline-none
-                           focus:border-orange-400 focus:bg-white transition-colors"
+                className="w-full px-3.5 py-3 text-sm rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-200 outline-none focus:border-orange-400 dark:focus:border-orange-500 focus:bg-white dark:focus:bg-gray-900 transition-colors [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
           </div>
 
-          {/* Category */}
+          {/* Category grid */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            <label className="block text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">
               Category
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -892,15 +995,12 @@ function AddTransactionModal({
                 return (
                   <button
                     key={cat}
-                    onClick={() =>
-                      setNewTransaction((p) => ({ ...p, category: cat }))
-                    }
-                    className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border text-[10px]
-                      font-semibold transition-all active:scale-95
+                    onClick={() => handleCategorySelect(cat)}
+                    className={`flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border text-[10px] font-semibold transition-all active:scale-95
                       ${
                         active
                           ? "border-transparent text-white"
-                          : "border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200"
+                          : "border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-white dark:border-gray-600 dark:bg-gray-900 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-800"
                       }`}
                     style={
                       active ? { background: color, borderColor: color } : {}
@@ -916,35 +1016,30 @@ function AddTransactionModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-50 px-6 py-4 flex gap-3">
+        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-50 dark:border-gray-700 px-6 py-4 flex gap-3">
           <button
             onClick={() => setShowModal(false)}
-            className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold
-                       hover:bg-gray-200 active:scale-95 transition"
+            className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold
-                       bg-gradient-to-r from-orange-500 to-amber-500
-                       hover:from-orange-600 hover:to-amber-600
-                       active:scale-95 transition-all shadow-md shadow-orange-200
-                       disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white text-sm font-bold bg-orange-500 hover:bg-orange-600 active:scale-95 transition-all shadow-sm shadow-orange-200 dark:shadow-orange-900/40 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ flex: 2 }}
           >
             <Plus size={15} />
             {loading ? "Saving…" : "Add Expense"}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// MAIN EXPENSE PAGE
-// ─────────────────────────────────────────────────────────────
+// ─── Main Expense Page ────────────────────────────────────────────────────────
 const ExpensePage = () => {
   const {
     transactions: outletTransactions = [],
@@ -953,7 +1048,6 @@ const ExpensePage = () => {
     refreshTransactions = () => {},
   } = useOutletContext();
 
-  /* ── Local state ── */
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showAll, setShowAll] = useState(false);
@@ -976,7 +1070,6 @@ const ExpensePage = () => {
     category: "Food",
   });
 
-  /* ── Helpers ── */
   const addToast = useCallback((message, type = "info") => {
     const id = Date.now();
     setToasts((p) => [...p, { id, message, type }]);
@@ -988,7 +1081,6 @@ const ExpensePage = () => {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
-  /* ── Derived data ── */
   const timeFrameRange = useMemo(
     () => getTimeFrameRange(timeFrame),
     [timeFrame],
@@ -1052,7 +1144,6 @@ const ExpensePage = () => {
     return list;
   }, [timeFrameTransactions, filter, search]);
 
-  /* ── Stats ── */
   const totalExpense = useMemo(
     () =>
       filteredTransactions.reduce(
@@ -1077,7 +1168,6 @@ const ExpensePage = () => {
     [filteredTransactions],
   );
 
-  /* ── Chart data ── */
   const chartData = useMemo(() => {
     if (!filteredTransactions.length) return [];
     const map = new Map();
@@ -1102,7 +1192,6 @@ const ExpensePage = () => {
     });
   }, [filteredTransactions, chartPoints, timeFrame]);
 
-  /* ── CRUD handlers ── */
   const handleAddTransaction = useCallback(async () => {
     if (!newTransaction.description || !newTransaction.amount) return;
     const payload = {
@@ -1111,7 +1200,6 @@ const ExpensePage = () => {
       category: newTransaction.category,
       date: toIsoWithClientTime(newTransaction.date),
     };
-    const tempId = `temp-${Date.now()}`;
     setShowModal(false);
     setNewTransaction({
       date: new Date().toISOString().split("T")[0],
@@ -1127,8 +1215,10 @@ const ExpensePage = () => {
       });
       refreshTransactions();
     } catch (err) {
-      const msg = err?.response?.data?.message;
-      addToast(msg || "Failed to save expense.", "error");
+      addToast(
+        err?.response?.data?.message || "Failed to save expense.",
+        "error",
+      );
     }
   }, [newTransaction, getAuthHeaders, refreshTransactions, addToast]);
 
@@ -1199,94 +1289,62 @@ const ExpensePage = () => {
     }
   };
 
-  /* ── Chart trend label ── */
   const chartLabel =
     timeFrame === "daily"
       ? "Hourly"
       : timeFrame === "yearly"
         ? "Monthly"
         : "Daily";
-
-  /* ── Visible transactions ── */
   const visibleTransactions = showAll
     ? filteredTransactions
     : filteredTransactions.slice(0, 10);
 
-  // ─────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(40px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-        @keyframes slideInRight {
-          from { transform: translateX(24px); opacity: 0; }
-          to   { transform: translateX(0);    opacity: 1; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.97); }
-          to   { opacity: 1; transform: scale(1);    }
-        }
-        @keyframes pulseDot {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.35; }
-        }
+        @keyframes glowPulse { 0%,100% { box-shadow: 0 4px 24px rgba(249,115,22,0.10); } 50% { box-shadow: 0 8px 32px rgba(249,115,22,0.22); } }
+        @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideInRight { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .dark .recharts-cartesian-grid line { stroke: #334155 !important; }
+        .dark .recharts-cartesian-axis-tick text { fill: #64748b !important; }
       `}</style>
-
       <Toast toasts={toasts} />
 
-      <div className="min-h-screen bg-gray-50/70 px-3 py-5 sm:px-5 md:px-6 lg:px-8 space-y-4">
-        {/* ── HEADER ──────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="h-[3px] bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500" />
-          <div className="p-4 sm:p-5 md:p-6">
+      <div className="min-h-screen space-y-4">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg shadow-orange-100/30 dark:shadow-black/30 hover:shadow-xl hover:shadow-orange-200/40 dark:hover:shadow-black/40 transition-all duration-300 overflow-hidden">
+          <div className="p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              {/* Title block */}
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className="w-2 h-2 rounded-full bg-orange-400"
-                    style={{ animation: "pulseDot 2s ease-in-out infinite" }}
-                  />
-                  <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">
+                  <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-widest">
                     Expenses
                   </span>
                 </div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
                   Expense Tracker
                 </h1>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                   {timeFrameRange.label}
                 </p>
               </div>
-
-              {/* Buttons */}
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleExport}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-50
-                             border border-gray-200 px-3 py-2.5 rounded-xl
-                             hover:bg-gray-100 active:scale-95 transition-all"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all shadow-sm"
                 >
-                  <Download size={13} />
+                  <Download size={13} />{" "}
                   <span className="hidden xs:inline">Export</span>
                 </button>
                 <button
                   onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white
-                             bg-gradient-to-r from-orange-500 to-amber-500
-                             px-4 py-2.5 rounded-xl
-                             hover:from-orange-600 hover:to-amber-600
-                             active:scale-95 transition-all shadow-md shadow-orange-200"
+                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-orange-200 dark:shadow-orange-900/40"
                 >
-                  <Plus size={14} />
-                  Add Expense
+                  <Plus size={14} /> Add Expense
                 </button>
               </div>
             </div>
-
-            {/* Timeframe tabs */}
             <div className="mt-4 overflow-x-auto">
               <TimeFrameSelector
                 timeFrame={timeFrame}
@@ -1299,48 +1357,46 @@ const ExpensePage = () => {
           </div>
         </div>
 
-        {/* ── STAT CARDS ──────────────────────────────────────────── */}
+        {/* Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             label="Total Expenses"
             value={fmtINR(totalExpense)}
             sub={timeFrameRange.label}
-            accent="#f97316"
             icon={TrendingDown}
           />
           <StatCard
             label="Avg / Transaction"
             value={fmtINR(averageExpense)}
             sub={`${filteredTransactions.length} transactions`}
-            accent="#f59e0b"
             icon={BarChart2}
           />
           <StatCard
             label="Highest Single"
             value={fmtINR(highestExpense)}
             sub="biggest spend"
-            accent="#ef4444"
             icon={ArrowUpRight}
           />
           <StatCard
             label="Total Count"
             value={filteredTransactions.length}
             sub={filter === "all" ? "all records" : "filtered"}
-            accent="#8b5cf6"
             icon={IndianRupee}
           />
         </div>
 
-        {/* ── CHART + BREAKDOWN ───────────────────────────────────── */}
+        {/* Chart + Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Area Chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg shadow-orange-100/30 dark:shadow-black/30 hover:shadow-xl hover:shadow-orange-200/40 dark:hover:shadow-black/40 transition-all duration-300 p-5">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                <BarChart2 size={15} className="text-orange-400" />
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                <BarChart2
+                  size={15}
+                  className="text-orange-500 dark:text-orange-400"
+                />{" "}
                 {chartLabel} trends
               </h3>
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-gray-400 dark:text-gray-500">
                 {timeFrameRange.label}
               </span>
             </div>
@@ -1351,11 +1407,17 @@ const ExpensePage = () => {
                   margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
                 >
                   <defs>
-                    <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient
+                      id="expGradLight"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
                       <stop
                         offset="0%"
                         stopColor="#f97316"
-                        stopOpacity={0.25}
+                        stopOpacity={0.15}
                       />
                       <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
                     </linearGradient>
@@ -1369,13 +1431,13 @@ const ExpensePage = () => {
                     dataKey="label"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    tick={{ fill: "#94a3b8", fontSize: 10 }}
                     interval="preserveStartEnd"
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fill: "#9ca3af", fontSize: 10 }}
+                    tick={{ fill: "#94a3b8", fontSize: 10 }}
                     width={50}
                     tickFormatter={fmtINR}
                   />
@@ -1384,7 +1446,7 @@ const ExpensePage = () => {
                     type="monotone"
                     dataKey="expense"
                     stroke="#f97316"
-                    fill="url(#expGrad)"
+                    fill="url(#expGradLight)"
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 5, fill: "#f97316", strokeWidth: 0 }}
@@ -1397,7 +1459,7 @@ const ExpensePage = () => {
                         stroke="#f97316"
                         strokeWidth={1.5}
                         strokeDasharray="4 3"
-                        strokeOpacity={0.5}
+                        strokeOpacity={0.3}
                       />
                     ) : null,
                   )}
@@ -1405,40 +1467,33 @@ const ExpensePage = () => {
               </ResponsiveContainer>
             </div>
           </div>
-
-          {/* Spending Breakdown */}
           <SpendingBreakdown transactions={filteredTransactions} />
         </div>
 
-        {/* ── TRANSACTIONS LIST ────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* List header */}
-          <div
-            className="px-4 sm:px-5 py-3.5 border-b border-gray-50
-                          flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-          >
-            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <IndianRupee size={14} className="text-orange-400" />
+        {/* Transactions List */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-lg shadow-orange-100/30 dark:shadow-black/30 hover:shadow-xl hover:shadow-orange-200/40 dark:hover:shadow-black/40 transition-all duration-300 overflow-hidden">
+          <div className="px-4 sm:px-5 py-3.5 border-b border-gray-50 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+              <IndianRupee
+                size={14}
+                className="text-orange-500 dark:text-orange-400"
+              />
               Transactions
-              <span className="bg-orange-50 text-orange-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span className="bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {filteredTransactions.length}
               </span>
             </h3>
-
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Search */}
               <div className="relative">
                 <Search
                   size={12}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none"
                 />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search…"
-                  className="pl-8 pr-3 py-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl
-                             w-32 sm:w-36 focus:w-44 sm:focus:w-48 transition-all
-                             outline-none focus:border-orange-300 focus:bg-white placeholder-gray-400"
+                  className="pl-8 pr-3 py-2.5 text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-600 dark:text-gray-300 w-32 sm:w-36 focus:w-44 sm:focus:w-48 transition-all outline-none focus:border-orange-400 dark:focus:border-orange-500 focus:bg-white dark:focus:bg-gray-900 placeholder-gray-300 dark:placeholder-gray-500"
                 />
               </div>
               <FilterDropdown
@@ -1451,8 +1506,19 @@ const ExpensePage = () => {
             </div>
           </div>
 
-          {/* Rows */}
-          <div className="divide-y divide-gray-50/80">
+          {/* Column header */}
+          <div className="grid grid-cols-4 px-4 py-2 bg-orange-50/40 dark:bg-orange-500/5 border-b border-gray-50 dark:border-gray-700">
+            {["Date", "Amount", "Description", "Category"].map((h) => (
+              <span
+                key={h}
+                className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500"
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          <div className="divide-y divide-gray-50 dark:divide-gray-700">
             {visibleTransactions.length > 0 ? (
               visibleTransactions.map((transaction) => (
                 <TransactionItem
@@ -1471,61 +1537,53 @@ const ExpensePage = () => {
                 />
               ))
             ) : (
-              /* Empty State */
               <div className="py-16 flex flex-col items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center">
-                  <IndianRupee size={22} className="text-orange-300" />
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+                  <IndianRupee
+                    size={22}
+                    className="text-orange-300 dark:text-orange-400/70"
+                  />
                 </div>
-                <p className="text-gray-600 font-bold text-sm">
+                <p className="text-gray-700 dark:text-gray-200 font-bold text-sm">
                   No expenses found
                 </p>
-                <p className="text-gray-400 text-xs text-center max-w-xs px-4">
+                <p className="text-gray-400 dark:text-gray-500 text-xs text-center max-w-xs px-4">
                   {filter === "all" && !search
-                    ? "You haven't recorded any expenses yet. Add your first one."
+                    ? "You haven't recorded any expenses yet."
                     : `No results for the current filter${search ? ` and "${search}"` : ""}.`}
                 </p>
                 {filter === "all" && !search && (
                   <button
                     onClick={() => setShowModal(true)}
-                    className="mt-1 flex items-center gap-1.5 text-xs font-bold text-white
-                               bg-gradient-to-r from-orange-500 to-amber-500
-                               px-4 py-2.5 rounded-xl active:scale-95 transition-all shadow-md shadow-orange-200"
+                    className="mt-1 flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
                   >
-                    <Plus size={13} />
-                    Add your first expense
+                    <Plus size={13} /> Add your first expense
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Show all / Show less */}
           {!showAll && filteredTransactions.length > 10 && (
             <button
               onClick={() => setShowAll(true)}
-              className="w-full py-4 text-xs font-bold text-orange-500
-                         hover:bg-orange-50/60 transition-colors flex items-center justify-center gap-2
-                         border-t border-gray-50"
+              className="w-full py-4 text-xs font-semibold text-orange-500 dark:text-orange-400 hover:bg-orange-50/40 dark:hover:bg-orange-500/5 transition-colors flex items-center justify-center gap-2 border-t border-gray-50 dark:border-gray-700"
             >
-              <Eye size={13} />
-              View all {filteredTransactions.length} transactions
+              <Eye size={13} /> View all {filteredTransactions.length}{" "}
+              transactions
             </button>
           )}
           {showAll && filteredTransactions.length > 10 && (
             <button
               onClick={() => setShowAll(false)}
-              className="w-full py-4 text-xs font-bold text-gray-400
-                         hover:bg-gray-50 transition-colors flex items-center justify-center gap-2
-                         border-t border-gray-50"
+              className="w-full py-4 text-xs font-semibold text-gray-400 dark:text-gray-500 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors flex items-center justify-center gap-2 border-t border-gray-50 dark:border-gray-700"
             >
-              <EyeOff size={13} />
-              Show less
+              <EyeOff size={13} /> Show less
             </button>
           )}
         </div>
       </div>
 
-      {/* ── ADD MODAL ─────────────────────────────────────────────── */}
       <AddTransactionModal
         showModal={showModal}
         setShowModal={setShowModal}
@@ -1534,8 +1592,6 @@ const ExpensePage = () => {
         handleAddTransaction={handleAddTransaction}
         loading={loading}
       />
-
-      {/* ── DELETE CONFIRM ────────────────────────────────────────── */}
       {deleteTarget && (
         <DeleteModal
           transaction={deleteTarget}

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { sidebarStyles, cn, signupStyles } from "../assets/dummyStyles";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -11,13 +10,17 @@ import {
   Menu,
   User,
   X,
+  Target,
+  BarChart2,
+  Settings,
 } from "lucide-react";
 
 const MENU_ITEMS = [
-  { text: "Dashboard", path: "/", icon: <Home size={20} /> },
-  { text: "Income", path: "/income", icon: <ArrowUp size={20} /> },
-  { text: "Expenses", path: "/expense", icon: <ArrowDown size={20} /> },
-  { text: "Profile", path: "/profile", icon: <User size={20} /> },
+  { text: "Dashboard", path: "/", icon: <Home size={18} /> },
+  { text: "Income", path: "/income", icon: <ArrowUp size={18} /> },
+  { text: "Expenses", path: "/expense", icon: <ArrowDown size={18} /> },
+  { text: "Goals", path: "/goals", icon: <Target size={18} /> },
+  { text: "Profile", path: "/profile", icon: <User size={18} /> },
 ];
 
 const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
@@ -25,15 +28,13 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
   const navigate = useNavigate();
   const sidebarRef = useRef(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeHover, setActiveHover] = useState(null);
 
-const {
-  name: username = "User",
-  email = "user@example.com",
-  profilePic = "",
-} = user || {};
-
-const initial = username.charAt(0).toUpperCase();
+  const {
+    name: username = "User",
+    email = "user@example.com",
+    profilePic = "",
+  } = user || {};
+  const initial = username.charAt(0).toUpperCase();
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "auto";
@@ -48,286 +49,160 @@ const initial = username.charAt(0).toUpperCase();
         mobileOpen &&
         sidebarRef.current &&
         !sidebarRef.current.contains(e.target)
-      ) {
-        setMobileOpen(false); // ✅ FIX (case)
-      }
+      )
+        setMobileOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [mobileOpen]);
 
-  const toggleSidebar = () => setIsCollapsed((c) => !c);
+  const handleLogout = () => navigate("/login");
 
-  const handleLogout = () => {
-    // TODO: add real logout logic
-    navigate("/login");
-  };
+  const SidebarContent = ({ collapsed }) => (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div
+        className={`flex items-center gap-3 px-4 py-5 border-b border-gray-50 dark:border-gray-700 ${collapsed ? "justify-center" : ""}`}
+      >
+        <div className="w-9 h-9 rounded-xl bg-violet-600 flex items-center justify-center shrink-0 shadow-sm shadow-violet-200 dark:shadow-violet-900/40">
+          <span className="text-white font-bold text-sm">F</span>
+        </div>
+        {!collapsed && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-base font-bold text-gray-900 dark:text-gray-100 tracking-tight"
+          >
+            Expense Tracker
+          </motion.span>
+        )}
+      </div>
 
-  const renderMenuItem = ({ text, path, icon }) => {
-    const isActive = pathname === path;
+      {/* Menu */}
+      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+        {MENU_ITEMS.map(({ text, path, icon }) => {
+          const isActive =
+            pathname === path || (path !== "/" && pathname.startsWith(path));
+          return (
+            <Link
+              key={`${text}-${path}`}
+              to={path}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group
+                ${
+                  isActive
+                    ? "bg-violet-600 text-white shadow-sm shadow-violet-200 dark:shadow-violet-900/40"
+                    : "text-gray-500 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
+                } ${collapsed ? "justify-center" : ""}`}
+              title={collapsed ? text : undefined}
+            >
+              <span
+                className={`shrink-0 transition-colors ${isActive ? "text-white" : "text-gray-400 group-hover:text-violet-600 dark:text-gray-500 dark:group-hover:text-violet-400"}`}
+              >
+                {icon}
+              </span>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="text-sm font-medium"
+                >
+                  {text}
+                </motion.span>
+              )}
+              {isActive && !collapsed && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/70" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
 
-    return (
-      <motion.li
-        key={path}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+      {/* User section */}
+      <div
+        className={`border-t border-gray-50 dark:border-gray-700 p-3 space-y-1`}
       >
         <Link
-          to={path}
-          className={cn(
-            sidebarStyles.menuItem.base,
-            isActive
-              ? sidebarStyles.menuItem.active
-              : sidebarStyles.menuItem.inactive,
-            isCollapsed
-              ? sidebarStyles.menuItem.collapsed
-              : sidebarStyles.menuItem.expanded,
-          )}
-          onMouseEnter={() => setActiveHover(text)}
-          onMouseLeave={() => setActiveHover(null)}
+          to="/contactus"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-violet-50 hover:text-violet-600 dark:text-gray-500 dark:hover:bg-violet-500/10 dark:hover:text-violet-400 transition-all ${collapsed ? "justify-center" : ""}`}
+          title={collapsed ? "Support" : undefined}
         >
-          <span
-            className={
-              isActive
-                ? sidebarStyles.menuIcon.active
-                : sidebarStyles.menuIcon.inactive
-            }
-          >
-            {icon}
-          </span>
-
-          {!isCollapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-            >
-              {text}
-            </motion.span>
-          )}
-
-          {activeHover === text && !isActive && !isCollapsed && (
-            <span className={sidebarStyles.activeIndicator}></span>
-          )}
+          <HelpCircle size={18} className="shrink-0" />
+          {!collapsed && <span className="text-sm font-medium">Help</span>}
         </Link>
-      </motion.li>
-    );
-  };
+
+        <button
+          onClick={handleLogout}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-all ${collapsed ? "justify-center" : ""}`}
+          title={collapsed ? "Log out" : undefined}
+        >
+          <LogOut size={18} className="shrink-0" />
+          {!collapsed && <span className="text-sm font-medium">Log out</span>}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <motion.div
+      {/* Desktop sidebar */}
+      <motion.aside
         ref={sidebarRef}
-        className={sidebarStyles.sidebarContainer.base}
-        initial={{ x: -100, opacity: 0 }}
-        animate={{
-          x: 0,
-          opacity: 1,
-          width: isCollapsed ? 80 : 225,
-        }}
-        transition={{ type: "spring", damping: 25 }} // ✅ FIX
+        className="hidden lg:flex fixed top-0 left-0 h-full bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700 shadow-sm dark:shadow-black/30 z-40 flex-col"
+        animate={{ width: isCollapsed ? 72 : 250 }}
+        transition={{ type: "spring", damping: 28, stiffness: 200 }}
       >
-        <div
-          className={cn(
-            sidebarStyles.sidebarInner.base,
-            "flex flex-col h-full",
-          )}
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setIsCollapsed((c) => !c)}
+          className="absolute -right-3 top-20 w-6 h-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-full flex items-center justify-center shadow-sm hover:shadow-md hover:border-violet-300 dark:hover:border-violet-500 transition-all z-50"
         >
-          {/* Toggle */}
-          <button
-            onClick={toggleSidebar}
-            className={sidebarStyles.toggleButton.base}
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
           >
-            <motion.div
-              initial={{ rotate: 0 }}
-              animate={{ rotate: isCollapsed ? 0 : 180 }}
-              transition={{ duration: 0.3 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24">
-                <polyline
-                  points={isCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"}
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  fill="none"
-                />
-              </svg>
-            </motion.div>
-          </button>
+            <polyline
+              points={isCollapsed ? "9 18 15 12 9 6" : "15 18 9 12 15 6"}
+            />
+          </svg>
+        </button>
 
-          {/* Profile */}
-          <div
-            className={cn(
-              sidebarStyles.userProfileContainer.base,
-              isCollapsed
-                ? sidebarStyles.userProfileContainer.collapsed
-                : sidebarStyles.userProfileContainer.expanded, // ✅ FIX (comma)
-            )}
-          >
-            <div className="flex flex-col items-center text-center">
-              <div
-                className={cn(
-                  "relative group mb-2 transition-all duration-300",
-                  isCollapsed ? "w-12 h-12" : "w-28 h-28",
-                )}
-              >
-                {profilePic ? (
-                  <img
-                    src={profilePic}
-                    alt="profile"
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-300 rounded-full">
-                    <span className="font-semibold text-gray-600">
-                      {initial}
-                    </span>
-                  </div>
-                )}
+        <SidebarContent collapsed={isCollapsed} />
+      </motion.aside>
 
-                {/* Online indicator */}
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
-              </div>
-              {!isCollapsed && (
-                <motion.div
-                  className="ml-3 overflow-hidden"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                >
-                  <h2 className="text-sm font-bold text-gray-800 truncate">
-                    {username}
-                  </h2>
-                  <p className="text-xs text-gray-500 truncate">{email}</p>
-                </motion.div>
-              )}
-            </div>
-            {/* Menu */}
-            <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
-              <ul className={sidebarStyles.menuList.base}>
-                {MENU_ITEMS.map(renderMenuItem)}
-              </ul>
-            </div>
-
-            {/* Footer */}
-            <div
-              className={cn(
-                sidebarStyles.footerContainer.base,
-                isCollapsed
-                  ? sidebarStyles.footerContainer.collapsed
-                  : sidebarStyles.footerContainer.expanded,
-              )}
-            >
-              <Link
-                to="/contactus"
-                className={cn(
-                  sidebarStyles.footerLink.base,
-                  isCollapsed
-                    ? sidebarStyles.footerLink.collapsed
-                    : sidebarStyles.footerLink.expanded,
-                )}
-              >
-                <HelpCircle className="w-6 h-6 shrink-0" />
-                {!isCollapsed && <span>Support</span>}
-              </Link>
-
-              <button
-                onClick={handleLogout}
-                className={cn(
-                  sidebarStyles.logoutButton.base,
-                  isCollapsed
-                    ? sidebarStyles.logoutButton.collapsed
-                    : sidebarStyles.logoutButton.expanded,
-                )}
-              >
-                <LogOut className="w-6 h-6 shrink-0" />
-                {!isCollapsed && <span>Logout</span>}
-              </button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Mobile Button */}
-      <motion.button
-        onClick={() => setMobileOpen((prev) => !prev)}
-        className={sidebarStyles.mobileMenuButton}
+      {/* Mobile toggle button */}
+      <button
+        onClick={() => setMobileOpen((p) => !p)}
+        className="lg:hidden fixed bottom-4 left-4 z-50 w-12 h-12 bg-violet-600 text-white rounded-2xl shadow-lg shadow-violet-300 dark:shadow-violet-900/50 flex items-center justify-center"
       >
-        {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-      </motion.button>
+        {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
 
-      {/* Mobile Sidebar */}
+      {/* Mobile sidebar */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div className={sidebarStyles.mobileOverlay}>
+          <motion.div className="lg:hidden fixed inset-0 z-40 flex">
             <motion.div
-              className={sidebarStyles.mobileBackdrop}
+              className="absolute inset-0 bg-gray-900/30 dark:bg-black/60 backdrop-blur-sm"
               onClick={() => setMobileOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
             />
-
-            <motion.div
+            <motion.aside
               ref={sidebarRef}
-              className={sidebarStyles.mobileSidebar.base}
+              className="relative w-64 h-full bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700 shadow-xl dark:shadow-black/50 z-50"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 28 }}
             >
-              <div
-                className={cn(
-                  sidebarStyles.sidebarInner.base,
-                  "flex flex-col h-full",
-                )}
-              >
-                {/* Profile */}
-                <div className="p-4 border-b">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-                      {profilePic ? (
-                        <img
-                          src={profilePic}
-                          alt="profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="font-semibold text-gray-600">
-                          {initial}
-                        </span>
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <h2 className="text-sm font-bold text-gray-800">
-                        {username}
-                      </h2>
-                      <p className="text-xs text-gray-500">{email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Menu */}
-                <div className="flex-1 overflow-y-auto py-4">
-                  <ul className={sidebarStyles.menuList.base}>
-                    {MENU_ITEMS.map(renderMenuItem)}
-                  </ul>
-                </div>
-
-                {/* Footer */}
-                <div className="p-4 border-t">
-                  <Link
-                    to="/contactus"
-                    className={sidebarStyles.footerLink.base}
-                  >
-                    <HelpCircle size={20} />
-                    <span>Support</span>
-                  </Link>
-
-                  <button
-                    onClick={handleLogout}
-                    className={sidebarStyles.logoutButton.base}
-                  >
-                    <LogOut size={20} />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+              <SidebarContent collapsed={false} />
+            </motion.aside>
           </motion.div>
         )}
       </AnimatePresence>
