@@ -14,7 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-/* ─── Constants ─────────────────────────────────────────────────────────────── */
+/* ─── Constants ──────────────────────────────────────────────────────────────── */
 const MENU_ITEMS = [
   { text: "Dashboard", path: "/", icon: Home },
   { text: "Income", path: "/income", icon: ArrowUp },
@@ -25,11 +25,10 @@ const MENU_ITEMS = [
 
 const EXPANDED = 252;
 const COLLAPSED = 72;
-
 const SPRING = { type: "spring", damping: 30, stiffness: 260, mass: 0.7 };
 const TEXT_SPRING = { type: "spring", damping: 32, stiffness: 300, mass: 0.6 };
 
-/* ─── NavItem ───────────────────────────────────────────────────────────────── */
+/* ─── NavItem ─────────────────────────────────────────────────────────────────── */
 const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
   const { pathname } = useLocation();
   const isActive =
@@ -40,14 +39,18 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
       to={path}
       onClick={onClick}
       className={[
-        "group relative flex items-center rounded-xl px-3 py-2.5 overflow-hidden",
+        "group relative flex items-center rounded-xl overflow-hidden",
         "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2",
-        "focus-visible:ring-violet-500 focus-visible:ring-offset-1",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1",
         isActive
           ? "bg-violet-600 text-white shadow-md shadow-violet-300/40 dark:shadow-violet-900/50"
           : "text-gray-500 dark:text-gray-400 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-500/10 dark:hover:text-violet-300",
       ].join(" ")}
+      style={{
+        padding: "12px 12px",
+        minHeight: 48, // mobile-friendly tap target
+        WebkitTapHighlightColor: "transparent",
+      }}
     >
       <motion.span
         aria-hidden
@@ -55,7 +58,6 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
         transition={{ duration: 0.15 }}
         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/60"
       />
-
       <motion.span
         layout="position"
         transition={SPRING}
@@ -65,8 +67,9 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
             ? "text-white"
             : "text-gray-400 group-hover:text-violet-600 dark:text-gray-500 dark:group-hover:text-violet-300",
         ].join(" ")}
+        style={{ width: 24, height: 24 }}
       >
-        <Icon size={18} aria-hidden />
+        <Icon size={20} aria-hidden />
       </motion.span>
 
       <motion.span
@@ -81,6 +84,7 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
         {text}
       </motion.span>
 
+      {/* Tooltip for collapsed desktop state */}
       {collapsed && (
         <span className="pointer-events-none absolute left-full ml-3 z-50 whitespace-nowrap rounded-lg bg-gray-900 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150">
           {text}
@@ -90,7 +94,7 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
   );
 };
 
-/* ─── UserAvatar ─────────────────────────────────────────────────────────────── */
+/* ─── UserAvatar ──────────────────────────────────────────────────────────────── */
 const UserAvatar = ({ name, profilePic, size = 36 }) => {
   const initial = (name ?? "U").charAt(0).toUpperCase();
   if (profilePic) {
@@ -113,7 +117,7 @@ const UserAvatar = ({ name, profilePic, size = 36 }) => {
   );
 };
 
-/* ─── SidebarContent ─────────────────────────────────────────────────────────── */
+/* ─── SidebarContent ──────────────────────────────────────────────────────────── */
 const SidebarContent = ({ collapsed, user, onNavClick }) => {
   const navigate = useNavigate();
   const {
@@ -124,10 +128,10 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ① USER CARD — sabse upar, brand ke neeche */}
+      {/* User Card */}
       <div className="px-3 pt-4 pb-3 border-b border-gray-100 dark:border-gray-700/60">
         <div className="flex items-center px-2 py-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 overflow-hidden">
-          <UserAvatar name={name} profilePic={profilePic} size={34} />
+          <UserAvatar name={name} profilePic={profilePic} size={36} />
           <motion.div
             animate={{
               maxWidth: collapsed ? 0 : 200,
@@ -147,10 +151,10 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
         </div>
       </div>
 
-      {/* ② NAV ITEMS — middle, flex-1 */}
+      {/* Nav Items */}
       <nav
         aria-label="Main navigation"
-        className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5"
+        className="flex-1 overflow-y-auto py-3 px-2.5 space-y-1"
       >
         <motion.p
           animate={{
@@ -162,7 +166,6 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
         >
           Menu
         </motion.p>
-
         {MENU_ITEMS.map(({ text, path, icon: Icon }) => (
           <NavItem
             key={path}
@@ -175,20 +178,25 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
         ))}
       </nav>
 
-      {/* ③ HELP + LOGOUT — sabse neeche */}
-      <div className="border-t border-gray-100 dark:border-gray-700/60 p-2.5 space-y-0.5">
-        {/* Help */}
+      {/* Bottom: Help + Logout */}
+      <div className="border-t border-gray-100 dark:border-gray-700/60 p-2.5 space-y-1">
         <Link
           to="/contactus"
           onClick={onNavClick}
-          className="group relative w-full flex items-center rounded-xl px-3 py-2.5 overflow-hidden text-gray-400 dark:text-gray-500 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          className="group relative w-full flex items-center rounded-xl overflow-hidden text-gray-400 dark:text-gray-500 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          style={{
+            padding: "12px 12px",
+            minHeight: 48,
+            WebkitTapHighlightColor: "transparent",
+          }}
         >
           <motion.span
             layout="position"
             transition={SPRING}
             className="shrink-0 flex items-center"
+            style={{ width: 24, height: 24 }}
           >
-            <HelpCircle size={18} aria-hidden />
+            <HelpCircle size={20} aria-hidden />
           </motion.span>
           <motion.span
             animate={{
@@ -208,17 +216,25 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
           )}
         </Link>
 
-        {/* Logout — red, at the very bottom */}
         <button
           onClick={() => navigate("/login")}
-          className="group relative w-full flex items-center rounded-xl px-3 py-2.5 overflow-hidden text-gray-400 dark:text-gray-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+          className="group relative w-full flex items-center rounded-xl overflow-hidden text-gray-400 dark:text-gray-500 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+          style={{
+            padding: "12px 12px",
+            minHeight: 48,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            WebkitTapHighlightColor: "transparent",
+          }}
         >
           <motion.span
             layout="position"
             transition={SPRING}
             className="shrink-0 flex items-center"
+            style={{ width: 24, height: 24 }}
           >
-            <LogOut size={18} aria-hidden />
+            <LogOut size={20} aria-hidden />
           </motion.span>
           <motion.span
             animate={{
@@ -239,6 +255,63 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
         </button>
       </div>
     </div>
+  );
+};
+
+/* ─── Mobile Bottom Nav Bar ───────────────────────────────────────────────────── */
+const MobileBottomNav = ({ onMenuOpen }) => {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  const items = [
+    { text: "Home", path: "/", icon: Home },
+    { text: "Income", path: "/income", icon: ArrowUp },
+    { text: "Expenses", path: "/expense", icon: ArrowDown },
+    { text: "Goals", path: "/goals", icon: Target },
+    { text: "Profile", path: "/profile", icon: User },
+  ];
+
+  return (
+    <nav
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700/60"
+      style={{
+        paddingBottom: "env(safe-area-inset-bottom)",
+        boxShadow: "0 -1px 0 rgba(0,0,0,0.08)",
+      }}
+      aria-label="Bottom navigation"
+    >
+      <div className="flex items-center justify-around">
+        {items.map(({ text, path, icon: Icon }) => {
+          const isActive =
+            pathname === path || (path !== "/" && pathname.startsWith(path));
+          return (
+            <Link
+              key={path}
+              to={path}
+              className="flex flex-col items-center justify-center gap-0.5 transition-colors duration-150"
+              style={{
+                flex: 1,
+                padding: "8px 4px 10px",
+                color: isActive ? "#7c3aed" : "#9ca3af",
+                WebkitTapHighlightColor: "transparent",
+                minHeight: 56,
+              }}
+            >
+              <Icon size={22} aria-hidden />
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: isActive ? 600 : 500,
+                  lineHeight: 1,
+                }}
+              >
+                {text}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 };
 
@@ -266,17 +339,12 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
 
   return (
     <>
-      {/* ══════════════════════════════════════
-          DESKTOP
-          ══════════════════════════════════════ */}
-
-      {/* Sidebar panel — overflow-hidden ONLY on the panel itself */}
+      {/* ═══ DESKTOP SIDEBAR ═══ */}
       <motion.aside
         className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700/60 shadow-sm dark:shadow-black/20 overflow-hidden"
         animate={{ width: isCollapsed ? COLLAPSED : EXPANDED }}
         transition={SPRING}
       >
-        {/* Brand row inside panel (no overflow issue here) */}
         <div className="flex items-center px-4 py-5 border-b border-gray-100 dark:border-gray-700/60 overflow-hidden shrink-0">
           <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 shadow-md shadow-violet-300/40 dark:shadow-violet-900/40">
             <span className="text-white font-bold text-sm select-none">F</span>
@@ -298,7 +366,6 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
             </p>
           </motion.div>
         </div>
-
         <SidebarContent
           collapsed={isCollapsed}
           user={user}
@@ -306,7 +373,7 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
         />
       </motion.aside>
 
-      {/* Chevron toggle — rendered OUTSIDE the aside so overflow-hidden can't clip it */}
+      {/* Collapse toggle (desktop only) */}
       <motion.div
         className="hidden lg:block fixed z-50 top-[72px]"
         animate={{ left: (isCollapsed ? COLLAPSED : EXPANDED) - 14 }}
@@ -315,7 +382,7 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
         <motion.button
           onClick={() => setIsCollapsed((c) => !c)}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          whileHover={{ scale: 1.12 }}
+          whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           className="w-7 h-7 rounded-full flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 shadow-md hover:border-violet-400 dark:hover:border-violet-500 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
         >
@@ -329,58 +396,70 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
         </motion.button>
       </motion.div>
 
-      {/* ══════════════════════════════════════
-          MOBILE FAB
-          ══════════════════════════════════════ */}
-      <motion.button
-        onClick={() => setMobileOpen((p) => !p)}
-        aria-label={mobileOpen ? "Close menu" : "Open menu"}
-        whileTap={{ scale: 0.9 }}
-        style={{ width: 52, height: 52 }}
-        className="lg:hidden fixed bottom-5 left-5 z-50 rounded-2xl bg-violet-600 text-white shadow-xl shadow-violet-400/50 dark:shadow-violet-900/60 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2"
+      {/* ═══ MOBILE HEADER BAR ═══ */}
+      <header
+        className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/60"
+        style={{ boxShadow: "0 1px 0 rgba(0,0,0,0.05)" }}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={mobileOpen ? "x" : "menu"}
-            initial={{ rotate: -90, opacity: 0, scale: 0.7 }}
-            animate={{ rotate: 0, opacity: 1, scale: 1 }}
-            exit={{ rotate: 90, opacity: 0, scale: 0.7 }}
-            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-            className="flex items-center"
-          >
-            {mobileOpen ? (
-              <X size={22} aria-hidden />
-            ) : (
-              <Menu size={22} aria-hidden />
-            )}
-          </motion.span>
-        </AnimatePresence>
-      </motion.button>
+        <div
+          className="flex items-center justify-between px-4"
+          style={{ height: 56 }}
+        >
+          {/* Brand */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700">
+              <span className="text-white font-bold text-sm select-none">
+                F
+              </span>
+            </div>
+            <div>
+              <p className="text-[14px] font-bold text-gray-900 dark:text-gray-50 tracking-tight leading-none">
+                FinTrack
+              </p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                Expense Tracker
+              </p>
+            </div>
+          </div>
 
-      {/* ══════════════════════════════════════
-          MOBILE DRAWER
-          ══════════════════════════════════════ */}
+          {/* Menu button */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation menu"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            style={{ WebkitTapHighlightColor: "transparent" }}
+          >
+            <Menu size={20} aria-hidden />
+          </button>
+        </div>
+      </header>
+
+      {/* ═══ MOBILE DRAWER ═══ */}
       <AnimatePresence>
         {mobileOpen && (
           <>
             <motion.div
               key="backdrop"
-              className="lg:hidden fixed inset-0 z-40 bg-black/40 dark:bg-black/60 backdrop-blur-[2px]"
+              className="lg:hidden fixed inset-0 z-40 bg-black/40 dark:bg-black/60"
+              style={{ backdropFilter: "blur(2px)" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={() => setMobileOpen(false)}
               aria-hidden
             />
-
             <motion.aside
               key="drawer"
               ref={sidebarRef}
               role="dialog"
               aria-modal="true"
               aria-label="Navigation menu"
-              className="lg:hidden fixed top-0 left-0 bottom-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700/60 shadow-2xl dark:shadow-black/50"
+              className="lg:hidden fixed top-0 left-0 bottom-0 z-50 flex flex-col bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700/60 shadow-2xl dark:shadow-black/50"
+              style={{
+                width: Math.min(EXPANDED, 280),
+                paddingBottom: "env(safe-area-inset-bottom)",
+              }}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -392,7 +471,7 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
               }}
             >
               {/* Brand + close */}
-              <div className="flex items-center justify-between px-4 py-5 border-b border-gray-100 dark:border-gray-700/60 shrink-0">
+              <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700/60 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500 to-violet-700 shadow-md shadow-violet-300/40 dark:shadow-violet-900/40">
                     <span className="text-white font-bold text-sm select-none">
@@ -411,9 +490,10 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
                 <button
                   onClick={() => setMobileOpen(false)}
                   aria-label="Close menu"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  style={{ WebkitTapHighlightColor: "transparent" }}
                 >
-                  <X size={16} aria-hidden />
+                  <X size={18} aria-hidden />
                 </button>
               </div>
 
@@ -426,6 +506,9 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
           </>
         )}
       </AnimatePresence>
+
+      {/* ═══ MOBILE BOTTOM TAB BAR ═══ */}
+      <MobileBottomNav />
     </>
   );
 };
