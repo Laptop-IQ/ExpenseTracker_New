@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar";
-
+import AddTransactionModal from "../components/Add";
 import "./Layout.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -52,6 +52,7 @@ export const CATEGORY_ICONS = {
   Freelance: <Briefcase />,
   Investment: <TrendingUp />,
   Side_Hustles: <Coins />,
+
   Food: <Utensils />,
   Grocery: <ShoppingBasket />,
   Dairy: <Milk />,
@@ -70,7 +71,7 @@ export const CATEGORY_ICONS = {
   Annual_Expense: <PieChart />,
 };
 
-const INCOME_CATEGORIES = [
+export const INCOME_CATEGORIES = [
   "Salary",
   "Extra_Income",
   "Freelance",
@@ -78,7 +79,7 @@ const INCOME_CATEGORIES = [
   "Side_Hustles",
 ];
 
-const EXPENSE_CATEGORIES = [
+export const EXPENSE_CATEGORIES = [
   "Food",
   "Grocery",
   "Dairy",
@@ -101,6 +102,14 @@ const EXPENSE_CATEGORIES = [
    HELPERS
 ============================================================================ */
 
+const getDefaultTransaction = (type = "income") => ({
+  type,
+  description: "",
+  amount: "",
+  date: new Date().toISOString().split("T")[0],
+  category: type === "income" ? "Salary" : "Food",
+});
+
 const formatCurrency = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", {
     maximumFractionDigits: 0,
@@ -119,14 +128,26 @@ const getAuthHeaders = () => {
     : {};
 };
 
+const getErrorMessage = (error, fallback = "Something went wrong.") => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback
+  );
+};
+
 const safeArray = (response) => {
   const body = response?.data;
 
   if (!body) return [];
 
   if (Array.isArray(body)) return body;
+
   if (Array.isArray(body.data)) return body.data;
+
   if (Array.isArray(body.incomes)) return body.incomes;
+
   if (Array.isArray(body.expenses)) return body.expenses;
 
   return [];
@@ -169,10 +190,9 @@ function useTransactions() {
 
   const fetchTransactions = useCallback(async () => {
     if (!API_BASE) {
-      console.error(
+      throw new Error(
         "VITE_API_BASE is missing. Please configure your environment variable.",
       );
-      return;
     }
 
     try {
@@ -204,11 +224,15 @@ function useTransactions() {
 
       setTransactions(merged);
       setLastUpdated(new Date());
+
+      return merged;
     } catch (error) {
       console.error(
         "Failed to fetch transactions:",
         error?.response?.data || error?.message || error,
       );
+
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -220,12 +244,25 @@ function useTransactions() {
         throw new Error("API base URL is not configured.");
       }
 
+      if (!transaction?.type) {
+        throw new Error("Transaction type is required.");
+      }
+
+      if (!transaction?.amount || Number(transaction.amount) <= 0) {
+        throw new Error("Please enter a valid amount.");
+      }
+
       const headers = getAuthHeaders();
 
       const endpoint =
         transaction.type === "income" ? "income/add" : "expense/add";
 
-      await axios.post(`${API_BASE}/${endpoint}`, transaction, {
+      const payload = {
+        ...transaction,
+        amount: Number(transaction.amount),
+      };
+
+      await axios.post(`${API_BASE}/${endpoint}`, payload, {
         headers,
       });
 
@@ -240,12 +277,21 @@ function useTransactions() {
         throw new Error("API base URL is not configured.");
       }
 
+      if (!id) {
+        throw new Error("Transaction ID is required.");
+      }
+
       const headers = getAuthHeaders();
 
       const endpoint =
         transaction.type === "income" ? "income/update" : "expense/update";
 
-      await axios.put(`${API_BASE}/${endpoint}/${id}`, transaction, {
+      const payload = {
+        ...transaction,
+        amount: Number(transaction.amount),
+      };
+
+      await axios.put(`${API_BASE}/${endpoint}/${id}`, payload, {
         headers,
       });
 
@@ -258,6 +304,10 @@ function useTransactions() {
     async (id, type) => {
       if (!API_BASE) {
         throw new Error("API base URL is not configured.");
+      }
+
+      if (!id) {
+        throw new Error("Transaction ID is required.");
       }
 
       const headers = getAuthHeaders();
@@ -274,7 +324,9 @@ function useTransactions() {
   );
 
   useEffect(() => {
-    fetchTransactions();
+    fetchTransactions().catch((error) => {
+      console.error("Initial transaction fetch failed:", error);
+    });
   }, [fetchTransactions]);
 
   return {
@@ -374,12 +426,15 @@ function calculateStats(transactions) {
       );
 
   const thisIncome = sum(currentMonth, "income");
+
   const thisExpenses = sum(currentMonth, "expense");
 
   const lastIncome = sum(previousMonth, "income");
+
   const lastExpenses = sum(previousMonth, "expense");
 
   const allIncome = sum(transactions, "income");
+
   const allExpenses = sum(transactions, "expense");
 
   const percentChange = (current, previous) => {
@@ -402,6 +457,7 @@ function calculateStats(transactions) {
 
     allIncome,
     allExpenses,
+
     allSavings: allIncome - allExpenses,
 
     incomeChange: percentChange(thisIncome, lastIncome),
@@ -544,245 +600,6 @@ function PanelHeader({ icon, title, subtitle, right }) {
 }
 
 /* ============================================================================
-   ADD TRANSACTION MODAL
-============================================================================ */
-
-function AddTransactionModal({ onClose, onAdd }) {
-  const [type, setType] = useState("expense");
-
-  const [form, setForm] = useState({
-    description: "",
-    amount: "",
-    category: "",
-    date: new Date().toISOString().slice(0, 10),
-  });
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const categories = type === "income" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
-
-  const updateField = (field) => (event) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: event.target.value,
-    }));
-
-    if (error) {
-      setError("");
-    }
-  };
-
-  const submit = async () => {
-    const description = form.description.trim();
-
-    const amount = Number(form.amount);
-
-    if (!description || !form.amount || !form.category || !form.date) {
-      setError("Please fill in all required fields.");
-      return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Please enter a valid amount.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-
-      await onAdd({
-        description,
-        amount,
-        category: form.category,
-        date: form.date,
-        type,
-      });
-
-      onClose(true);
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        err?.response?.data?.message ||
-          "Unable to save transaction. Please try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-transaction-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) {
-          onClose(false);
-        }
-      }}
-    >
-      <div className="modal-card">
-        <div className="modal-header">
-          <div>
-            <span className="modal-eyebrow">MONEY MANAGER</span>
-
-            <h2 id="add-transaction-title">Add Transaction</h2>
-
-            <p>Record your income or expense.</p>
-          </div>
-
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => onClose(false)}
-            disabled={saving}
-            aria-label="Close modal"
-          >
-            <X size={17} />
-          </button>
-        </div>
-
-        <div className="transaction-type-switch">
-          <button
-            type="button"
-            className={type === "income" ? "active income" : ""}
-            onClick={() => {
-              setType("income");
-
-              setForm((previous) => ({
-                ...previous,
-                category: "",
-              }));
-            }}
-          >
-            <ArrowUp size={15} />
-            Income
-          </button>
-
-          <button
-            type="button"
-            className={type === "expense" ? "active expense" : ""}
-            onClick={() => {
-              setType("expense");
-
-              setForm((previous) => ({
-                ...previous,
-                category: "",
-              }));
-            }}
-          >
-            <ArrowDown size={15} />
-            Expense
-          </button>
-        </div>
-
-        <div className="form-grid">
-          <label className="form-field full">
-            <span>Description</span>
-
-            <input
-              className="premium-input"
-              placeholder="e.g. Monthly salary"
-              value={form.description}
-              onChange={updateField("description")}
-              autoFocus
-            />
-          </label>
-
-          <label className="form-field">
-            <span>Amount</span>
-
-            <div className="input-prefix-wrap">
-              <span>₹</span>
-
-              <input
-                className="premium-input input-with-prefix mono"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0"
-                value={form.amount}
-                onChange={updateField("amount")}
-              />
-            </div>
-          </label>
-
-          <label className="form-field">
-            <span>Date</span>
-
-            <input
-              className="premium-input"
-              type="date"
-              value={form.date}
-              onChange={updateField("date")}
-            />
-          </label>
-
-          <label className="form-field full">
-            <span>Category</span>
-
-            <select
-              className="premium-input"
-              value={form.category}
-              onChange={updateField("category")}
-            >
-              <option value="">Select a category</option>
-
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {formatCategory(category)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {error && (
-          <div className="form-error">
-            <AlertCircle size={15} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => onClose(false)}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={submit}
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <RefreshCw size={15} className="spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={15} />
-                Save Transaction
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================================
    TOAST
 ============================================================================ */
 
@@ -794,7 +611,7 @@ function Toast({ message, type = "success", onDone }) {
   }, [onDone]);
 
   return (
-    <div className={`premium-toast ${type}`} role="status">
+    <div className={`premium-toast ${type}`} role="status" aria-live="polite">
       <div className="toast-icon">
         {type === "success" ? (
           <CheckCircle size={17} />
@@ -813,7 +630,7 @@ function Toast({ message, type = "success", onDone }) {
 }
 
 /* ============================================================================
-   LOADING ROWS
+   LOADING ROW
 ============================================================================ */
 
 function TransactionSkeleton() {
@@ -844,6 +661,10 @@ const Layout = ({ onLogout, user }) => {
     deleteTransaction,
   } = useTransactions();
 
+  /* --------------------------------------------------------------------------
+     UI STATE
+  -------------------------------------------------------------------------- */
+
   const [timeFrame, setTimeFrame] = useState("monthly");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -854,10 +675,26 @@ const Layout = ({ onLogout, user }) => {
 
   const [toast, setToast] = useState(null);
 
+  /* --------------------------------------------------------------------------
+     ADD TRANSACTION STATE
+  -------------------------------------------------------------------------- */
+
+  const [newTransaction, setNewTransaction] = useState(
+    getDefaultTransaction("income"),
+  );
+
+  /* --------------------------------------------------------------------------
+     FILTERED TRANSACTIONS
+  -------------------------------------------------------------------------- */
+
   const filteredTransactions = useMemo(
     () => filterTransactions(transactions, timeFrame),
     [transactions, timeFrame],
   );
+
+  /* --------------------------------------------------------------------------
+     STATS
+  -------------------------------------------------------------------------- */
 
   const stats = useMemo(() => calculateStats(transactions), [transactions]);
 
@@ -903,25 +740,76 @@ const Layout = ({ onLogout, user }) => {
     : transactions.slice(0, 5);
 
   /* --------------------------------------------------------------------------
-     HANDLERS
+     OPEN MODAL
   -------------------------------------------------------------------------- */
 
-  const handleAddClose = (saved) => {
+  const openAddModal = useCallback((type = "income") => {
+    setNewTransaction(getDefaultTransaction(type));
+
+    setShowModal(true);
+  }, []);
+
+  /* --------------------------------------------------------------------------
+     CLOSE MODAL
+  -------------------------------------------------------------------------- */
+
+  const closeAddModal = useCallback(() => {
     setShowModal(false);
 
-    if (saved) {
+    setNewTransaction(getDefaultTransaction("income"));
+  }, []);
+
+  /* --------------------------------------------------------------------------
+     ADD TRANSACTION
+  -------------------------------------------------------------------------- */
+
+  const handleAddTransaction = useCallback(async () => {
+    try {
+      const amount = Number(newTransaction.amount);
+
+      if (!newTransaction.type) {
+        throw new Error("Please select transaction type.");
+      }
+
+      if (!newTransaction.description?.trim()) {
+        throw new Error("Please enter a description.");
+      }
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount.");
+      }
+
+      if (!newTransaction.date) {
+        throw new Error("Please select a date.");
+      }
+
+      await addTransaction({
+        ...newTransaction,
+        description: newTransaction.description.trim(),
+        amount,
+      });
+
+      closeAddModal();
+
       setToast({
         message: "Transaction added successfully.",
         type: "success",
       });
+    } catch (error) {
+      console.error("Failed to add transaction:", error);
+
+      setToast({
+        message: getErrorMessage(error, "Unable to add transaction."),
+        type: "error",
+      });
     }
-  };
+  }, [newTransaction, addTransaction, closeAddModal]);
 
-  const handleAdd = async (transaction) => {
-    await addTransaction(transaction);
-  };
+  /* --------------------------------------------------------------------------
+     REFRESH
+  -------------------------------------------------------------------------- */
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     try {
       await fetchTransactions();
 
@@ -929,34 +817,48 @@ const Layout = ({ onLogout, user }) => {
         message: "Transactions refreshed.",
         type: "success",
       });
-    } catch {
+    } catch (error) {
+      console.error("Refresh failed:", error);
+
       setToast({
-        message: "Unable to refresh transactions.",
+        message: getErrorMessage(error, "Unable to refresh transactions."),
         type: "error",
       });
     }
-  };
+  }, [fetchTransactions]);
 
   /* --------------------------------------------------------------------------
      OUTLET CONTEXT
   -------------------------------------------------------------------------- */
 
-  const outletContext = {
-    transactions: filteredTransactions,
+  const outletContext = useMemo(
+    () => ({
+      transactions: filteredTransactions,
 
-    allTransactions: transactions,
+      allTransactions: transactions,
 
-    addTransaction,
-    editTransaction,
-    deleteTransaction,
+      addTransaction,
+      editTransaction,
+      deleteTransaction,
 
-    refreshTransactions: fetchTransactions,
+      refreshTransactions: fetchTransactions,
 
-    timeFrame,
-    setTimeFrame,
+      timeFrame,
+      setTimeFrame,
 
-    lastUpdated,
-  };
+      lastUpdated,
+    }),
+    [
+      filteredTransactions,
+      transactions,
+      addTransaction,
+      editTransaction,
+      deleteTransaction,
+      fetchTransactions,
+      timeFrame,
+      lastUpdated,
+    ],
+  );
 
   /* --------------------------------------------------------------------------
      PERCENTAGE
@@ -970,11 +872,19 @@ const Layout = ({ onLogout, user }) => {
 
   return (
     <div className="app-shell">
+      {/* =====================================================================
+          AMBIENT BACKGROUND
+      ===================================================================== */}
+
       <div className="ambient-background">
         <span className="ambient-orb orb-one" />
         <span className="ambient-orb orb-two" />
         <span className="ambient-orb orb-three" />
       </div>
+
+      {/* =====================================================================
+          SIDEBAR
+      ===================================================================== */}
 
       <Sidebar
         user={user}
@@ -983,19 +893,38 @@ const Layout = ({ onLogout, user }) => {
         setIsCollapsed={setSidebarCollapsed}
       />
 
+      {/* =====================================================================
+          ADD TRANSACTION MODAL
+      ===================================================================== */}
+
       {showModal && (
-        <AddTransactionModal onClose={handleAddClose} onAdd={handleAdd} />
+        <AddTransactionModal
+          showModal={showModal}
+          setShowModal={setShowModal}
+          newTransaction={newTransaction}
+          setNewTransaction={setNewTransaction}
+          handleAddTransaction={handleAddTransaction}
+          loading={loading}
+        />
       )}
 
+      {/* =====================================================================
+          TOAST
+      ===================================================================== */}
+
       {toast && <Toast {...toast} onDone={() => setToast(null)} />}
+
+      {/* =====================================================================
+          MAIN
+      ===================================================================== */}
 
       <main
         className={`app-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
       >
         <div className="dashboard-container">
-          {/* ==================================================================
-             TOP HEADER
-          ================================================================== */}
+          {/* ================================================================
+              HEADER
+          ================================================================ */}
 
           <header className="dashboard-header">
             <div>
@@ -1034,17 +963,18 @@ const Layout = ({ onLogout, user }) => {
               <button
                 className="add-transaction-button"
                 type="button"
-                onClick={() => setShowModal(true)}
+                onClick={() => openAddModal("income")}
               >
                 <span>+</span>
+
                 <strong>Add Transaction</strong>
               </button>
             </div>
           </header>
 
-          {/* ==================================================================
-             FILTER BAR
-          ================================================================== */}
+          {/* ================================================================
+              FILTER BAR
+          ================================================================ */}
 
           <div className="dashboard-toolbar">
             <div>
@@ -1065,9 +995,9 @@ const Layout = ({ onLogout, user }) => {
             </div>
           </div>
 
-          {/* ==================================================================
-             STATS
-          ================================================================== */}
+          {/* ================================================================
+              STATS
+          ================================================================ */}
 
           <section className="stats-grid">
             <StatCard
@@ -1111,12 +1041,15 @@ const Layout = ({ onLogout, user }) => {
             />
           </section>
 
-          {/* ==================================================================
-             MAIN CONTENT
-          ================================================================== */}
+          {/* ================================================================
+              MAIN CONTENT
+          ================================================================ */}
 
           <div className="dashboard-grid">
-          
+            {/* ==============================================================
+                LEFT
+            ============================================================== */}
+
             <div className="dashboard-left">
               <PanelCard delay={0.25}>
                 <div className="outlet-wrapper mt-5">
@@ -1125,14 +1058,14 @@ const Layout = ({ onLogout, user }) => {
               </PanelCard>
             </div>
 
-            {/* ================================================================
-               RIGHT
-            ================================================================ */}
+            {/* ==============================================================
+                RIGHT
+            ============================================================== */}
 
             <aside className="dashboard-right">
-              {/* --------------------------------------------------------------
-                 TOP SPENDING
-              -------------------------------------------------------------- */}
+              {/* ============================================================
+                  TOP SPENDING
+              ============================================================ */}
 
               <PanelCard delay={0.28}>
                 <PanelHeader
@@ -1158,14 +1091,17 @@ const Layout = ({ onLogout, user }) => {
 
                       <p>No spending data yet</p>
 
-                      <button type="button" onClick={() => setShowModal(true)}>
+                      <button
+                        type="button"
+                        onClick={() => openAddModal("expense")}
+                      >
                         Add your first expense
                       </button>
                     </div>
                   ) : (
                     <div className="category-list">
                       {topCategories.map(([category, amount], index) => {
-                        const percentage =
+                        const categoryPercentage =
                           topCategoriesTotal > 0
                             ? Math.round((amount / topCategoriesTotal) * 100)
                             : 0;
@@ -1186,7 +1122,7 @@ const Layout = ({ onLogout, user }) => {
                                 <div>
                                   <strong>{formatCategory(category)}</strong>
 
-                                  <span>{percentage}%</span>
+                                  <span>{categoryPercentage}%</span>
                                 </div>
                               </div>
 
@@ -1198,7 +1134,7 @@ const Layout = ({ onLogout, user }) => {
                             <div className="category-progress">
                               <div
                                 style={{
-                                  width: `${percentage}%`,
+                                  width: `${categoryPercentage}%`,
                                   animationDelay: `${index * 80}ms`,
                                 }}
                               />
@@ -1229,9 +1165,9 @@ const Layout = ({ onLogout, user }) => {
                 </div>
               </PanelCard>
 
-              {/* --------------------------------------------------------------
-                 RECENT TRANSACTIONS
-              -------------------------------------------------------------- */}
+              {/* ============================================================
+                  RECENT TRANSACTIONS
+              ============================================================ */}
 
               <PanelCard delay={0.33}>
                 <PanelHeader
@@ -1280,7 +1216,7 @@ const Layout = ({ onLogout, user }) => {
 
                         <button
                           type="button"
-                          onClick={() => setShowModal(true)}
+                          onClick={() => openAddModal("income")}
                         >
                           + Add transaction
                         </button>
@@ -1306,6 +1242,7 @@ const Layout = ({ onLogout, user }) => {
                             }`}
                           >
                             {transaction.type === "income" ? "+" : "−"}
+
                             {formatCurrency(transaction.amount).slice(1)}
                           </strong>
 

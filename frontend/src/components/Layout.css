@@ -2764,3 +2764,687 @@ a {
      }
 }
 
+/* ==========================================================================
+   MOBILE UX PATCH
+   Top Spending + Recent Transactions
+   Add this AFTER your existing CSS.
+========================================================================== */
+
+
+/* ==========================================================================
+   TOP SPENDING — DESKTOP SAFETY
+========================================================================== */
+
+.spending-content {
+     min-width: 0;
+     overflow: hidden;
+}
+
+.category-list {
+     width: 100%;
+     min-width: 0;
+}
+
+.category-item {
+     width: 100%;
+     min-width: 0;
+}
+
+.category-top {
+     min-width: 0;
+}
+
+.category-info {
+     min-width: 0;
+     flex: 1 1 auto;
+}
+
+.category-info>div:last-child {
+     min-width: 0;
+     overflow: hidden;
+}
+
+.category-amount {
+     min-width: max-content;
+     white-space: nowrap;
+}
+
+.category-progress {
+     width: 100%;
+}
+
+
+/* ==========================================================================
+   RECENT TRANSACTIONS — DESKTOP SAFETY
+========================================================================== */
+
+.transactions-wrapper {
+     width: 100%;
+     min-width: 0;
+     overflow: hidden;
+}
+
+.transaction-list {
+     width: 100%;
+     min-width: 0;
+}
+
+.transaction-row {
+     width: 100%;
+     min-width: 0;
+}
+
+.transaction-name {
+     min-width: 0;
+}
+
+.transaction-category {
+     min-width: 0;
+}
+
+
+/* ==========================================================================
+   TABLET
+========================================================================== */
+
+@media (max-width: 960px) {
+
+     /*
+      * Keep Top Spending and Recent Transactions readable
+      * when the dashboard switches to one-column layout.
+      */
+
+     .dashboard-left,
+     .dashboard-right {
+          width: 100%;
+          min-width: 0;
+     }
+
+     .panel-card {
+          width: 100%;
+          min-width: 0;
+     }
+
+     .spending-content {
+          padding: 16px;
+     }
+
+     .category-list {
+          gap: 13px;
+     }
+
+     .category-top {
+          gap: 14px;
+     }
+
+     .category-info strong {
+          font-size: 10px;
+     }
+
+     .category-amount {
+          font-size: 10px;
+     }
+
+     .transaction-row,
+     .transaction-head {
+          padding-right: 16px;
+          padding-left: 16px;
+     }
+}
+
+
+/* ==========================================================================
+   MOBILE — <= 700px
+========================================================================== */
+
+@media (max-width: 700px) {
+
+     /* ----------------------------------------------------------------------
+        TOP SPENDING
+     ---------------------------------------------------------------------- */
+
+     .spending-content {
+          padding: 15px 14px 16px;
+     }
+
+     .category-list {
+          gap: 15px;
+     }
+
+     .category-item {
+          padding: 0;
+     }
+
+     .category-top {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+
+          align-items: center;
+
+          gap: 10px;
+
+          margin-bottom: 8px;
+     }
+
+     .category-info {
+          min-width: 0;
+          width: 100%;
+
+          display: flex;
+          align-items: center;
+
+          gap: 9px;
+     }
+
+     .category-icon {
+          width: 34px;
+          height: 34px;
+
+          flex: 0 0 34px;
+
+          border-radius: 10px;
+     }
+
+     .category-info>div:last-child {
+          min-width: 0;
+          width: 100%;
+     }
+
+     .category-info strong {
+          max-width: 100%;
+
+          font-size: 11px;
+          line-height: 1.25;
+     }
+
+     .category-info span {
+          margin-top: 3px;
+
+          font-size: 8px;
+          line-height: 1.2;
+     }
+
+     .category-amount {
+          font-size: 10px;
+          font-weight: 800;
+
+          text-align: right;
+     }
+
+     .category-progress {
+          height: 5px;
+
+          border-radius: 999px;
+     }
+
+     .category-progress div {
+          min-width: 5px;
+
+          box-shadow:
+               0 0 10px rgba(139, 92, 246, 0.25);
+     }
+
+     /*
+      * Financial mini stats become a little larger/tappable.
+      */
+
+     .financial-mini-grid {
+          gap: 8px;
+          margin-top: 16px;
+     }
+
+     .mini-stat {
+          min-width: 0;
+
+          padding: 11px 10px;
+
+          border-radius: 11px;
+     }
+
+     .mini-stat span {
+          font-size: 7px;
+     }
+
+     .mini-stat strong {
+          overflow: hidden;
+
+          font-size: 12px;
+
+          text-overflow: ellipsis;
+          white-space: nowrap;
+     }
+
+
+     /* ----------------------------------------------------------------------
+        RECENT TRANSACTIONS
+     ---------------------------------------------------------------------- */
+
+     .transactions-wrapper {
+          overflow: visible;
+     }
+
+     /*
+      * Hide desktop table header on phones.
+      */
+
+     .transaction-head {
+          display: none;
+     }
+
+     .transaction-list {
+          max-height: none;
+
+          overflow: visible;
+     }
+
+     /*
+      * Each transaction becomes a 2-row card.
+      *
+      * Row 1:
+      * Date | Amount | Merchant
+      *
+      * Row 2:
+      * Category
+      */
+
+     .transaction-row {
+          display: grid;
+
+          grid-template-columns:
+               58px minmax(72px, 0.8fr) minmax(0, 1.4fr);
+
+          grid-template-areas:
+               "date amount name"
+               "category category category";
+
+          align-items: start;
+
+          column-gap: 8px;
+          row-gap: 7px;
+
+          width: 100%;
+          min-height: 72px;
+
+          padding: 12px 14px;
+
+          border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+
+          background: transparent;
+
+          transition:
+               background 0.18s ease,
+               border-color 0.18s ease;
+     }
+
+     .transaction-row:hover {
+          background: rgba(139, 92, 246, 0.055);
+     }
+
+     .transaction-row:active {
+          background: rgba(139, 92, 246, 0.08);
+     }
+
+     .transaction-date {
+          grid-area: date;
+
+          min-width: 0;
+
+          padding-top: 2px;
+
+          color: var(--text-muted);
+
+          font-size: 9px;
+          font-weight: 600;
+
+          line-height: 1.3;
+
+          white-space: nowrap;
+     }
+
+     .transaction-amount {
+          grid-area: amount;
+
+          min-width: 0;
+
+          padding-top: 1px;
+
+          overflow: hidden;
+
+          font-size: 10px;
+          font-weight: 850;
+
+          line-height: 1.3;
+
+          text-overflow: ellipsis;
+          white-space: nowrap;
+     }
+
+     .transaction-name {
+          grid-area: name;
+
+          min-width: 0;
+
+          width: 100%;
+
+          overflow: hidden;
+
+          padding-top: 1px;
+
+          color: var(--text);
+
+          font-size: 10px;
+          font-weight: 700;
+
+          line-height: 1.3;
+
+          text-align: right;
+
+          text-overflow: ellipsis;
+          white-space: nowrap;
+     }
+
+     .transaction-category {
+          grid-area: category;
+
+          justify-self: start;
+
+          width: auto;
+          max-width: min(100%, 220px);
+
+          min-height: 22px;
+
+          display: inline-flex;
+          align-items: center;
+
+          overflow: hidden;
+
+          padding: 3px 8px;
+
+          border-radius: 7px;
+
+          font-size: 8px;
+          font-weight: 750;
+
+          line-height: 1.2;
+
+          text-overflow: ellipsis;
+          white-space: nowrap;
+     }
+
+
+     /* ----------------------------------------------------------------------
+        TRANSACTION SKELETON
+     ---------------------------------------------------------------------- */
+
+     .transaction-skeleton {
+          display: grid;
+
+          grid-template-columns:
+               58px minmax(72px, 0.8fr) minmax(0, 1.4fr);
+
+          grid-template-areas:
+               "date amount name"
+               "category category category";
+
+          align-items: center;
+
+          column-gap: 8px;
+          row-gap: 8px;
+
+          min-height: 72px;
+
+          padding: 12px 14px;
+     }
+
+     .transaction-skeleton span {
+          width: 100% !important;
+
+          height: 9px;
+     }
+
+     .transaction-skeleton span:nth-child(1) {
+          grid-area: date;
+     }
+
+     .transaction-skeleton span:nth-child(2) {
+          grid-area: amount;
+     }
+
+     .transaction-skeleton span:nth-child(3) {
+          grid-area: name;
+     }
+
+     .transaction-skeleton span:nth-child(4) {
+          grid-area: category;
+
+          width: 70% !important;
+     }
+
+
+     /* ----------------------------------------------------------------------
+        VIEW MORE
+     ---------------------------------------------------------------------- */
+
+     .view-more-button {
+          min-height: 44px;
+
+          font-size: 10px;
+     }
+}
+
+
+/* ==========================================================================
+   SMALL PHONES — <= 480px
+========================================================================== */
+
+@media (max-width: 480px) {
+
+     /* ----------------------------------------------------------------------
+        TOP SPENDING
+     ---------------------------------------------------------------------- */
+
+     .spending-content {
+          padding: 14px 12px 15px;
+     }
+
+     .category-list {
+          gap: 14px;
+     }
+
+     .category-icon {
+          width: 32px;
+          height: 32px;
+
+          flex-basis: 32px;
+     }
+
+     .category-info {
+          gap: 8px;
+     }
+
+     .category-info strong {
+          font-size: 10px;
+     }
+
+     .category-info span {
+          font-size: 7px;
+     }
+
+     .category-amount {
+          font-size: 9px;
+     }
+
+     .category-progress {
+          height: 4px;
+     }
+
+
+     /* ----------------------------------------------------------------------
+        RECENT TRANSACTIONS
+     ---------------------------------------------------------------------- */
+
+     .transaction-row {
+          grid-template-columns:
+               52px minmax(65px, 0.8fr) minmax(0, 1.5fr);
+
+          padding: 11px 12px;
+
+          column-gap: 7px;
+     }
+
+     .transaction-date {
+          font-size: 8px;
+     }
+
+     .transaction-amount {
+          font-size: 9px;
+     }
+
+     .transaction-name {
+          font-size: 9px;
+     }
+
+     .transaction-category {
+          max-width: 180px;
+
+          min-height: 21px;
+
+          padding: 3px 7px;
+
+          font-size: 7px;
+     }
+
+     .transaction-skeleton {
+          grid-template-columns:
+               52px minmax(65px, 0.8fr) minmax(0, 1.5fr);
+
+          padding: 11px 12px;
+
+          column-gap: 7px;
+     }
+}
+
+
+/* ==========================================================================
+   VERY SMALL PHONES — <= 360px
+========================================================================== */
+
+@media (max-width: 360px) {
+
+     /* ----------------------------------------------------------------------
+        TOP SPENDING
+     ---------------------------------------------------------------------- */
+
+     .category-top {
+          grid-template-columns: minmax(0, 1fr) auto;
+
+          gap: 7px;
+     }
+
+     .category-icon {
+          width: 30px;
+          height: 30px;
+
+          flex-basis: 30px;
+     }
+
+     .category-info {
+          gap: 7px;
+     }
+
+     .category-info strong {
+          font-size: 9px;
+     }
+
+     .category-info span {
+          font-size: 7px;
+     }
+
+     .category-amount {
+          font-size: 8px;
+     }
+
+
+     /* ----------------------------------------------------------------------
+        RECENT TRANSACTIONS
+     ---------------------------------------------------------------------- */
+
+     .transaction-row {
+          grid-template-columns:
+               48px minmax(58px, 0.8fr) minmax(0, 1.5fr);
+
+          padding-right: 10px;
+          padding-left: 10px;
+
+          column-gap: 6px;
+     }
+
+     .transaction-date {
+          font-size: 7px;
+     }
+
+     .transaction-amount {
+          font-size: 8px;
+     }
+
+     .transaction-name {
+          font-size: 8px;
+     }
+
+     .transaction-category {
+          max-width: 150px;
+
+          font-size: 7px;
+     }
+
+     .transaction-skeleton {
+          grid-template-columns:
+               48px minmax(58px, 0.8fr) minmax(0, 1.5fr);
+
+          padding-right: 10px;
+          padding-left: 10px;
+
+          column-gap: 6px;
+     }
+}
+
+
+/* ==========================================================================
+   TOUCH DEVICES
+========================================================================== */
+
+@media (hover: none) and (pointer: coarse) {
+
+     .category-item,
+     .transaction-row {
+          -webkit-tap-highlight-color: transparent;
+     }
+
+     .transaction-row:hover {
+          background: transparent;
+     }
+
+     .transaction-row:active {
+          background: rgba(139, 92, 246, 0.075);
+     }
+
+     .panel-link,
+     .view-more-button,
+     .category-item {
+          touch-action: manipulation;
+     }
+}
+
+
+/* ==========================================================================
+   ACCESSIBILITY
+========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+     .transaction-row,
+     .category-progress div {
+          transition: none !important;
+          animation: none !important;
+     }
+}
