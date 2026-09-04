@@ -94,28 +94,6 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
   );
 };
 
-/* ─── UserAvatar ──────────────────────────────────────────────────────────────── */
-const UserAvatar = ({ name, profilePic, size = 36 }) => {
-  const initial = (name ?? "U").charAt(0).toUpperCase();
-  if (profilePic) {
-    return (
-      <img
-        src={profilePic}
-        alt={name}
-        style={{ width: size, height: size, minWidth: size }}
-        className="rounded-full object-cover shrink-0 ring-2 ring-violet-200 dark:ring-violet-700"
-      />
-    );
-  }
-  return (
-    <div
-      style={{ width: size, height: size, minWidth: size }}
-      className="rounded-full shrink-0 flex items-center justify-center bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 font-semibold text-sm ring-2 ring-violet-200 dark:ring-violet-700"
-    >
-      {initial}
-    </div>
-  );
-};
 
 /* ─── SidebarContent ──────────────────────────────────────────────────────────── */
 const SidebarContent = ({ collapsed, user, onNavClick }) => {
@@ -128,29 +106,7 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* User Card */}
-      <div className="px-3 pt-4 pb-3 border-b border-gray-100 dark:border-gray-700/60">
-        <div className="flex items-center px-2 py-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 overflow-hidden">
-          <UserAvatar name={name} profilePic={profilePic} size={36} />
-          <motion.div
-            animate={{
-              maxWidth: collapsed ? 0 : 200,
-              opacity: collapsed ? 0 : 1,
-              marginLeft: collapsed ? 0 : 10,
-            }}
-            transition={TEXT_SPRING}
-            className="overflow-hidden whitespace-nowrap block min-w-0"
-          >
-            <p className="text-[13px] font-semibold text-gray-800 dark:text-gray-100 truncate leading-tight">
-              {name}
-            </p>
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate leading-tight mt-0.5">
-              {email}
-            </p>
-          </motion.div>
-        </div>
-      </div>
-
+     
       {/* Nav Items */}
       <nav
         aria-label="Main navigation"

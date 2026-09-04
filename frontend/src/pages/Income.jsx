@@ -6,12 +6,15 @@ import React, {
   useRef,
 } from "react";
 import { useOutletContext } from "react-router-dom";
+import axios from "axios";
+import { createPortal } from "react-dom";
 import {
   Plus,
   Download,
   Eye,
   EyeOff,
   TrendingUp,
+  TrendingDown,
   BarChart2,
   IndianRupee,
   Trash2,
@@ -30,7 +33,17 @@ import {
   Briefcase,
   Coins,
   Banknote,
+  CalendarDays,
+  RotateCcw,
+  Filter,
+  ArrowDownRight,
+  CircleDollarSign,
+  ReceiptText,
+  Layers3,
+  WalletCards,
+  Loader2,
 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -42,19 +55,40 @@ import {
   Cell,
   ReferenceLine,
 } from "recharts";
-import axios from "axios";
-import {  learnCategory } from "../utils/smartCategoryAI";
+
+import { learnCategory } from "../utils/smartCategoryAI";
 import AddTransactionModal from "../components/Add";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
+/* =========================================================
+   THEME
+========================================================= */
+
+const COLORS = {
+  bg: "#080b10",
+  surface: "#0f131a",
+  surface2: "#141923",
+  surface3: "#191f2b",
+  border: "#222936",
+  borderSoft: "#1a202b",
+  text: "#f1f5f9",
+  textMuted: "#7b8497",
+  textDim: "#515b6e",
+  green: "#00e5a0",
+  blue: "#5b8dff",
+  purple: "#b97cff",
+  orange: "#ffb347",
+  cyan: "#22d3ee",
+  red: "#ff6b6b",
+};
 
 const CATEGORY_COLOR = {
-  Salary: "#00e5a0",
-  Extra_Income: "#5b8dff",
-  Freelance: "#b97cff",
-  Side_Hustles: "#ffb347",
-  Investment: "#22d3ee",
+  Salary: COLORS.green,
+  Extra_Income: COLORS.blue,
+  Freelance: COLORS.purple,
+  Side_Hustles: COLORS.orange,
+  Investment: COLORS.cyan,
 };
 
 const CATEGORY_ICONS = {
@@ -74,18 +108,18 @@ const INCOME_CATEGORIES = [
 ];
 
 const BAR_COLORS = [
-  "#00e5a0",
+  COLORS.green,
   "#00c882",
   "#00a86b",
-  "#00e5a0cc",
-  "#00c88280",
-  "#00a86b60",
+  "#22d3ee",
+  "#5b8dff",
+  "#b97cff",
+  "#ffb347",
+  "#7c6cff",
 ];
 
-const FILTER_OPTIONS = [
-  { value: "all", label: "All Transactions" },
-  { value: "month", label: "This Month" },
-  { value: "year", label: "This Year" },
+const CATEGORY_FILTERS = [
+  { value: "all", label: "All Sources" },
   { value: "Salary", label: "Salary" },
   { value: "Extra_Income", label: "Extra Income" },
   { value: "Freelance", label: "Freelance" },
@@ -95,323 +129,1068 @@ const FILTER_OPTIONS = [
 
 const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
 
-// ─────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function getMonthKey(dateValue) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) return "";
+
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+function getYear(dateValue) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) return null;
+
+  return d.getFullYear();
+}
+
+function getCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+}
+
+function getCurrentYear() {
+  return new Date().getFullYear();
+}
+
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return "Select month";
+
+  const [year, month] = monthKey.split("-").map(Number);
+
+  if (!year || !month) return "Select month";
+
+  return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatShortMonth(monthKey) {
+  if (!monthKey) return "";
+
+  const [year, month] = monthKey.split("-").map(Number);
+
+  return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+    month: "short",
+  });
+}
+
+function fmtINR(value) {
+  const n = Number(value || 0);
+
+  if (n >= 10000000) {
+    return `₹${(n / 10000000).toFixed(1)}Cr`;
+  }
+
+  if (n >= 100000) {
+    return `₹${(n / 100000).toFixed(1)}L`;
+  }
+
+  if (n >= 1000) {
+    return `₹${(n / 1000).toFixed(1)}K`;
+  }
+
+  return `₹${Math.round(n).toLocaleString("en-IN")}`;
+}
+
+function formatFullINR(value) {
+  return `₹${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function toIsoWithClientTime(dateValue) {
-  if (!dateValue) return new Date().toISOString();
+  if (!dateValue) {
+    return new Date().toISOString();
+  }
+
   if (typeof dateValue === "string" && dateValue.length === 10) {
     const now = new Date();
+
     return new Date(
       `${dateValue}T${now.toTimeString().slice(0, 8)}`,
     ).toISOString();
   }
-  try {
-    return new Date(dateValue).toISOString();
-  } catch {
-    return new Date().toISOString();
+
+  const parsed = new Date(dateValue);
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString();
   }
+
+  return new Date().toISOString();
 }
 
-function fmtINR(n) {
-  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 1_000) return `₹${(n / 1_000).toFixed(1)}K`;
-  return `₹${Math.round(n).toLocaleString("en-IN")}`;
+function formatTransactionDate(dateValue) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) return "Invalid date";
+
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTransactionDateMobile(dateValue) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) return "Invalid date";
+
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function normalizeDate(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function safeNumber(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : 0;
+}
+
+function isDateInRange(dateValue, start, end) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) return false;
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
+  d.setHours(0, 0, 0, 0);
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  return d >= startDate && d <= endDate;
 }
 
 function getTimeFrameRange(timeFrame) {
   const now = new Date();
+
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
-  if (timeFrame === "daily")
-    return { start, end: new Date(now), label: "Today" };
+
+  if (timeFrame === "daily") {
+    return {
+      start,
+      end: new Date(now),
+      label: "Today",
+    };
+  }
+
   if (timeFrame === "weekly") {
     const s = new Date(start);
+
     s.setDate(start.getDate() - start.getDay());
     s.setHours(0, 0, 0, 0);
-    return { start: s, end: new Date(now), label: "This Week" };
+
+    return {
+      start: s,
+      end: new Date(now),
+      label: "This Week",
+    };
   }
-  if (timeFrame === "monthly")
+
+  if (timeFrame === "monthly") {
     return {
       start: new Date(start.getFullYear(), start.getMonth(), 1),
       end: new Date(now),
       label: "This Month",
     };
-  if (timeFrame === "yearly")
-    return {
-      start: new Date(start.getFullYear(), 0, 1),
-      end: new Date(now),
-      label: "This Year",
-    };
+  }
+
   return {
-    start: new Date(start.getFullYear(), start.getMonth(), 1),
+    start: new Date(start.getFullYear(), 0, 1),
     end: new Date(now),
-    label: "This Month",
+    label: "This Year",
   };
 }
 
-function generateChartPoints(timeFrame) {
-  const now = new Date();
-  const points = [];
-  if (timeFrame === "daily") {
-    for (let i = 0; i < 24; i++) {
-      const h = new Date(now);
-      h.setHours(i, 0, 0, 0);
-      points.push({
-        date: h,
-        label: h.toLocaleTimeString([], { hour: "2-digit" }),
-        hour: i,
-        isCurrent: i === now.getHours(),
-      });
+function getYearOptions(currentYear, count = 5) {
+  return Array.from({ length: count }, (_, index) => currentYear - index);
+}
+
+/* =========================================================
+   YEAR SELECTOR
+========================================================= */
+
+function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
+  const years = useMemo(() => getYearOptions(currentYear, 6), [currentYear]);
+
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 220,
+  });
+
+  const triggerRef = useRef(null);
+
+  const isCurrentYear = selectedYear === currentYear;
+
+  const updatePosition = () => {
+    if (!triggerRef.current) return;
+
+    const rect = triggerRef.current.getBoundingClientRect();
+
+    const dropdownWidth = 220;
+    const gap = 8;
+    const padding = 12;
+
+    let left = rect.left;
+
+    // Prevent right-side overflow
+    if (left + dropdownWidth > window.innerWidth - padding) {
+      left = window.innerWidth - dropdownWidth - padding;
     }
-  } else if (timeFrame === "weekly") {
-    const s = new Date(now);
-    s.setDate(now.getDate() - now.getDay());
-    s.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(s);
-      d.setDate(s.getDate() + i);
-      points.push({
-        date: d,
-        label: d.toLocaleDateString("en-US", { weekday: "short" }),
-        isCurrent:
-          d.getDate() === now.getDate() && d.getMonth() === now.getMonth(),
-      });
-    }
-  } else if (timeFrame === "monthly") {
-    const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    for (let i = 1; i <= days; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), i);
-      points.push({
-        date: d,
-        label: d.toLocaleDateString("en-US", { day: "numeric" }),
-        isCurrent: i === now.getDate(),
-      });
-    }
-  } else {
-    for (let i = 0; i < 12; i++) {
-      const m = new Date(now.getFullYear(), i, 1);
-      points.push({
-        date: m,
-        label: m.toLocaleDateString("en-US", { month: "short" }),
-        isCurrent: i === now.getMonth(),
-      });
-    }
+
+    // Prevent left-side overflow
+    left = Math.max(padding, left);
+
+    setPosition({
+      top: rect.bottom + gap,
+      left,
+      width: dropdownWidth,
+    });
+  };
+
+  const handleOpen = () => {
+    updatePosition();
+    setOpen((prev) => !prev);
+  };
+
+  const handleSelect = (year) => {
+    setSelectedYear(year);
+    setOpen(false);
+  };
+
+  // Update position while scrolling/resizing
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePosition = () => {
+      updatePosition();
+    };
+
+    window.addEventListener("resize", handlePosition);
+    window.addEventListener("scroll", handlePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", handlePosition);
+      window.removeEventListener("scroll", handlePosition, true);
+    };
+  }, [open]);
+
+  // Escape
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  // Outside click
+  useEffect(() => {
+    if (!open) return;
+
+    const handleOutside = (event) => {
+      if (triggerRef.current && !triggerRef.current.contains(event.target)) {
+        const dropdown = document.getElementById("year-selector-dropdown");
+
+        if (dropdown && !dropdown.contains(event.target)) {
+          setOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={handleOpen}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Select expense year"
+        className="
+          group
+          relative
+          inline-flex
+          h-10
+          items-center
+          gap-2
+          rounded-full
+          border
+          border-violet-500/30
+          bg-[#080b18]
+          px-3
+          shadow-[0_0_0_1px_rgba(124,58,237,.08),0_8px_30px_rgba(0,0,0,.25)]
+          transition-all
+          duration-200
+          hover:border-violet-500/50
+          hover:bg-[#0b0f20]
+          focus:outline-none
+          focus:ring-2
+          focus:ring-violet-500/20
+        "
+      >
+        <span
+          className="
+            flex
+            h-7
+            w-7
+            items-center
+            justify-center
+            rounded-full
+            bg-violet-500/10
+            text-violet-400
+          "
+        >
+          <CalendarDays size={14} strokeWidth={2.2} />
+        </span>
+
+        <span
+          className="
+            text-xs
+            font-black
+            tracking-tight
+            text-slate-100
+          "
+        >
+          {selectedYear}
+        </span>
+
+        {isCurrentYear && (
+          <span
+            className="
+              flex
+              items-center
+              gap-1.5
+              border-l
+              border-white/10
+              pl-2
+              text-[9px]
+              font-bold
+              text-emerald-400
+            "
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span
+                className="
+                  absolute
+                  inset-0
+                  animate-ping
+                  rounded-full
+                  bg-emerald-400/50
+                "
+              />
+              <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            </span>
+            Current
+          </span>
+        )}
+
+        <ChevronDown
+          size={14}
+          strokeWidth={2.5}
+          className={`
+            ml-1
+            text-slate-500
+            transition-transform
+            duration-200
+            ${open ? "rotate-180 text-violet-400" : ""}
+          `}
+        />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            id="year-selector-dropdown"
+            role="listbox"
+            aria-label="Select expense year"
+            style={{
+              position: "fixed",
+              top: position.top,
+              left: position.left,
+              width: position.width,
+            }}
+            className="
+              z-[999999]
+              overflow-hidden
+              rounded-xl
+              border
+              border-white/[0.08]
+              bg-[#080b18]/[0.98]
+              p-1.5
+              shadow-[0_24px_70px_rgba(0,0,0,.55),0_0_0_1px_rgba(139,92,246,.08)]
+              backdrop-blur-2xl
+            "
+          >
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                px-2.5
+                pb-2
+                pt-1.5
+              "
+            >
+              <span
+                className="
+                  text-[9px]
+                  font-black
+                  uppercase
+                  tracking-[0.18em]
+                  text-slate-500
+                "
+              >
+                Select year
+              </span>
+
+              <CalendarDays size={12} className="text-violet-500/50" />
+            </div>
+
+            <div className="space-y-0.5">
+              {years.map((year) => {
+                const selected = year === selectedYear;
+                const current = year === currentYear;
+                const previous = year === currentYear - 1;
+
+                return (
+                  <button
+                    key={year}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => handleSelect(year)}
+                    className={`
+                      group/year
+                      flex
+                      w-full
+                      items-center
+                      justify-between
+                      rounded-xl
+                      px-3
+                      py-2.5
+                      text-left
+                      transition-all
+                      duration-150
+
+                      ${selected ? "bg-violet-500/10" : "hover:bg-white/[0.04]"}
+                    `}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`
+                          flex
+                          h-7
+                          w-7
+                          items-center
+                          justify-center
+                          rounded-lg
+                          text-[10px]
+                          font-black
+                          ${
+                            selected
+                              ? "bg-violet-500/15 text-violet-400"
+                              : "bg-white/[0.04] text-slate-500"
+                          }
+                        `}
+                      >
+                        {String(year).slice(-2)}
+                      </span>
+
+                      <div>
+                        <div
+                          className={`
+                            text-xs
+                            font-extrabold
+                            ${selected ? "text-violet-300" : "text-slate-200"}
+                          `}
+                        >
+                          {year}
+                        </div>
+
+                        {current && (
+                          <div className="mt-0.5 text-[9px] font-semibold text-emerald-400">
+                            Current year
+                          </div>
+                        )}
+
+                        {previous && (
+                          <div className="mt-0.5 text-[9px] text-slate-600">
+                            Previous year
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {selected && (
+                      <span
+                        className="
+                          flex
+                          h-5
+                          w-5
+                          items-center
+                          justify-center
+                          rounded-full
+                          bg-violet-500
+                          text-white
+                          shadow-[0_4px_12px_rgba(124,58,237,.35)]
+                        "
+                      >
+                        <Check size={11} strokeWidth={3} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function TimeFrameSelector({ timeFrame, setTimeFrame }) {
+  return (
+    <div
+      className="
+        flex
+        gap-1
+        overflow-x-auto
+        max-w-full
+        bg-slate-100/80
+        dark:bg-slate-800/80
+        p-1
+        rounded-2xl
+        border
+        border-slate-200/60
+        dark:border-slate-700/60
+        scrollbar-none
+      "
+    >
+      {TIME_FRAMES.map((frame) => {
+        const active = timeFrame === frame;
+
+        return (
+          <button
+            key={frame}
+            type="button"
+            onClick={() => setTimeFrame(frame)}
+            className={`
+              shrink-0
+              px-3
+              sm:px-4
+              py-2
+              text-[11px]
+              font-bold
+              rounded-xl
+              transition-all
+              ${
+                active
+                  ? " bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-orange-500/20"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
+              }
+            `}
+          >
+            {frame.charAt(0).toUpperCase() + frame.slice(1)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function getMonthRange(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+
+  return {
+    start: new Date(year, month - 1, 1),
+    end: new Date(year, month, 0, 23, 59, 59, 999),
+  };
+}
+
+function getYearRange(year) {
+  return {
+    start: new Date(year, 0, 1),
+    end: new Date(year, 11, 31, 23, 59, 59, 999),
+  };
+}
+
+function getDateInputValue(dateValue) {
+  const d = new Date(dateValue);
+
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toISOString().split("T")[0];
   }
+
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function buildRecentMonths(count = 60) {
+  const result = [];
+  const now = new Date();
+
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+
+    result.push(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
+  }
+
+  return result;
+}
+
+function buildChartPoints(mode, periodValue) {
+  const points = [];
+
+  if (mode === "month") {
+    const [year, month] = periodValue.split("-").map(Number);
+
+    const days = new Date(year, month, 0).getDate();
+
+    for (let i = 1; i <= days; i++) {
+      points.push({
+        key: `${year}-${pad2(month)}-${pad2(i)}`,
+        date: new Date(year, month - 1, i),
+        label: String(i),
+        day: i,
+      });
+    }
+
+    return points;
+  }
+
+  const year = Number(periodValue);
+
+  for (let month = 0; month < 12; month++) {
+    points.push({
+      key: `${year}-${pad2(month + 1)}`,
+      date: new Date(year, month, 1),
+      label: new Date(year, month, 1).toLocaleDateString("en-IN", {
+        month: "short",
+      }),
+      month,
+    });
+  }
+
   return points;
 }
 
-// ─────────────────────────────────────────────────────────────
-// TOAST
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   TOAST
+========================================================= */
+
 function Toast({ toasts }) {
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
-      {toasts.map((t) => (
+    <div className="fixed top-4 right-3 sm:right-5 z-[9999] flex flex-col gap-2 pointer-events-none w-[calc(100%-24px)] max-w-sm">
+      {toasts.map((toast) => (
         <div
-          key={t.id}
-          style={{ animation: "slideInRight .25s ease-out" }}
-          className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium
-            pointer-events-auto border backdrop-blur-md
-            ${
-              t.type === "success"
-                ? "bg-[#0d1f1a] border-[#00e5a030] text-[#00e5a0]"
-                : t.type === "error"
-                  ? "bg-[#1f0d0d] border-[#ff4d4d30] text-[#ff6b6b]"
-                  : "bg-[#13161e] border-[#252836] text-[#eef0f6]"
-            }`}
+          key={toast.id}
+          className="pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-2xl border backdrop-blur-xl"
+          style={{
+            background:
+              toast.type === "success"
+                ? "#0c211b"
+                : toast.type === "error"
+                  ? "#251313"
+                  : "#151a24",
+            borderColor:
+              toast.type === "success"
+                ? "#00e5a033"
+                : toast.type === "error"
+                  ? "#ff6b6b33"
+                  : "#2a3242",
+            color:
+              toast.type === "success"
+                ? COLORS.green
+                : toast.type === "error"
+                  ? COLORS.red
+                  : COLORS.text,
+            animation: "incomeSlideIn .25s ease-out",
+          }}
         >
-          {t.type === "success" ? (
-            <Check size={14} className="shrink-0" />
-          ) : t.type === "error" ? (
-            <AlertCircle size={14} className="shrink-0" />
+          {toast.type === "success" ? (
+            <Check size={16} />
+          ) : toast.type === "error" ? (
+            <AlertCircle size={16} />
           ) : (
-            <Zap size={14} className="shrink-0" />
+            <Zap size={16} />
           )}
-          {t.message}
+
+          <span className="text-xs sm:text-sm font-semibold">
+            {toast.message}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// STAT CARD
-// ─────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent = "#00e5a0", icon: Icon }) {
+/* =========================================================
+   STAT CARD
+========================================================= */
+
+function StatCard({ label, value, sub, accent, icon: Icon, trend }) {
   return (
     <div
-      className="relative rounded-2xl p-5 overflow-hidden border transition-all duration-200 group"
-      style={{ background: "#13161e", borderColor: "#252836" }}
+      className="relative overflow-hidden rounded-2xl sm:rounded-3xl border p-4 sm:p-5 group"
+      style={{
+        background: "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
+        borderColor: COLORS.border,
+      }}
     >
-      {/* Glow on hover */}
       <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse at top left, ${accent}08 0%, transparent 70%)`,
-        }}
+        className="absolute -right-8 -top-8 h-24 w-24 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity"
+        style={{ background: accent }}
       />
 
-      <div className="flex items-start justify-between mb-4">
-        <p
-          className="text-[10px] font-bold uppercase tracking-[0.15em]"
-          style={{ color: "#5e6378" }}
-        >
-          {label}
-        </p>
-        {Icon && (
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{ background: accent + "14", color: accent }}
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p
+            className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]"
+            style={{ color: COLORS.textDim }}
           >
-            <Icon size={15} />
+            {label}
+          </p>
+
+          <p
+            className="mt-2 text-xl sm:text-2xl font-black tracking-tight truncate"
+            style={{ color: COLORS.text }}
+          >
+            {value}
+          </p>
+
+          <div className="flex items-center gap-1.5 mt-1.5">
+            {trend !== undefined && (
+              <span
+                className="flex items-center gap-0.5 text-[10px] font-bold"
+                style={{
+                  color: trend >= 0 ? COLORS.green : COLORS.red,
+                }}
+              >
+                {trend >= 0 ? (
+                  <ArrowUpRight size={11} />
+                ) : (
+                  <ArrowDownRight size={11} />
+                )}
+                {Math.abs(trend).toFixed(0)}%
+              </span>
+            )}
+
+            <span
+              className="text-[10px] sm:text-xs truncate"
+              style={{ color: COLORS.textMuted }}
+            >
+              {sub}
+            </span>
           </div>
-        )}
+        </div>
+
+        <div
+          className="shrink-0 h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl flex items-center justify-center"
+          style={{
+            color: accent,
+            background: `${accent}12`,
+            border: `1px solid ${accent}18`,
+          }}
+        >
+          <Icon size={16} />
+        </div>
       </div>
-
-      <p
-        className="text-2xl font-bold tracking-tight"
-        style={{ color: "#eef0f6" }}
-      >
-        {value}
-      </p>
-      <p className="text-xs mt-1.5" style={{ color: "#5e6378" }}>
-        {sub}
-      </p>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// CUSTOM CHART TOOLTIP
-// ─────────────────────────────────────────────────────────────
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div
-      className="rounded-xl px-3 py-2.5 shadow-2xl text-sm border"
-      style={{ background: "#1a1e29", borderColor: "#252836" }}
-    >
-      <p className="text-xs mb-0.5" style={{ color: "#5e6378" }}>
-        {label}
-      </p>
-      <p className="font-bold" style={{ color: "#00e5a0" }}>
-        {fmtINR(Math.round(payload[0].value))}
-      </p>
-    </div>
-  );
-}
+/* =========================================================
+   CATEGORY PILL
+========================================================= */
 
-// ─────────────────────────────────────────────────────────────
-// CATEGORY PILL
-// ─────────────────────────────────────────────────────────────
 function CategoryPill({ cat }) {
-  const color = CATEGORY_COLOR[cat] ?? "#5e6378";
+  const color = CATEGORY_COLOR[cat] || COLORS.textMuted;
+
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-      style={{ background: color + "18", color }}
+      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] sm:text-[10px] font-bold whitespace-nowrap"
+      style={{
+        color,
+        background: `${color}12`,
+        border: `1px solid ${color}18`,
+      }}
     >
-      {cat.replace(/_/g, " ")}
+      {cat?.replace(/_/g, " ") || "Other"}
     </span>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// TIMEFRAME SELECTOR
-// ─────────────────────────────────────────────────────────────
-function TimeFrameSelector({ timeFrame, setTimeFrame }) {
+/* =========================================================
+   PERIOD SELECTOR
+========================================================= */
+
+function PeriodSelector({
+  mode,
+  setMode,
+  month,
+  setMonth,
+  year,
+  setYear,
+  years,
+}) {
   return (
     <div
-      className="flex gap-1 p-1 rounded-xl w-fit"
-      style={{ background: "#0d0f14", border: "1px solid #252836" }}
+      className="rounded-2xl border p-2 sm:p-2.5"
+      style={{
+        background: "#0b0f15",
+        borderColor: COLORS.border,
+      }}
     >
-      {TIME_FRAMES.map((f) => (
-        <button
-          key={f}
-          onClick={() => setTimeFrame(f)}
-          className="px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150"
-          style={
-            timeFrame === f
-              ? { background: "#00e5a0", color: "#0d0f14" }
-              : { color: "#5e6378" }
-          }
+      <div className="flex flex-col sm:flex-row gap-2">
+        {/* Mode */}
+        <div
+          className="flex p-1 rounded-xl shrink-0"
+          style={{ background: "#141923" }}
         >
-          {f.charAt(0).toUpperCase() + f.slice(1)}
-        </button>
-      ))}
+          <button
+            type="button"
+            onClick={() => setMode("month")}
+            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all"
+            style={
+              mode === "month"
+                ? {
+                    background: COLORS.green,
+                    color: "#06110d",
+                    boxShadow: "0 4px 18px #00e5a020",
+                  }
+                : {
+                    color: COLORS.textMuted,
+                  }
+            }
+          >
+            Month
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMode("year")}
+            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all"
+            style={
+              mode === "year"
+                ? {
+                    background: COLORS.green,
+                    color: "#06110d",
+                    boxShadow: "0 4px 18px #00e5a020",
+                  }
+                : {
+                    color: COLORS.textMuted,
+                  }
+            }
+          >
+            Year
+          </button>
+        </div>
+
+        {/* Period input */}
+        {mode === "month" ? (
+          <div className="relative flex-1 min-w-0">
+            <CalendarDays
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: COLORS.green }}
+            />
+
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="w-full h-[38px] pl-9 pr-3 rounded-xl text-xs font-bold outline-none appearance-none"
+              style={{
+                color: COLORS.text,
+                background: "#141923",
+                border: `1px solid ${COLORS.border}`,
+                colorScheme: "dark",
+              }}
+            />
+          </div>
+        ) : (
+          <div className="relative flex-1 min-w-0">
+            <CalendarDays
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: COLORS.green }}
+            />
+
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="w-full h-[38px] pl-9 pr-8 rounded-xl text-xs font-bold outline-none appearance-none"
+              style={{
+                color: COLORS.text,
+                background: "#141923",
+                border: `1px solid ${COLORS.border}`,
+              }}
+            >
+              {years.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                  style={{ background: "#141923" }}
+                >
+                  {item === getCurrentYear()
+                    ? `${item} — Current`
+                    : item === getCurrentYear() - 1
+                      ? `${item} — Previous Year`
+                      : item}
+                </option>
+              ))}
+            </select>
+
+            <ChevronDown
+              size={13}
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: COLORS.textMuted }}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// FILTER DROPDOWN
-// ─────────────────────────────────────────────────────────────
-function FilterDropdown({ value, onChange }) {
+/* =========================================================
+   CATEGORY FILTER
+========================================================= */
+
+function CategoryFilter({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const label =
-    FILTER_OPTIONS.find((o) => o.value === value)?.label ?? "Filter";
 
   useEffect(() => {
-    const h = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    const handler = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
     };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+
+    document.addEventListener("mousedown", handler);
+
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const current =
+    CATEGORY_FILTERS.find((item) => item.value === value) ||
+    CATEGORY_FILTERS[0];
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((p) => !p)}
-        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-all"
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="h-10 flex items-center gap-2 rounded-xl px-3 text-xs font-bold transition-all active:scale-[.98]"
         style={{
-          background: "#1a1e29",
-          border: "1px solid #252836",
-          color: "#5e6378",
+          background: "#141923",
+          border: `1px solid ${COLORS.border}`,
+          color: COLORS.textMuted,
         }}
       >
         <SlidersHorizontal size={13} />
-        <span className="max-w-[80px] truncate">{label}</span>
+
+        <span className="max-w-[100px] truncate">{current.label}</span>
+
         <ChevronDown
           size={12}
           className={`transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
+
       {open && (
         <div
-          className="absolute right-0 mt-2 w-52 rounded-2xl shadow-2xl overflow-hidden z-30"
+          className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-2xl border shadow-2xl overflow-hidden"
           style={{
-            background: "#1a1e29",
-            border: "1px solid #252836",
-            animation: "fadeIn .12s ease-out",
+            background: "#131821",
+            borderColor: COLORS.border,
           }}
         >
-          <div className="max-h-64 overflow-y-auto py-1.5">
-            {FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center gap-2"
-                style={
-                  value === opt.value
-                    ? { background: "#00e5a012", color: "#00e5a0" }
-                    : { color: "#5e6378" }
-                }
-              >
-                {CATEGORY_COLOR[opt.value] && (
+          <div className="p-1.5">
+            {CATEGORY_FILTERS.map((item) => {
+              const active = value === item.value;
+              const color = CATEGORY_COLOR[item.value] || COLORS.green;
+
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(item.value);
+                    setOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all"
+                  style={
+                    active
+                      ? {
+                          background: `${COLORS.green}10`,
+                          color: COLORS.green,
+                        }
+                      : {
+                          color: COLORS.textMuted,
+                        }
+                  }
+                >
                   <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: CATEGORY_COLOR[opt.value] }}
+                    className="h-2 w-2 rounded-full"
+                    style={{
+                      background: item.value === "all" ? COLORS.textDim : color,
+                    }}
                   />
-                )}
-                {opt.label}
-              </button>
-            ))}
+
+                  {item.label}
+
+                  {active && <Check size={13} className="ml-auto" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -419,92 +1198,174 @@ function FilterDropdown({ value, onChange }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// INCOME BREAKDOWN
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   BREAKDOWN
+========================================================= */
+
 function IncomeBreakdown({ transactions }) {
   const breakdown = useMemo(() => {
     const map = {};
-    for (const t of transactions)
-      map[t.category] = (map[t.category] || 0) + Number(t.amount);
-    const total = Object.values(map).reduce((a, b) => a + b, 0);
+
+    transactions.forEach((transaction) => {
+      const category = transaction.category || "Other";
+
+      map[category] = (map[category] || 0) + Number(transaction.amount || 0);
+    });
+
+    const total = Object.values(map).reduce((sum, value) => sum + value, 0);
+
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
-      .map(([cat, amt]) => ({
-        cat,
-        amt,
-        pct: total ? (amt / total) * 100 : 0,
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: total ? (amount / total) * 100 : 0,
       }));
   }, [transactions]);
 
-  if (!breakdown.length)
-    return (
-      <div
-        className="rounded-2xl border p-5 flex flex-col items-center justify-center gap-3 min-h-[160px]"
-        style={{ background: "#13161e", borderColor: "#252836" }}
-      >
-        <Sparkles size={22} style={{ color: "#252836" }} />
-        <p className="text-xs" style={{ color: "#5e6378" }}>
-          No income sources yet
-        </p>
-      </div>
-    );
-
   return (
     <div
-      className="rounded-2xl border p-5"
-      style={{ background: "#13161e", borderColor: "#252836" }}
+      className="rounded-2xl sm:rounded-3xl border p-4 sm:p-5"
+      style={{
+        background: "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
+        borderColor: COLORS.border,
+      }}
     >
-      <h3
-        className="text-sm font-bold mb-5 flex items-center gap-2"
-        style={{ color: "#eef0f6" }}
-      >
-        <Sparkles size={15} style={{ color: "#00e5a0" }} />
-        Income sources
-      </h3>
-      <div className="space-y-4">
-        {breakdown.map(({ cat, amt, pct }) => {
-          const color = CATEGORY_COLOR[cat] ?? "#5e6378";
-          return (
-            <div key={cat}>
-              <div className="flex items-center justify-between mb-2">
-                <span
-                  className="flex items-center gap-2 text-xs font-medium"
-                  style={{ color: "#eef0f6" }}
-                >
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ background: color }}
-                  />
-                  {cat.replace(/_/g, " ")}
-                </span>
-                <span className="text-xs font-bold" style={{ color }}>
-                  {fmtINR(amt)}
-                </span>
-              </div>
-              <div
-                className="h-1 rounded-full overflow-hidden"
-                style={{ background: "#1a1e29" }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    width: `${pct}%`,
-                    background: `linear-gradient(90deg, ${color}, ${color}80)`,
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-sm font-bold" style={{ color: COLORS.text }}>
+            Income sources
+          </h3>
+
+          <p className="text-[10px] mt-1" style={{ color: COLORS.textDim }}>
+            Where your money is coming from
+          </p>
+        </div>
+
+        <div
+          className="h-8 w-8 rounded-xl flex items-center justify-center"
+          style={{
+            background: `${COLORS.green}10`,
+            color: COLORS.green,
+          }}
+        >
+          <Layers3 size={14} />
+        </div>
       </div>
+
+      {breakdown.length === 0 ? (
+        <div
+          className="min-h-[180px] flex flex-col items-center justify-center text-center rounded-2xl"
+          style={{ background: "#0b0f15" }}
+        >
+          <Sparkles size={20} style={{ color: COLORS.textDim }} />
+
+          <p
+            className="text-xs font-semibold mt-3"
+            style={{ color: COLORS.textMuted }}
+          >
+            No income sources
+          </p>
+
+          <p
+            className="text-[10px] mt-1 max-w-[180px]"
+            style={{ color: COLORS.textDim }}
+          >
+            Add income transactions to see your breakdown.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {breakdown.map(({ category, amount, percentage }) => {
+            const color = CATEGORY_COLOR[category] || COLORS.textMuted;
+
+            return (
+              <div key={category}>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ background: color }}
+                    />
+
+                    <span
+                      className="text-xs font-semibold truncate"
+                      style={{ color: COLORS.text }}
+                    >
+                      {category.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  <span
+                    className="text-xs font-bold shrink-0"
+                    style={{ color }}
+                  >
+                    {fmtINR(amount)}
+                  </span>
+                </div>
+
+                <div
+                  className="h-1.5 rounded-full overflow-hidden"
+                  style={{
+                    background: "#1a202b",
+                  }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${percentage}%`,
+                      background: `linear-gradient(90deg, ${color}, ${color}88)`,
+                    }}
+                  />
+                </div>
+
+                <p
+                  className="text-[9px] mt-1"
+                  style={{ color: COLORS.textDim }}
+                >
+                  {percentage.toFixed(1)}% of selected income
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// TRANSACTION ITEM
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   CUSTOM TOOLTIP
+========================================================= */
+
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-xl border px-3 py-2.5 shadow-2xl"
+      style={{
+        background: "#151a23",
+        borderColor: COLORS.border,
+      }}
+    >
+      <p className="text-[10px] mb-1" style={{ color: COLORS.textDim }}>
+        {label}
+      </p>
+
+      <p className="text-sm font-black" style={{ color: COLORS.green }}>
+        {formatFullINR(payload[0].value)}
+      </p>
+    </div>
+  );
+}
+
+/* =========================================================
+   TRANSACTION ITEM
+========================================================= */
+
 function TransactionItem({
   transaction,
   isEditing,
@@ -515,312 +1376,501 @@ function TransactionItem({
   onDelete,
   setEditingId,
 }) {
-  const [errors, setErrors] = useState({ description: "", amount: "" });
-  const color = CATEGORY_COLOR[transaction.category] ?? "#5e6378";
-  const icon = CATEGORY_ICONS[transaction.category] ?? (
-    <IndianRupee className="w-4 h-4" />
-  );
+  const [errors, setErrors] = useState({
+    description: "",
+    amount: "",
+  });
+
+  const category = transaction.category || "Extra_Income";
+
+  const color = CATEGORY_COLOR[category] || COLORS.textMuted;
+
+  const icon = CATEGORY_ICONS[category] || <IndianRupee size={16} />;
 
   const validate = () => {
-    const e = { description: "", amount: "" };
-    if (!String(editForm.description ?? "").trim()) e.description = "Required";
-    const a = String(editForm.amount ?? "").trim();
-    if (!a) e.amount = "Required";
-    else if (Number(a) <= 0) e.amount = "Must be > 0";
-    setErrors(e);
-    return !e.description && !e.amount;
+    const nextErrors = {
+      description: "",
+      amount: "",
+    };
+
+    if (!String(editForm.description || "").trim()) {
+      nextErrors.description = "Description is required";
+    }
+
+    if (!String(editForm.amount || "").trim()) {
+      nextErrors.amount = "Amount is required";
+    } else if (
+      !Number.isFinite(Number(editForm.amount)) ||
+      Number(editForm.amount) <= 0
+    ) {
+      nextErrors.amount = "Enter a valid amount";
+    }
+
+    setErrors(nextErrors);
+
+    return !nextErrors.description && !nextErrors.amount;
   };
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-4 transition-all duration-150"
-      style={{ background: isEditing ? "#1a1e29" : "transparent" }}
-      onMouseEnter={(e) => {
-        if (!isEditing) e.currentTarget.style.background = "#1a1e2960";
-      }}
-      onMouseLeave={(e) => {
-        if (!isEditing) e.currentTarget.style.background = "transparent";
+      className="px-3 sm:px-4 py-3.5 sm:py-4 transition-all"
+      style={{
+        background: isEditing ? "#151b25" : "transparent",
       }}
     >
-      {/* Icon */}
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: color + "18", color }}
-      >
-        {icon}
-      </div>
+      {!isEditing ? (
+        <div className="flex items-center gap-3">
+          <div
+            className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl shrink-0 flex items-center justify-center"
+            style={{
+              background: `${color}12`,
+              color,
+              border: `1px solid ${color}16`,
+            }}
+          >
+            {icon}
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        {isEditing ? (
-          <div className="space-y-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p
+                className="text-xs sm:text-sm font-bold truncate"
+                style={{ color: COLORS.text }}
+              >
+                {transaction.description}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 mt-1.5 min-w-0">
+              <span
+                className="text-[9px] sm:text-[10px] shrink-0"
+                style={{ color: COLORS.textDim }}
+              >
+                <span className="sm:hidden">
+                  {formatTransactionDateMobile(transaction.date)}
+                </span>
+
+                <span className="hidden sm:inline">
+                  {formatTransactionDate(transaction.date)}
+                </span>
+              </span>
+
+              <span className="text-[8px]" style={{ color: COLORS.border }}>
+                •
+              </span>
+
+              <CategoryPill cat={category} />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <span
+              className="text-xs sm:text-sm font-black"
+              style={{ color: COLORS.green }}
+            >
+              +{formatFullINR(transaction.amount)}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditForm({
+                  description: transaction.description || "",
+                  amount: transaction.amount || "",
+                  category,
+                  date: getDateInputValue(transaction.date),
+                });
+
+                setErrors({
+                  description: "",
+                  amount: "",
+                });
+
+                setEditingId(transaction.id);
+              }}
+              className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+              style={{
+                color: COLORS.textDim,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = COLORS.green;
+                e.currentTarget.style.background = `${COLORS.green}10`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = COLORS.textDim;
+                e.currentTarget.style.background = "transparent";
+              }}
+              title="Edit income"
+            >
+              <Edit2 size={13} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onDelete(transaction.id)}
+              className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+              style={{
+                color: COLORS.textDim,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = COLORS.red;
+                e.currentTarget.style.background = `${COLORS.red}10`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = COLORS.textDim;
+                e.currentTarget.style.background = "transparent";
+              }}
+              title="Delete income"
+            >
+              <Trash2 size={13} />
+            </button>
+
+            {/* Mobile menu buttons */}
+            <div className="flex sm:hidden gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditForm({
+                    description: transaction.description || "",
+                    amount: transaction.amount || "",
+                    category,
+                    date: getDateInputValue(transaction.date),
+                  });
+
+                  setErrors({
+                    description: "",
+                    amount: "",
+                  });
+
+                  setEditingId(transaction.id);
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded-lg"
+                style={{
+                  color: COLORS.textDim,
+                  background: "#141923",
+                }}
+              >
+                <Edit2 size={12} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onDelete(transaction.id)}
+                className="h-7 w-7 flex items-center justify-center rounded-lg"
+                style={{
+                  color: COLORS.red,
+                  background: `${COLORS.red}08`,
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="rounded-2xl p-3 sm:p-4"
+          style={{
+            background: "#0b0f15",
+            border: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <div className="space-y-3">
             <div>
+              <label
+                className="text-[9px] font-bold uppercase tracking-wider"
+                style={{ color: COLORS.textDim }}
+              >
+                Description
+              </label>
+
               <input
-                type="text"
                 value={editForm.description}
                 onChange={(e) =>
-                  setEditForm((p) => ({ ...p, description: e.target.value }))
+                  setEditForm((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
                 }
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none transition-colors"
+                className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
                 style={{
-                  background: "#0d0f14",
-                  border: `1px solid ${errors.description ? "#ff4d4d" : "#252836"}`,
-                  color: "#eef0f6",
+                  background: "#141923",
+                  color: COLORS.text,
+                  border: `1px solid ${
+                    errors.description ? COLORS.red : COLORS.border
+                  }`,
                 }}
-                placeholder="Description"
+                placeholder="Income description"
               />
+
               {errors.description && (
-                <p className="text-[10px] mt-0.5" style={{ color: "#ff6b6b" }}>
+                <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
                   {errors.description}
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: COLORS.textDim }}
+                >
+                  Amount
+                </label>
+
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={editForm.amount}
                   onChange={(e) =>
-                    setEditForm((p) => ({ ...p, amount: e.target.value }))
+                    setEditForm((prev) => ({
+                      ...prev,
+                      amount: e.target.value,
+                    }))
                   }
-                  className="w-full text-sm px-3 py-2 rounded-lg outline-none transition-colors"
+                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
                   style={{
-                    background: "#0d0f14",
-                    border: `1px solid ${errors.amount ? "#ff4d4d" : "#252836"}`,
-                    color: "#eef0f6",
+                    background: "#141923",
+                    color: COLORS.text,
+                    border: `1px solid ${
+                      errors.amount ? COLORS.red : COLORS.border
+                    }`,
                   }}
                   placeholder="Amount"
-                  min="1"
                 />
+
                 {errors.amount && (
-                  <p
-                    className="text-[10px] mt-0.5"
-                    style={{ color: "#ff6b6b" }}
-                  >
+                  <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
                     {errors.amount}
                   </p>
                 )}
               </div>
-              <select
-                value={editForm.category}
-                onChange={(e) =>
-                  setEditForm((p) => ({ ...p, category: e.target.value }))
-                }
-                className="text-xs px-2 py-2 rounded-lg outline-none"
+
+              <div>
+                <label
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: COLORS.textDim }}
+                >
+                  Category
+                </label>
+
+                <select
+                  value={editForm.category}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      category: e.target.value,
+                    }))
+                  }
+                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                  style={{
+                    background: "#141923",
+                    color: COLORS.text,
+                    border: `1px solid ${COLORS.border}`,
+                  }}
+                >
+                  {INCOME_CATEGORIES.map((item) => (
+                    <option
+                      key={item}
+                      value={item}
+                      style={{
+                        background: "#141923",
+                      }}
+                    >
+                      {item.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="text-[9px] font-bold uppercase tracking-wider"
+                  style={{ color: COLORS.textDim }}
+                >
+                  Date
+                </label>
+
+                <input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
+                  }
+                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                  style={{
+                    background: "#141923",
+                    color: COLORS.text,
+                    border: `1px solid ${COLORS.border}`,
+                    colorScheme: "dark",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (validate()) {
+                    onSave();
+                  }
+                }}
+                className="flex-1 sm:flex-none h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
                 style={{
-                  background: "#0d0f14",
-                  border: "1px solid #252836",
-                  color: "#eef0f6",
+                  background: COLORS.green,
+                  color: "#06110d",
                 }}
               >
-                {INCOME_CATEGORIES.map((c) => (
-                  <option key={c} value={c} style={{ background: "#0d0f14" }}>
-                    {c.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
+                <Save size={13} />
+                Save Changes
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setErrors({
+                    description: "",
+                    amount: "",
+                  });
+
+                  onCancel();
+                }}
+                className="h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+                style={{
+                  background: "#141923",
+                  color: COLORS.textMuted,
+                  border: `1px solid ${COLORS.border}`,
+                }}
+              >
+                <X size={13} />
+                Cancel
+              </button>
             </div>
           </div>
-        ) : (
-          <>
-            <p
-              className="text-sm font-semibold truncate"
-              style={{ color: "#eef0f6" }}
-            >
-              {transaction.description}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[11px]" style={{ color: "#5e6378" }}>
-                {new Date(transaction.date).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </span>
-              <span style={{ color: "#252836" }}>·</span>
-              <CategoryPill cat={transaction.category} />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        {isEditing ? (
-          <>
-            <button
-              onClick={() => {
-                if (validate()) {
-                  setErrors({ description: "", amount: "" });
-                  onSave();
-                }
-              }}
-              className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95"
-              style={{ background: "#00e5a0", color: "#0d0f14" }}
-            >
-              <Save size={12} /> Save
-            </button>
-            <button
-              onClick={() => {
-                setErrors({ description: "", amount: "" });
-                onCancel();
-              }}
-              className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95"
-              style={{
-                background: "#1a1e29",
-                color: "#5e6378",
-                border: "1px solid #252836",
-              }}
-            >
-              <X size={12} /> Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            <span
-              className="text-sm font-bold mr-1"
-              style={{ color: "#00e5a0" }}
-            >
-              +₹
-              {Number(transaction.amount).toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-            <button
-              onClick={() => {
-                setEditForm({
-                  description: transaction.description ?? "",
-                  amount: transaction.amount ?? "",
-                  category: transaction.category ?? "Salary",
-                  date: transaction.date ?? "",
-                });
-                setEditingId(transaction.id);
-              }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-              style={{ color: "#363a4e" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#00e5a012";
-                e.currentTarget.style.color = "#00e5a0";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#363a4e";
-              }}
-              title="Edit"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              onClick={() => onDelete(transaction.id)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-              style={{ color: "#363a4e" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#ff4d4d12";
-                e.currentTarget.style.color = "#ff6b6b";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#363a4e";
-              }}
-              title="Delete"
-            >
-              <Trash2 size={13} />
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// DELETE MODAL
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   DELETE MODAL
+========================================================= */
+
 function DeleteModal({ transaction, loading, onConfirm, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       <div
-        className="absolute inset-0 backdrop-blur-sm"
-        style={{ background: "#0d0f14cc" }}
+        className="absolute inset-0 backdrop-blur-md"
+        style={{ background: "#05070bcc" }}
         onClick={onClose}
       />
+
       <div
-        className="relative w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl sm:mx-4"
+        className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5 sm:p-6"
         style={{
-          background: "#13161e",
-          border: "1px solid #252836",
-          animation: "slideUp .25s ease-out",
+          background: "linear-gradient(145deg, #131821, #0e1219)",
+          border: `1px solid ${COLORS.border}`,
+          boxShadow: "0 -20px 80px rgba(0,0,0,.4)",
+          animation: "incomeSlideUp .25s ease-out",
         }}
       >
         <div
-          className="w-10 h-1 rounded-full mx-auto mb-5 sm:hidden"
-          style={{ background: "#252836" }}
+          className="sm:hidden w-10 h-1 rounded-full mx-auto mb-5"
+          style={{ background: COLORS.border }}
         />
-        <div className="flex justify-center mb-4">
+
+        <div className="flex justify-center">
           <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center"
-            style={{ background: "#ff4d4d12" }}
+            className="h-14 w-14 rounded-2xl flex items-center justify-center"
+            style={{
+              background: `${COLORS.red}10`,
+              color: COLORS.red,
+              border: `1px solid ${COLORS.red}18`,
+            }}
           >
-            <Trash2 size={22} style={{ color: "#ff6b6b" }} />
+            <Trash2 size={22} />
           </div>
         </div>
+
         <h2
-          className="text-center text-base font-bold"
-          style={{ color: "#eef0f6" }}
+          className="text-center text-base font-black mt-4"
+          style={{ color: COLORS.text }}
         >
           Delete this income?
         </h2>
+
         <p
-          className="text-center text-xs mt-1 mb-4"
-          style={{ color: "#5e6378" }}
+          className="text-center text-xs mt-1"
+          style={{ color: COLORS.textMuted }}
         >
-          This action cannot be undone
+          This action cannot be undone.
         </p>
+
         {transaction && (
           <div
-            className="rounded-xl px-4 py-3 mb-5"
-            style={{ background: "#1a1e29", border: "1px solid #252836" }}
+            className="rounded-2xl p-3.5 mt-5"
+            style={{
+              background: "#0b0f15",
+              border: `1px solid ${COLORS.border}`,
+            }}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p
-                  className="font-semibold text-sm truncate"
-                  style={{ color: "#eef0f6" }}
+                  className="text-xs font-bold truncate"
+                  style={{ color: COLORS.text }}
                 >
                   {transaction.description}
                 </p>
-                <CategoryPill cat={transaction.category} />
+
+                <div className="mt-2">
+                  <CategoryPill cat={transaction.category} />
+                </div>
               </div>
-              <p className="font-bold shrink-0" style={{ color: "#00e5a0" }}>
-                {fmtINR(transaction.amount)}
+
+              <p
+                className="text-sm font-black shrink-0"
+                style={{ color: COLORS.green }}
+              >
+                {formatFullINR(transaction.amount)}
               </p>
             </div>
           </div>
         )}
-        <div className="flex gap-3">
+
+        <div className="grid grid-cols-2 gap-2.5 mt-5">
           <button
+            type="button"
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95"
+            className="h-11 rounded-xl text-xs font-bold"
             style={{
-              background: "#1a1e29",
-              color: "#5e6378",
-              border: "1px solid #252836",
+              background: "#141923",
+              color: COLORS.textMuted,
+              border: `1px solid ${COLORS.border}`,
             }}
           >
             Cancel
           </button>
+
           <button
+            type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 disabled:opacity-50"
+            className="h-11 rounded-xl text-xs font-bold disabled:opacity-50"
             style={{
-              background: "#ff4d4d20",
-              color: "#ff6b6b",
-              border: "1px solid #ff4d4d30",
+              background: `${COLORS.red}12`,
+              color: COLORS.red,
+              border: `1px solid ${COLORS.red}25`,
             }}
           >
-            {loading ? "Deleting…" : "Delete"}
+            {loading ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
@@ -828,31 +1878,49 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// MAIN INCOME PAGE
-// ─────────────────────────────────────────────────────────────
+/* =========================================================
+   MAIN
+========================================================= */
+
 const Income = () => {
   const {
     transactions: outletTransactions = [],
-    timeFrame = "monthly",
-    setTimeFrame = () => {},
     refreshTransactions = () => {},
   } = useOutletContext();
 
   const [showModal, setShowModal] = useState(false);
+
   const [editingId, setEditingId] = useState(null);
-  const [showAll, setShowAll] = useState(false);
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(false);
+
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const [loading, setLoading] = useState(false);
+
   const [toasts, setToasts] = useState([]);
+
   const [search, setSearch] = useState("");
+
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const [showAll, setShowAll] = useState(false);
+
+  const [periodMode, setPeriodMode] = useState("month");
+
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
+
+  const [selectedYear, setSelectedYear] = useState(getCurrentYear());
+
+  const [timeFrame, setTimeFrame] = useState("monthly");
+
+  const currentYear = getCurrentYear();
+
   const [editForm, setEditForm] = useState({
     description: "",
     amount: "",
     category: "Salary",
     date: new Date().toISOString().split("T")[0],
   });
+
   const [newTransaction, setNewTransaction] = useState({
     date: new Date().toISOString().split("T")[0],
     description: "",
@@ -861,598 +1929,1554 @@ const Income = () => {
     category: "Salary",
   });
 
+  /* -----------------------------------------
+     TOAST
+  ----------------------------------------- */
+
   const addToast = useCallback((message, type = "info") => {
-    const id = Date.now();
-    setToasts((p) => [...p, { id, message, type }]);
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3500);
+    const id = Date.now() + Math.random();
+
+    setToasts((previous) => [
+      ...previous,
+      {
+        id,
+        message,
+        type,
+      },
+    ]);
+
+    window.setTimeout(() => {
+      setToasts((previous) => previous.filter((toast) => toast.id !== id));
+    }, 3500);
   }, []);
+
+  /* -----------------------------------------
+     AUTH
+  ----------------------------------------- */
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
+
+    return token
+      ? {
+          Authorization: `Bearer ${token}`,
+        }
+      : {};
   }, []);
 
-  const timeFrameRange = useMemo(
-    () => getTimeFrameRange(timeFrame),
-    [timeFrame],
-  );
-  const chartPoints = useMemo(
-    () => generateChartPoints(timeFrame),
-    [timeFrame],
-  );
+  /* -----------------------------------------
+     INCOME TRANSACTIONS
+  ----------------------------------------- */
 
-  const isDateInRange = useCallback((date, start, end) => {
-    const d = new Date(date),
-      s = new Date(start),
-      e = new Date(end);
-    d.setHours(0, 0, 0, 0);
-    s.setHours(0, 0, 0, 0);
-    e.setHours(23, 59, 59, 999);
-    return d >= s && d <= e;
-  }, []);
+  const incomeTransactions = useMemo(() => {
+    return (outletTransactions || [])
+      .filter((transaction) => transaction.type === "income")
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [outletTransactions]);
 
-  const incomeTransactions = useMemo(
-    () =>
-      (outletTransactions || [])
-        .filter((t) => t.type === "income")
-        .sort((a, b) => new Date(b.date) - new Date(a.date)),
-    [outletTransactions],
-  );
+  /* -----------------------------------------
+     AVAILABLE MONTHS
+  ----------------------------------------- */
 
-  const timeFrameTransactions = useMemo(
-    () =>
-      incomeTransactions.filter((t) =>
-        isDateInRange(t.date, timeFrameRange.start, timeFrameRange.end),
-      ),
-    [incomeTransactions, timeFrameRange, isDateInRange],
-  );
+  const availableMonths = useMemo(() => {
+    const set = new Set(buildRecentMonths(60));
+
+    incomeTransactions.forEach((transaction) => {
+      const key = getMonthKey(transaction.date);
+
+      if (key) set.add(key);
+    });
+
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [incomeTransactions]);
+
+  /* -----------------------------------------
+     AVAILABLE YEARS
+  ----------------------------------------- */
+
+  const availableYears = useMemo(() => {
+    const set = new Set();
+
+    const currentYear = getCurrentYear();
+
+    for (let year = currentYear; year >= currentYear - 10; year--) {
+      set.add(year);
+    }
+
+    incomeTransactions.forEach((transaction) => {
+      const year = getYear(transaction.date);
+
+      if (year) set.add(year);
+    });
+
+    return [...set].sort((a, b) => b - a);
+  }, [incomeTransactions]);
+
+  /* -----------------------------------------
+     PERIOD RANGE
+  ----------------------------------------- */
+
+  const periodRange = useMemo(() => {
+    if (periodMode === "month") {
+      return getMonthRange(selectedMonth);
+    }
+
+    return getYearRange(selectedYear);
+  }, [periodMode, selectedMonth, selectedYear]);
+
+  const periodLabel = useMemo(() => {
+    if (periodMode === "month") {
+      return formatMonthLabel(selectedMonth);
+    }
+
+    return String(selectedYear);
+  }, [periodMode, selectedMonth, selectedYear]);
+
+  /* -----------------------------------------
+     PERIOD TRANSACTIONS
+  ----------------------------------------- */
+
+  const periodTransactions = useMemo(() => {
+    return incomeTransactions.filter((transaction) =>
+      isDateInRange(transaction.date, periodRange.start, periodRange.end),
+    );
+  }, [incomeTransactions, periodRange]);
+
+  /* -----------------------------------------
+     FILTERED TRANSACTIONS
+  ----------------------------------------- */
 
   const filteredTransactions = useMemo(() => {
-    let list = timeFrameTransactions;
-    const now = new Date();
-    if (filter === "month")
+    let list = [...periodTransactions];
+
+    if (categoryFilter !== "all") {
       list = list.filter(
-        (t) =>
-          new Date(t.date).getFullYear() === now.getFullYear() &&
-          new Date(t.date).getMonth() === now.getMonth(),
-      );
-    else if (filter === "year")
-      list = list.filter(
-        (t) => new Date(t.date).getFullYear() === now.getFullYear(),
-      );
-    else if (filter !== "all")
-      list = list.filter(
-        (t) => t.category.toLowerCase() === filter.toLowerCase(),
-      );
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (t) =>
-          t.description?.toLowerCase().includes(q) ||
-          t.category?.toLowerCase().includes(q),
+        (transaction) =>
+          String(transaction.category || "Other").toLowerCase() ===
+          categoryFilter.toLowerCase(),
       );
     }
-    return list;
-  }, [timeFrameTransactions, filter, search]);
+
+    const query = search.trim().toLowerCase();
+
+    if (query) {
+      list = list.filter((transaction) => {
+        const description = String(transaction.description || "").toLowerCase();
+
+        const category = String(transaction.category || "").toLowerCase();
+
+        return description.includes(query) || category.includes(query);
+      });
+    }
+
+    return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [periodTransactions, categoryFilter, search]);
+
+  /* -----------------------------------------
+     KPI
+  ----------------------------------------- */
 
   const totalIncome = useMemo(
     () =>
       filteredTransactions.reduce(
-        (s, t) => s + Math.round(Number(t.amount || 0)),
+        (sum, transaction) => sum + Number(transaction.amount || 0),
         0,
       ),
     [filteredTransactions],
   );
+
   const averageIncome = useMemo(
     () =>
       filteredTransactions.length
-        ? Math.round(totalIncome / filteredTransactions.length)
+        ? totalIncome / filteredTransactions.length
         : 0,
-    [filteredTransactions, totalIncome],
+    [totalIncome, filteredTransactions.length],
   );
+
   const highestIncome = useMemo(
     () =>
       filteredTransactions.reduce(
-        (m, t) => Math.max(m, Number(t.amount || 0)),
+        (highest, transaction) =>
+          Math.max(highest, Number(transaction.amount || 0)),
         0,
       ),
     [filteredTransactions],
   );
 
+  const totalCount = filteredTransactions.length;
+
+  /* -----------------------------------------
+     PREVIOUS PERIOD COMPARISON
+  ----------------------------------------- */
+
+  const previousPeriodIncome = useMemo(() => {
+    let start;
+    let end;
+
+    if (periodMode === "month") {
+      const [year, month] = selectedMonth.split("-").map(Number);
+
+      start = new Date(year, month - 2, 1);
+
+      end = new Date(year, month - 1, 0, 23, 59, 59, 999);
+    } else {
+      start = new Date(selectedYear - 1, 0, 1);
+
+      end = new Date(selectedYear - 1, 11, 31, 23, 59, 59, 999);
+    }
+
+    return incomeTransactions
+      .filter((transaction) => isDateInRange(transaction.date, start, end))
+      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  }, [incomeTransactions, periodMode, selectedMonth, selectedYear]);
+
+  const incomeChange = useMemo(() => {
+    if (previousPeriodIncome === 0) {
+      return totalIncome > 0 ? 100 : 0;
+    }
+
+    return ((totalIncome - previousPeriodIncome) / previousPeriodIncome) * 100;
+  }, [totalIncome, previousPeriodIncome]);
+
+  /* -----------------------------------------
+     CHART
+  ----------------------------------------- */
+
+  const chartPoints = useMemo(
+    () =>
+      buildChartPoints(
+        periodMode,
+        periodMode === "month" ? selectedMonth : String(selectedYear),
+      ),
+    [periodMode, selectedMonth, selectedYear],
+  );
+
   const chartData = useMemo(() => {
-    const data = chartPoints.map((p) => ({ ...p, income: 0 }));
-    filteredTransactions.forEach((t) => {
-      const d = new Date(t.date);
-      const point = data.find((p) =>
-        timeFrame === "daily"
-          ? p.hour === d.getHours()
-          : timeFrame === "yearly"
-            ? p.date.getMonth() === d.getMonth()
-            : p.date.getDate() === d.getDate() &&
-              p.date.getMonth() === d.getMonth(),
-      );
-      if (point) point.income += Math.round(Number(t.amount));
+    return chartPoints.map((point) => {
+      const income = periodTransactions
+        .filter((transaction) => {
+          const d = new Date(transaction.date);
+
+          if (periodMode === "month") {
+            return d.getDate() === point.day;
+          }
+
+          return d.getMonth() === point.month;
+        })
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+      return {
+        ...point,
+        income,
+      };
     });
-    return data;
-  }, [filteredTransactions, chartPoints, timeFrame]);
+  }, [chartPoints, periodTransactions, periodMode]);
+
+  const chartLabel = periodMode === "month" ? "Daily income" : "Monthly income";
+
+  /* -----------------------------------------
+     VISIBLE TRANSACTIONS
+  ----------------------------------------- */
+
+  const visibleTransactions = showAll
+    ? filteredTransactions
+    : filteredTransactions.slice(0, 10);
+
+  /* -----------------------------------------
+     RESET
+  ----------------------------------------- */
+
+  const resetFilters = useCallback(() => {
+    setSearch("");
+    setCategoryFilter("all");
+    setShowAll(false);
+    setPeriodMode("month");
+    setSelectedMonth(getCurrentMonthKey());
+    setSelectedYear(getCurrentYear());
+  }, []);
+
+  /* -----------------------------------------
+     ADD
+  ----------------------------------------- */
 
   const handleAddTransaction = useCallback(async () => {
-    if (!newTransaction.description || !newTransaction.amount) return;
+    const description = String(newTransaction.description || "").trim();
+
+    const amount = Number(newTransaction.amount);
+
+    if (!description) {
+      addToast("Please enter a description.", "error");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addToast("Please enter a valid amount.", "error");
+      return;
+    }
+
     const payload = {
-      description: newTransaction.description.trim(),
-      amount: parseFloat(newTransaction.amount),
-      category: newTransaction.category,
+      description,
+      amount,
+      category: newTransaction.category || "Salary",
       date: toIsoWithClientTime(newTransaction.date),
     };
-    setShowModal(false);
-    setNewTransaction({
-      date: new Date().toISOString().split("T")[0],
-      description: "",
-      amount: "",
-      type: "income",
-      category: "Salary",
-    });
-    addToast("Income added!", "success");
+
     try {
+      setLoading(true);
+
       await axios.post(`${API_BASE}/income/add`, payload, {
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       });
+
       learnCategory(payload.description, payload.category);
+
+      setShowModal(false);
+
+      setNewTransaction({
+        date: new Date().toISOString().split("T")[0],
+        description: "",
+        amount: "",
+        type: "income",
+        category: "Salary",
+      });
+
+      addToast("Income added successfully.", "success");
+
       refreshTransactions();
-    } catch (err) {
+    } catch (error) {
       addToast(
-        err?.response?.data?.message || "Failed to save income.",
+        error?.response?.data?.message || "Failed to save income.",
         "error",
       );
+    } finally {
+      setLoading(false);
     }
   }, [newTransaction, getAuthHeaders, refreshTransactions, addToast]);
 
+  /* -----------------------------------------
+     EDIT
+  ----------------------------------------- */
+
   const handleEditTransaction = useCallback(async () => {
-    if (!editingId || !editForm.description || !editForm.amount) return;
+    if (!editingId) return;
+
+    const description = String(editForm.description || "").trim();
+
+    const amount = Number(editForm.amount);
+
+    if (!description) {
+      addToast("Description is required.", "error");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addToast("Enter a valid amount.", "error");
+      return;
+    }
+
     const payload = {
-      description: editForm.description.trim(),
-      amount: parseFloat(editForm.amount),
-      category: editForm.category,
+      description,
+      amount,
+      category: editForm.category || "Salary",
       date: toIsoWithClientTime(editForm.date),
     };
+
     try {
       setLoading(true);
+
       await axios.put(`${API_BASE}/income/update/${editingId}`, payload, {
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       });
-      setEditingId(null);
+
       learnCategory(payload.description, payload.category);
-      addToast("Income updated!", "success");
+
+      setEditingId(null);
+
+      addToast("Income updated successfully.", "success");
+
       refreshTransactions();
-    } catch (err) {
-      addToast(err?.response?.data?.message || "Update failed.", "error");
+    } catch (error) {
+      addToast(error?.response?.data?.message || "Update failed.", "error");
     } finally {
       setLoading(false);
     }
   }, [editingId, editForm, getAuthHeaders, refreshTransactions, addToast]);
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
+  /* -----------------------------------------
+     DELETE
+  ----------------------------------------- */
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget?.id) return;
+
     try {
       setLoading(true);
+
       await axios.delete(`${API_BASE}/income/delete/${deleteTarget.id}`, {
         headers: getAuthHeaders(),
       });
+
       setDeleteTarget(null);
-      addToast("Income deleted.", "success");
+
+      addToast("Income deleted successfully.", "success");
+
       refreshTransactions();
-    } catch (err) {
-      addToast(err?.response?.data?.message || "Delete failed.", "error");
+    } catch (error) {
+      addToast(error?.response?.data?.message || "Delete failed.", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [deleteTarget, getAuthHeaders, refreshTransactions, addToast]);
+
+  /* -----------------------------------------
+     EXPORT
+  ----------------------------------------- */
 
   const handleExport = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/income/downloadexcel`, {
+      setLoading(true);
+
+      const response = await axios.get(`${API_BASE}/income/downloadexcel`, {
         headers: getAuthHeaders(),
         responseType: "blob",
       });
-      const blob = new Blob([res.data], {
-        type: res.headers["content-type"] || "application/octet-stream",
+
+      const blob = new Blob([response.data], {
+        type: response.headers["content-type"] || "application/octet-stream",
       });
-      const disposition = res.headers["content-disposition"];
+
+      const disposition = response.headers["content-disposition"];
+
       let filename = "income_details.xlsx";
+
       if (disposition) {
-        const m = disposition.match(/filename="?(.+)"?/);
-        if (m?.[1]) filename = m[1];
+        const match = disposition.match(/filename="?([^"]+)"?/i);
+
+        if (match?.[1]) {
+          filename = match[1];
+        }
       }
+
+      const url = URL.createObjectURL(blob);
+
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+
+      link.href = url;
       link.download = filename;
+
       document.body.appendChild(link);
       link.click();
       link.remove();
-      addToast("Export ready!", "success");
-    } catch {
+
+      URL.revokeObjectURL(url);
+
+      addToast("Export ready.", "success");
+    } catch (error) {
       addToast("Export failed.", "error");
+    } finally {
+      setLoading(false);
     }
   }, [getAuthHeaders, addToast]);
 
-  const chartLabel =
-    timeFrame === "daily"
-      ? "Hourly"
-      : timeFrame === "yearly"
-        ? "Monthly"
-        : "Daily";
-  const visibleTransactions = showAll
-    ? filteredTransactions
-    : filteredTransactions.slice(0, 10);
+  const handleYearChange = useCallback((year) => {
+    setSelectedYear(year);
+    setShowAll(false);
+    setCategoryFilter("all");
+  }, []);
 
-  // ─────────────────────────────────────────────────────────────
+  /* -----------------------------------------
+     UI
+  ----------------------------------------- */
+
   return (
     <>
       <style>{`
-        @keyframes slideUp {
-          from { transform: translateY(40px); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-        @keyframes slideInRight {
-          from { transform: translateX(24px); opacity: 0; }
-          to   { transform: translateX(0);    opacity: 1; }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: scale(0.97); }
-          to   { opacity: 1; transform: scale(1);    }
-        }
-        @keyframes pulseDot {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.35; }
-        }
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
-      `}</style>
+    @keyframes incomeSlideUp {
+      from {
+        transform: translateY(40px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes incomeSlideIn {
+      from {
+        transform: translateX(24px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .dark .recharts-cartesian-grid line {
+      stroke: #1e293b !important;
+    }
+
+    .dark .recharts-cartesian-axis-tick text {
+      fill: #64748b !important;
+    }
+
+    .recharts-tooltip-cursor {
+      fill: rgba(16,185,129,.08);
+    }
+  `}</style>
 
       <Toast toasts={toasts} />
 
-      <div
-        className="min-h-screen px-3 py-5 sm:px-5 md:px-6 lg:px-8 space-y-4"
-        style={{ background: "#0d0f14" }}
-      >
-        {/* ── HEADER ─────────────────────────────────────────────── */}
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ background: "#13161e", borderColor: "#252836" }}
+      <div className="min-h-screen pb-24 space-y-4 sm:space-y-5">
+        {/* ---------------------------------------------------------------- */}
+        {/* HEADER                                                           */}
+        {/* ---------------------------------------------------------------- */}
+
+        <section
+          className="
+        relative
+        overflow-hidden
+        rounded-[0.25rem]
+        sm:rounded-[2rem]
+        border
+        border-white/70
+        dark:border-slate-700
+        bg-gradient-to-br
+        from-white
+        via-emerald-50/50
+        to-violet-50/70
+        dark:from-slate-900
+        dark:via-slate-900
+        dark:to-emerald-950/30
+        p-4
+        sm:p-6
+        shadow-[0_20px_60px_rgba(16,185,129,0.08)]
+      "
         >
-          <div className="p-4 sm:p-5 md:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{
-                      background: "#00e5a0",
-                      animation: "pulseDot 2s ease-in-out infinite",
+          <div className="absolute -right-20 -top-20 w-52 h-52 rounded-full bg-emerald-400/10 blur-3xl" />
+          <div className="absolute -left-20 -bottom-20 w-52 h-52 rounded-full bg-violet-500/10 blur-3xl" />
+
+          <div className="relative">
+            {/* HEADER CARD */}
+
+            <div
+              className="
+            flex flex-col gap-5
+            rounded-2xl
+            border border-slate-200/70
+            bg-white/80
+            p-4
+            shadow-sm
+            backdrop-blur-xl
+            dark:border-slate-800/80
+            dark:bg-slate-950/70
+            sm:p-5
+            lg:p-6
+          "
+            >
+              {/* Top row */}
+
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                {/* Title */}
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span
+                        className="
+                      absolute inset-0
+                      animate-ping
+                      rounded-full
+                      bg-emerald-400/60
+                    "
+                      />
+
+                      <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+
+                    <span
+                      className="
+                    text-[9px]
+                    font-black
+                    uppercase
+                    tracking-[0.2em]
+                    text-emerald-500
+                  "
+                    >
+                      Income Intelligence
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-col gap-1">
+                    <h1
+                      className="
+                    text-2xl
+                    font-black
+                    tracking-[-0.03em]
+                    text-slate-900
+                    dark:text-white
+                    sm:text-3xl
+                    lg:text-[32px]
+                  "
+                    >
+                      Income Tracker
+                    </h1>
+
+                    <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
+                      Smart income insights for{" "}
+                      <span className="font-bold text-slate-700 dark:text-slate-200">
+                        {periodLabel}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+
+                <div
+                  className="
+                flex w-full items-center gap-2
+                lg:w-auto
+                lg:shrink-0
+              "
+                >
+                  {/* Export */}
+
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={loading}
+                    aria-label="Export income"
+                    className="
+                  inline-flex
+                  h-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-white
+                  px-3
+                  text-xs
+                  font-bold
+                  text-slate-600
+                  shadow-sm
+                  transition-all
+                  hover:border-slate-300
+                  hover:bg-slate-50
+                  hover:text-slate-900
+                  active:scale-[.97]
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                  dark:text-slate-300
+                  dark:hover:border-slate-600
+                  dark:hover:bg-slate-800
+                  dark:hover:text-white
+                  focus:outline-none
+                  focus:ring-2
+                  focus:ring-emerald-500/20
+                  sm:px-3.5
+                "
+                  >
+                    {loading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+
+                    <span className="hidden sm:inline">
+                      {loading ? "Exporting..." : "Export"}
+                    </span>
+                  </button>
+
+                  {/* Primary CTA */}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(true)}
+                    className="
+                  group
+                  inline-flex
+                  h-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  bg-gradient-to-r
+                  from-emerald-500
+                  to-teal-500
+                  px-3.5
+                  text-xs
+                  font-black
+                  text-white
+                  shadow-lg
+                  shadow-emerald-500/20
+                  transition-all
+                  hover:-translate-y-0.5
+                  hover:shadow-xl
+                  hover:shadow-emerald-500/30
+                  active:scale-[.97]
+                  focus:outline-none
+                  focus:ring-2
+                  focus:ring-emerald-500/30
+                  sm:px-4
+                "
+                  >
+                    <Plus
+                      size={15}
+                      strokeWidth={2.5}
+                      className="transition-transform duration-200 group-hover:rotate-90"
+                    />
+
+                    <span>Add Income</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Divider */}
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
+
+              {/* Filters row */}
+              <div
+                className="
+        flex flex-col gap-3
+        sm:flex-row
+        sm:items-center
+        sm:justify-between
+      "
+              >
+                {/* Timeframe */}
+                <div className="min-w-0 overflow-x-auto scrollbar-none">
+                  <TimeFrameSelector
+                    timeFrame={timeFrame}
+                    setTimeFrame={(value) => {
+                      setTimeFrame(value);
+                      setShowAll(false);
                     }}
                   />
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-[0.2em]"
-                    style={{ color: "#00e5a0" }}
-                  >
-                    Income
-                  </span>
                 </div>
-                <h1
-                  className="text-lg sm:text-xl font-bold tracking-tight"
-                  style={{ color: "#eef0f6" }}
-                >
-                  Income Tracker
-                </h1>
-                <p className="text-xs mt-0.5" style={{ color: "#5e6378" }}>
-                  {timeFrameRange.label}
-                </p>
+                <div className="min-w-0 flex-1 sm:flex-none">
+                  <YearSelector
+                    selectedYear={selectedYear}
+                    setSelectedYear={handleYearChange}
+                    currentYear={currentYear}
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleExport}
-                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95"
-                  style={{
-                    background: "#1a1e29",
-                    border: "1px solid #252836",
-                    color: "#5e6378",
-                  }}
+              {/* Selected year indicator */}
+              {selectedYear !== currentYear && (
+                <div
+                  className="
+            inline-flex
+            w-fit
+            shrink-0
+            items-center
+            gap-2
+            rounded-xl
+            border
+            border-violet-200
+            bg-violet-50
+            px-3
+            py-2
+            text-[10px]
+            font-black
+            text-violet-600
+            dark:border-violet-500/20
+            dark:bg-violet-500/10
+            dark:text-violet-400
+          "
                 >
-                  <Download size={13} />
-                  <span className="hidden xs:inline">Export</span>
-                </button>
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl transition-all active:scale-95"
-                  style={{
-                    background: "#00e5a0",
-                    color: "#0d0f14",
-                    boxShadow: "0 0 20px #00e5a030",
-                  }}
-                >
-                  <Plus size={14} />
-                  Add Income
-                </button>
-              </div>
-            </div>
+                  <RotateCcw size={12} />
 
-            <div className="mt-4 overflow-x-auto">
-              <TimeFrameSelector
-                timeFrame={timeFrame}
-                setTimeFrame={(f) => {
-                  setTimeFrame(f);
-                  setShowAll(false);
-                }}
-              />
+                  <span>Viewing {selectedYear}</span>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* ── STAT CARDS ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* ---------------------------------------------------------------- */}
+        {/* STAT CARDS                                                       */}
+        {/* ---------------------------------------------------------------- */}
+
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
-            label="Total Income"
+            label="Total income"
             value={fmtINR(totalIncome)}
-            sub={timeFrameRange.label}
-            accent="#00e5a0"
+            sub={periodLabel}
             icon={TrendingUp}
+            accent="#10b981"
+            trend={incomeChange}
+            trendLabel="vs previous period"
           />
+
           <StatCard
-            label="Avg / Transaction"
+            label="Average"
             value={fmtINR(averageIncome)}
             sub={`${filteredTransactions.length} transactions`}
-            accent="#5b8dff"
             icon={BarChart2}
+            accent="#8b5cf6"
           />
+
           <StatCard
-            label="Highest Single"
+            label="Highest"
             value={fmtINR(highestIncome)}
-            sub="biggest income"
-            accent="#b97cff"
+            sub="single transaction"
             icon={ArrowUpRight}
+            accent="#3b82f6"
           />
+
           <StatCard
-            label="Total Count"
+            label="Transactions"
             value={filteredTransactions.length}
-            sub={filter === "all" ? "all records" : "filtered"}
-            accent="#ffb347"
-            icon={IndianRupee}
+            sub={
+              categoryFilter === "all"
+                ? "all records"
+                : categoryFilter.replace(/_/g, " ")
+            }
+            icon={CircleDollarSign}
+            accent="#f97316"
           />
-        </div>
+        </section>
 
-        {/* ── CHART + BREAKDOWN ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Bar Chart */}
-          <div
-            className="lg:col-span-2 rounded-2xl border p-5"
-            style={{ background: "#13161e", borderColor: "#252836" }}
+        {/* ---------------------------------------------------------------- */}
+        {/* YEAR / PERIOD COMPARISON                                         */}
+        {/* ---------------------------------------------------------------- */}
+
+        {incomeChange !== undefined && (
+          <section
+            className="
+          rounded-3xl
+          border
+          border-emerald-100
+          dark:border-emerald-500/20
+          bg-gradient-to-br
+          from-emerald-50/70
+          via-white
+          to-violet-50/50
+          dark:from-emerald-500/10
+          dark:via-slate-900
+          dark:to-violet-500/10
+          p-4
+          sm:p-5
+          shadow-[0_12px_40px_rgba(16,185,129,0.06)]
+        "
           >
-            <div className="flex items-center justify-between mb-5">
-              <h3
-                className="text-sm font-bold flex items-center gap-2"
-                style={{ color: "#eef0f6" }}
-              >
-                <BarChart2 size={15} style={{ color: "#00e5a0" }} />
-                {chartLabel} trends
-              </h3>
-              <span className="text-xs" style={{ color: "#5e6378" }}>
-                {timeFrameRange.label}
-              </span>
-            </div>
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
-                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#1a1e29"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#363a4e", fontSize: 10 }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: "#363a4e", fontSize: 10 }}
-                    width={50}
-                    tickFormatter={fmtINR}
-                  />
-                  <Tooltip
-                    content={<CustomTooltip />}
-                    cursor={{ fill: "#00e5a008", radius: 6 }}
-                  />
-                  <Bar dataKey="income" radius={[6, 6, 0, 0]} maxBarSize={28}>
-                    {chartData.map((_, i) => (
-                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
-                    ))}
-                  </Bar>
-                  {chartData.map((pt, i) =>
-                    pt.isCurrent ? (
-                      <ReferenceLine
-                        key={i}
-                        x={pt.label}
-                        stroke="#00e5a0"
-                        strokeWidth={1}
-                        strokeDasharray="4 3"
-                        strokeOpacity={0.4}
-                      />
-                    ) : null,
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <IncomeBreakdown transactions={filteredTransactions} />
-        </div>
-
-        {/* ── TRANSACTIONS LIST ───────────────────────────────────── */}
-        <div
-          className="rounded-2xl border overflow-hidden"
-          style={{ background: "#13161e", borderColor: "#252836" }}
-        >
-          {/* List header */}
-          <div
-            className="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            style={{ borderBottom: "1px solid #1a1e29" }}
-          >
-            <h3
-              className="text-sm font-bold flex items-center gap-2"
-              style={{ color: "#eef0f6" }}
-            >
-              <IndianRupee size={14} style={{ color: "#00e5a0" }} />
-              Transactions
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: "#00e5a014", color: "#00e5a0" }}
-              >
-                {filteredTransactions.length}
-              </span>
-            </h3>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative">
-                <Search
-                  size={12}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                  style={{ color: "#363a4e" }}
-                />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search…"
-                  className="pl-8 pr-3 py-2.5 text-xs rounded-xl w-32 sm:w-36 focus:w-44 sm:focus:w-48 transition-all outline-none"
-                  style={{
-                    background: "#1a1e29",
-                    border: "1px solid #252836",
-                    color: "#eef0f6",
-                  }}
-                />
-              </div>
-              <FilterDropdown
-                value={filter}
-                onChange={(v) => {
-                  setFilter(v);
-                  setShowAll(false);
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Rows */}
-          <div style={{ borderTop: "1px solid #1a1e29" }}>
-            {visibleTransactions.length > 0 ? (
-              <div>
-                {visibleTransactions.map((transaction, i) => (
-                  <div
-                    key={transaction.id}
-                    style={i > 0 ? { borderTop: "1px solid #1a1e29" } : {}}
-                  >
-                    <TransactionItem
-                      transaction={transaction}
-                      isEditing={editingId === transaction.id}
-                      editForm={editForm}
-                      setEditForm={setEditForm}
-                      onSave={handleEditTransaction}
-                      onCancel={() => setEditingId(null)}
-                      onDelete={(id) => {
-                        const tx = filteredTransactions.find(
-                          (t) => t.id === id,
-                        );
-                        setDeleteTarget(tx ?? { id });
-                      }}
-                      setEditingId={setEditingId}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              /* Empty State */
-              <div className="py-16 flex flex-col items-center gap-3">
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: "#1a1e29" }}
-                >
-                  <IndianRupee size={22} style={{ color: "#363a4e" }} />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                  <TrendingUp size={17} className="text-emerald-500" />
                 </div>
-                <p className="font-bold text-sm" style={{ color: "#eef0f6" }}>
-                  No income found
+
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-500">
+                    Income performance
+                  </p>
+
+                  <h3 className="mt-0.5 text-sm font-black text-slate-800 dark:text-white">
+                    {incomeChange > 0
+                      ? "Income is trending upward"
+                      : incomeChange < 0
+                        ? "Income is trending downward"
+                        : "Income is stable"}
+                  </h3>
+                </div>
+              </div>
+
+              <div
+                className={`
+              inline-flex
+              w-fit
+              items-center
+              gap-2
+              rounded-xl
+              px-3
+              py-2
+              text-[10px]
+              font-black
+              ${
+                incomeChange > 0
+                  ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                  : incomeChange < 0
+                    ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
+              }
+            `}
+              >
+                {incomeChange > 0 ? (
+                  <TrendingUp size={12} />
+                ) : incomeChange < 0 ? (
+                  <TrendingDown size={12} />
+                ) : (
+                  <BarChart2 size={12} />
+                )}
+                {Math.abs(incomeChange).toFixed(0)}% vs previous period
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* CHART + BREAKDOWN                                                */}
+        {/* ---------------------------------------------------------------- */}
+
+        <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          {/* Chart */}
+
+          <div
+            className="
+          xl:col-span-2
+          rounded-3xl
+          border
+          border-slate-100
+          dark:border-slate-700
+          bg-white
+          dark:bg-slate-900
+          p-4
+          sm:p-5
+          shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+          dark:shadow-black/20
+        "
+          >
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                    <BarChart2 size={14} className="text-emerald-500" />
+                  </div>
+
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white">
+                    {chartLabel}
+                  </h3>
+                </div>
+
+                <p className="mt-1 ml-10 text-[10px] text-slate-400">
+                  {periodLabel}
                 </p>
-                <p
-                  className="text-xs text-center max-w-xs px-4"
-                  style={{ color: "#5e6378" }}
-                >
-                  {filter === "all" && !search
-                    ? "You haven't recorded any income yet. Add your first one."
-                    : `No results for the current filter${search ? ` and "${search}"` : ""}.`}
-                </p>
-                {filter === "all" && !search && (
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="mt-1 flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl active:scale-95 transition-all"
-                    style={{
-                      background: "#00e5a0",
-                      color: "#0d0f14",
-                      boxShadow: "0 0 16px #00e5a030",
+              </div>
+
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {fmtINR(totalIncome)}
+              </div>
+            </div>
+
+            <div className="h-56 sm:h-64">
+              {chartData.some((item) => item.income > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    margin={{
+                      top: 5,
+                      right: 5,
+                      left: -15,
+                      bottom: 0,
                     }}
                   >
+                    <defs>
+                      <linearGradient
+                        id="premiumIncomeGradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="#10b981"
+                          stopOpacity={0.95}
+                        />
+
+                        <stop
+                          offset="100%"
+                          stopColor="#10b981"
+                          stopOpacity={0.55}
+                        />
+                      </linearGradient>
+                    </defs>
+
+                    <CartesianGrid
+                      strokeDasharray="3 4"
+                      stroke="#f1f5f9"
+                      vertical={false}
+                    />
+
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: "#94a3b8",
+                        fontSize: 9,
+                      }}
+                      interval={
+                        periodMode === "month"
+                          ? chartData.length > 20
+                            ? 4
+                            : 2
+                          : 0
+                      }
+                    />
+
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: "#94a3b8",
+                        fontSize: 9,
+                      }}
+                      width={48}
+                      tickFormatter={(value) => fmtINR(value)}
+                    />
+
+                    <Tooltip
+                      cursor={{
+                        fill: "#10b98108",
+                      }}
+                      content={<CustomTooltip />}
+                    />
+
+                    <Bar
+                      dataKey="income"
+                      fill="url(#premiumIncomeGradient)"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={periodMode === "month" ? 18 : 32}
+                    >
+                      {chartData.map((item, index) => (
+                        <Cell
+                          key={item.key}
+                          fill={BAR_COLORS[index % BAR_COLORS.length]}
+                          fillOpacity={item.income > 0 ? 1 : 0.18}
+                        />
+                      ))}
+                    </Bar>
+
+                    {periodMode === "year" &&
+                      chartData.some(
+                        (item) =>
+                          item.month === new Date().getMonth() &&
+                          selectedYear === getCurrentYear(),
+                      ) && (
+                        <ReferenceLine
+                          x={new Date().toLocaleDateString("en-IN", {
+                            month: "short",
+                          })}
+                          stroke="#10b981"
+                          strokeWidth={1.5}
+                          strokeDasharray="4 4"
+                          strokeOpacity={0.4}
+                        />
+                      )}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+                    <BarChart2
+                      size={22}
+                      className="text-slate-300 dark:text-slate-600"
+                    />
+                  </div>
+
+                  <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+                    No chart data
+                  </p>
+
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Income will appear here.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Breakdown */}
+
+          <IncomeBreakdown transactions={filteredTransactions} />
+        </section>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* TRANSACTIONS                                                     */}
+        {/* ---------------------------------------------------------------- */}
+
+        <section
+          className="
+        rounded-3xl
+        border
+        border-slate-100
+        dark:border-slate-700
+        bg-white
+        dark:bg-slate-900
+        overflow-hidden
+        shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+        dark:shadow-black/20
+      "
+        >
+          {/* Toolbar */}
+
+          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+                  <ReceiptText size={17} className="text-emerald-500" />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-800 dark:text-white">
+                      Transactions
+                    </h3>
+
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
+                      {filteredTransactions.length}
+                    </span>
+                  </div>
+
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    {periodLabel}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Search */}
+
+                <div className="relative flex-1 sm:flex-none">
+                  <Search
+                    size={13}
+                    className="
+                  absolute
+                  left-3
+                  top-1/2
+                  -translate-y-1/2
+                  text-slate-400
+                "
+                  />
+
+                  <input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setShowAll(false);
+                    }}
+                    placeholder="Search income…"
+                    className="
+                  w-full
+                  sm:w-48
+                  pl-9
+                  pr-9
+                  py-2.5
+                  rounded-2xl
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-slate-50
+                  dark:bg-slate-950
+                  text-xs
+                  text-slate-700
+                  dark:text-slate-200
+                  outline-none
+                  focus:border-emerald-400
+                  focus:ring-4
+                  focus:ring-emerald-500/10
+                  placeholder:text-slate-300
+                "
+                  />
+
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      className="
+                    absolute
+                    right-2
+                    top-1/2
+                    -translate-y-1/2
+                    w-6
+                    h-6
+                    rounded-lg
+                    flex
+                    items-center
+                    justify-center
+                    text-slate-400
+                  "
+                      aria-label="Clear search"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Category */}
+
+                <CategoryFilter
+                  value={categoryFilter}
+                  onChange={(value) => {
+                    setCategoryFilter(value);
+                    setShowAll(false);
+                  }}
+                />
+
+                {/* Reset */}
+
+                {(search || categoryFilter !== "all") && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="
+                  h-10
+                  w-10
+                  shrink-0
+                  rounded-xl
+                  flex
+                  items-center
+                  justify-center
+                  text-slate-400
+                  hover:text-emerald-500
+                  hover:bg-emerald-50
+                  dark:hover:bg-emerald-500/10
+                  transition
+                "
+                    aria-label="Reset filters"
+                    title="Reset filters"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active filters */}
+
+            {(search || categoryFilter !== "all") && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">
+                  Active filters:
+                </span>
+
+                {categoryFilter !== "all" && (
+                  <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
+                    {categoryFilter.replace(/_/g, " ")}
+                  </span>
+                )}
+
+                {search && (
+                  <span className="max-w-[150px] truncate px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
+                    "{search}"
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="ml-auto flex items-center gap-1 text-[9px] font-black text-emerald-500"
+                >
+                  <RotateCcw size={10} />
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop column header */}
+
+          <div
+            className="
+          hidden
+          md:grid
+          grid-cols-[110px_150px_1fr_150px_100px]
+          gap-3
+          px-5
+          py-2.5
+          bg-slate-50/70
+          dark:bg-slate-950/40
+          border-b
+          border-slate-100
+          dark:border-slate-800
+        "
+          >
+            {["Date", "Amount", "Description", "Category", "Actions"].map(
+              (heading) => (
+                <span
+                  key={heading}
+                  className="
+                text-[9px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-slate-400
+              "
+                >
+                  {heading}
+                </span>
+              ),
+            )}
+          </div>
+
+          {/* Transaction list */}
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {visibleTransactions.length > 0 ? (
+              visibleTransactions.map((transaction) => (
+                <TransactionItem
+                  key={transaction.id}
+                  transaction={transaction}
+                  isEditing={editingId === transaction.id}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                  onSave={handleEditTransaction}
+                  onCancel={() => setEditingId(null)}
+                  onDelete={(id) => {
+                    const transactionToDelete = filteredTransactions.find(
+                      (item) => item.id === id,
+                    );
+
+                    setDeleteTarget(
+                      transactionToDelete || {
+                        id,
+                      },
+                    );
+                  }}
+                  setEditingId={setEditingId}
+                />
+              ))
+            ) : (
+              <div className="py-16 px-5 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-emerald-50 to-violet-50 dark:from-emerald-500/10 dark:to-violet-500/10 flex items-center justify-center">
+                  <ReceiptText
+                    size={24}
+                    className="text-emerald-300 dark:text-emerald-400"
+                  />
+                </div>
+
+                <h4 className="mt-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  No income found
+                </h4>
+
+                <p className="mt-1 max-w-xs text-xs text-slate-400">
+                  {search || categoryFilter !== "all"
+                    ? "Try changing your search or filters."
+                    : `No income recorded for ${periodLabel}.`}
+                </p>
+
+                {search || categoryFilter !== "all" ? (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="
+                  mt-4
+                  flex
+                  items-center
+                  gap-2
+                  px-4
+                  py-2.5
+                  rounded-xl
+                  bg-slate-100
+                  dark:bg-slate-800
+                  text-slate-600
+                  dark:text-slate-300
+                  text-xs
+                  font-black
+                "
+                  >
+                    <RotateCcw size={13} />
+                    Reset filters
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(true)}
+                    className="
+                  mt-4
+                  flex
+                  items-center
+                  gap-2
+                  px-4
+                  py-2.5
+                  rounded-xl
+                  bg-gradient-to-r
+                  from-emerald-500
+                  to-teal-500
+                  text-white
+                  text-xs
+                  font-black
+                  shadow-lg
+                  shadow-emerald-500/20
+                "
+                  >
                     <Plus size={13} />
-                    Add your first income
+                    Add first income
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          {/* Show all / Show less */}
-          {!showAll && filteredTransactions.length > 10 && (
-            <button
-              onClick={() => setShowAll(true)}
-              className="w-full py-4 text-xs font-bold flex items-center justify-center gap-2 transition-all"
-              style={{ color: "#5e6378", borderTop: "1px solid #1a1e29" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#1a1e29";
-                e.currentTarget.style.color = "#00e5a0";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#5e6378";
-              }}
-            >
-              <Eye size={13} />
-              View all {filteredTransactions.length} transactions
-            </button>
+          {/* Pagination */}
+
+          {filteredTransactions.length > 10 && (
+            <div className="border-t border-slate-100 dark:border-slate-800">
+              {!showAll ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="
+                w-full
+                py-4
+                flex
+                items-center
+                justify-center
+                gap-2
+                text-[10px]
+                font-black
+                text-emerald-500
+                hover:bg-emerald-50/50
+                dark:hover:bg-emerald-500/5
+                transition
+              "
+                >
+                  <Eye size={13} />
+                  View all {filteredTransactions.length} transactions
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(false)}
+                  className="
+                w-full
+                py-4
+                flex
+                items-center
+                justify-center
+                gap-2
+                text-[10px]
+                font-black
+                text-slate-400
+                hover:bg-slate-50
+                dark:hover:bg-slate-800
+                transition
+              "
+                >
+                  <EyeOff size={13} />
+                  Show less
+                </button>
+              )}
+            </div>
           )}
-          {showAll && filteredTransactions.length > 10 && (
-            <button
-              onClick={() => setShowAll(false)}
-              className="w-full py-4 text-xs font-bold flex items-center justify-center gap-2 transition-all"
-              style={{ color: "#5e6378", borderTop: "1px solid #1a1e29" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#1a1e29";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <EyeOff size={13} />
-              Show less
-            </button>
-          )}
-        </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* FOOTER INSIGHT                                                   */}
+        {/* ---------------------------------------------------------------- */}
+
+        <section
+          className="
+        rounded-3xl
+        border
+        border-emerald-100
+        dark:border-emerald-500/20
+        bg-gradient-to-br
+        from-emerald-50/70
+        via-white
+        to-violet-50/50
+        dark:from-emerald-500/10
+        dark:via-slate-900
+        dark:to-violet-500/10
+        p-4
+        sm:p-5
+        shadow-[0_12px_40px_rgba(16,185,129,0.05)]
+      "
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <Sparkles size={15} className="text-emerald-500" />
+            </div>
+
+            <div>
+              <p className="text-xs font-black text-slate-800 dark:text-white">
+                Income insight
+              </p>
+
+              <p className="text-[10px] sm:text-xs leading-relaxed mt-1 text-slate-500 dark:text-slate-400">
+                {totalIncome > 0
+                  ? `You earned ${formatFullINR(totalIncome)} during ${periodLabel}. ${
+                      incomeChange > 0
+                        ? `That's ${Math.abs(incomeChange).toFixed(
+                            0,
+                          )}% higher than the previous period.`
+                        : incomeChange < 0
+                          ? `That's ${Math.abs(incomeChange).toFixed(
+                              0,
+                            )}% lower than the previous period.`
+                          : "Your income is unchanged compared with the previous period."
+                    }`
+                  : `Start adding income transactions for ${periodLabel} to unlock detailed income insights.`}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* MOBILE QUICK ADD                                                 */}
+        {/* ---------------------------------------------------------------- */}
+
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="
+        md:hidden
+        fixed
+        bottom-5
+        right-5
+        z-40
+        w-14
+        h-14
+        rounded-2xl
+        bg-gradient-to-br
+        from-emerald-500
+        to-teal-500
+        text-white
+        flex
+        items-center
+        justify-center
+        shadow-2xl
+        shadow-emerald-500/30
+        active:scale-90
+        transition
+      "
+          aria-label="Add income"
+        >
+          <Plus size={23} />
+        </button>
       </div>
 
-      {/* ── ADD MODAL ─────────────────────────────────────────────── */}
+      {/* ================================================================ */}
+      {/* ADD MODAL                                                        */}
+      {/* ================================================================ */}
+
       <AddTransactionModal
         showModal={showModal}
         setShowModal={setShowModal}
@@ -1463,7 +3487,10 @@ const Income = () => {
         lockType="income"
       />
 
-      {/* ── DELETE CONFIRM ─────────────────────────────────────────── */}
+      {/* ================================================================ */}
+      {/* DELETE                                                            */}
+      {/* ================================================================ */}
+
       {deleteTarget && (
         <DeleteModal
           transaction={deleteTarget}
