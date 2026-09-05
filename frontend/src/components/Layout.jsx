@@ -1105,16 +1105,7 @@ const Layout = ({ onLogout, user }) => {
                   icon={<PieChart />}
                   title="Top Spending"
                   subtitle="Where your money goes"
-                  right={
-                    <button
-                      type="button"
-                      className="panel-link"
-                      onClick={() => navigate("/transactions")}
-                    >
-                      View all
-                      <ArrowUpRight size={13} />
-                    </button>
-                  }
+                 
                 />
 
                 <div className="spending-content">
@@ -1207,16 +1198,7 @@ const Layout = ({ onLogout, user }) => {
                   icon={<Clock />}
                   title="Recent Transactions"
                   subtitle={`${transactions.length} total records`}
-                  right={
-                    <button
-                      type="button"
-                      className="panel-link"
-                      onClick={() => navigate("/transactions")}
-                    >
-                      See all
-                      <ArrowUpRight size={13} />
-                    </button>
-                  }
+                 
                 />
 
                 <div className="transactions-wrapper">

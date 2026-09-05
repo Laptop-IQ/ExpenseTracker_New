@@ -1,4 +1,4 @@
-import React, {
+import {
   useState,
   useMemo,
   useEffect,
@@ -7,14 +7,12 @@ import React, {
 } from "react";
 import { useOutletContext } from "react-router-dom";
 import axios from "axios";
-import { createPortal } from "react-dom";
 import {
   Plus,
   Download,
   Eye,
   EyeOff,
   TrendingUp,
-  TrendingDown,
   BarChart2,
   IndianRupee,
   Trash2,
@@ -33,14 +31,11 @@ import {
   Briefcase,
   Coins,
   Banknote,
-  CalendarDays,
   RotateCcw,
-  Filter,
   ArrowDownRight,
   CircleDollarSign,
   ReceiptText,
   Layers3,
-  WalletCards,
   Loader2,
 } from "lucide-react";
 
@@ -68,11 +63,9 @@ import {
   formatTransactionDateMobile,
   getDateInputValue,
   toIsoWithClientTime,
-  formatCategory,
-  getYearOptions,
   getAuthHeaders,
-  safeNumber,
 } from "../utils/commonHelpers";
+import YearSelector from "../components/common/YearSelector";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
@@ -143,176 +136,6 @@ const CATEGORY_FILTERS = [
   { value: "Investment", label: "Investment" },
 ];
 
-/* =========================================================
-   YEAR SELECTOR COMPONENT
-========================================================= */
-
-function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
-  const years = useMemo(() => getYearOptions(currentYear, 6), [currentYear]);
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 220 });
-  const triggerRef = useRef(null);
-  const isCurrentYear = selectedYear === currentYear;
-
-  const updatePosition = () => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const dropdownWidth = 220;
-    const gap = 8;
-    const padding = 12;
-    let left = rect.left;
-    if (left + dropdownWidth > window.innerWidth - padding) {
-      left = window.innerWidth - dropdownWidth - padding;
-    }
-    left = Math.max(padding, left);
-    setPosition({ top: rect.bottom + gap, left, width: dropdownWidth });
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePosition = () => updatePosition();
-    window.addEventListener("resize", handlePosition);
-    window.addEventListener("scroll", handlePosition, true);
-    return () => {
-      window.removeEventListener("resize", handlePosition);
-      window.removeEventListener("scroll", handlePosition, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleEscape = (event) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleOutside = (event) => {
-      if (triggerRef.current && !triggerRef.current.contains(event.target)) {
-        const dropdown = document.getElementById("year-selector-dropdown");
-        if (dropdown && !dropdown.contains(event.target)) {
-          setOpen(false);
-        }
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open]);
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => {
-          updatePosition();
-          setOpen((prev) => !prev);
-        }}
-        className="group relative inline-flex h-10 items-center gap-2 rounded-full border border-violet-500/30 bg-[#080b18] px-3 shadow-[0_0_0_1px_rgba(124,58,237,.08),0_8px_30px_rgba(0,0,0,.25)] transition-all duration-200 hover:border-violet-500/50 hover:bg-[#0b0f20] focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-      >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-500/10 text-violet-400">
-          <CalendarDays size={14} strokeWidth={2.2} />
-        </span>
-        <span className="text-xs font-black tracking-tight text-slate-100">
-          {selectedYear}
-        </span>
-        {isCurrentYear && (
-          <span className="flex items-center gap-1.5 border-l border-white/10 pl-2 text-[9px] font-bold text-emerald-400">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/50" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-            Current
-          </span>
-        )}
-        <ChevronDown
-          size={14}
-          strokeWidth={2.5}
-          className={`ml-1 text-slate-500 transition-transform duration-200 ${
-            open ? "rotate-180 text-violet-400" : ""
-          }`}
-        />
-      </button>
-
-      {open &&
-        createPortal(
-          <div
-            id="year-selector-dropdown"
-            style={{
-              position: "fixed",
-              top: position.top,
-              left: position.left,
-              width: position.width,
-            }}
-            className="z-[999999] overflow-hidden rounded-xl border border-white/[0.08] bg-[#080b18]/[0.98] p-1.5 shadow-[0_24px_70px_rgba(0,0,0,.55),0_0_0_1px_rgba(139,92,246,.08)] backdrop-blur-2xl"
-          >
-            <div className="flex items-center justify-between px-2.5 pb-2 pt-1.5">
-              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Select year
-              </span>
-              <CalendarDays size={12} className="text-violet-500/50" />
-            </div>
-
-            <div className="space-y-0.5">
-              {years.map((year) => {
-                const selected = year === selectedYear;
-                const current = year === currentYear;
-
-                return (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => {
-                      setSelectedYear(year);
-                      setOpen(false);
-                    }}
-                    className={`group/year flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${
-                      selected ? "bg-violet-500/10" : "hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-black ${
-                          selected
-                            ? "bg-violet-500/15 text-violet-400"
-                            : "bg-white/[0.04] text-slate-500"
-                        }`}
-                      >
-                        {String(year).slice(-2)}
-                      </span>
-                      <div>
-                        <div
-                          className={`text-xs font-extrabold ${
-                            selected ? "text-violet-300" : "text-slate-200"
-                          }`}
-                        >
-                          {year}
-                        </div>
-                        {current && (
-                          <div className="mt-0.5 text-[9px] font-semibold text-emerald-400">
-                            Current year
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {selected && (
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500 text-white shadow-[0_4px_12px_rgba(124,58,237,.35)]">
-                        <Check size={11} strokeWidth={3} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-}
 
 /* =========================================================
    TIME FRAME SELECTOR
