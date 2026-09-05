@@ -396,25 +396,82 @@ function filterTransactions(transactions, frame) {
    STATS
 ============================================================================ */
 
-function calculateStats(transactions) {
+function calculateStats(transactions, timeFrame) {
   const now = new Date();
 
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
 
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  let currentPeriodStart;
+  let previousPeriodStart;
+  let nextPeriodStart;
 
-  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  switch (timeFrame) {
+    case "daily": {
+      currentPeriodStart = startOfToday;
 
-  const currentMonth = transactions.filter((transaction) => {
+      nextPeriodStart = new Date(startOfToday);
+      nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
+
+      previousPeriodStart = new Date(startOfToday);
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - 1);
+
+      break;
+    }
+
+    case "weekly": {
+      currentPeriodStart = new Date(startOfToday);
+
+      const day = currentPeriodStart.getDay();
+
+      currentPeriodStart.setDate(currentPeriodStart.getDate() - day);
+
+      nextPeriodStart = new Date(currentPeriodStart);
+      nextPeriodStart.setDate(nextPeriodStart.getDate() + 7);
+
+      previousPeriodStart = new Date(currentPeriodStart);
+      previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
+
+      break;
+    }
+
+    case "yearly": {
+      // This Year
+      currentPeriodStart = new Date(now.getFullYear(), 0, 1);
+
+      nextPeriodStart = new Date(now.getFullYear() + 1, 0, 1);
+
+      previousPeriodStart = new Date(now.getFullYear() - 1, 0, 1);
+
+      break;
+    }
+
+    case "monthly":
+    default: {
+      // This Month
+      currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      nextPeriodStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      previousPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      break;
+    }
+  }
+
+  const currentPeriod = transactions.filter((transaction) => {
     const date = new Date(transaction.date);
 
-    return date >= currentMonthStart && date < nextMonthStart;
+    return date >= currentPeriodStart && date < nextPeriodStart;
   });
 
-  const previousMonth = transactions.filter((transaction) => {
+  const previousPeriod = transactions.filter((transaction) => {
     const date = new Date(transaction.date);
 
-    return date >= previousMonthStart && date < currentMonthStart;
+    return date >= previousPeriodStart && date < currentPeriodStart;
   });
 
   const sum = (items, type) =>
@@ -425,17 +482,19 @@ function calculateStats(transactions) {
         0,
       );
 
-  const thisIncome = sum(currentMonth, "income");
+  // Current selected period
+  const thisIncome = sum(currentPeriod, "income");
+  const thisExpenses = sum(currentPeriod, "expense");
+  const thisSavings = thisIncome - thisExpenses;
 
-  const thisExpenses = sum(currentMonth, "expense");
+  // Previous selected period
+  const lastIncome = sum(previousPeriod, "income");
+  const lastExpenses = sum(previousPeriod, "expense");
 
-  const lastIncome = sum(previousMonth, "income");
-
-  const lastExpenses = sum(previousMonth, "expense");
-
+  // All time
   const allIncome = sum(transactions, "income");
-
   const allExpenses = sum(transactions, "expense");
+  const allSavings = allIncome - allExpenses;
 
   const percentChange = (current, previous) => {
     if (previous === 0) {
@@ -444,8 +503,6 @@ function calculateStats(transactions) {
 
     return Math.round(((current - previous) / previous) * 100);
   };
-
-  const thisSavings = thisIncome - thisExpenses;
 
   const savingsRate =
     thisIncome > 0 ? Math.round((thisSavings / thisIncome) * 100) : 0;
@@ -457,11 +514,9 @@ function calculateStats(transactions) {
 
     allIncome,
     allExpenses,
-
-    allSavings: allIncome - allExpenses,
+    allSavings,
 
     incomeChange: percentChange(thisIncome, lastIncome),
-
     expenseChange: percentChange(thisExpenses, lastExpenses),
 
     savingsRate,
@@ -469,6 +524,7 @@ function calculateStats(transactions) {
     total: transactions.length,
   };
 }
+
 
 /* ============================================================================
    STAT CARD
@@ -696,7 +752,10 @@ const Layout = ({ onLogout, user }) => {
      STATS
   -------------------------------------------------------------------------- */
 
-  const stats = useMemo(() => calculateStats(transactions), [transactions]);
+  const stats = useMemo(
+  () => calculateStats(transactions, timeFrame),
+  [transactions, timeFrame],
+);
 
   const timeframeLabels = {
     daily: "Today",
