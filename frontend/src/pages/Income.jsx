@@ -53,16 +53,32 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   Cell,
-  ReferenceLine,
 } from "recharts";
 
 import { learnCategory } from "../utils/smartCategoryAI";
 import AddTransactionModal from "../components/Add";
+import {
+  fmtINR,
+  formatFullINR,
+  getCurrentYear,
+  getTimeFrameRange,
+  buildChartPoints,
+  isDateInRange,
+  formatTransactionDate,
+  formatTransactionDateMobile,
+  getDateInputValue,
+  toIsoWithClientTime,
+  formatCategory,
+  getYearOptions,
+  getAuthHeaders,
+  safeNumber,
+} from "../utils/commonHelpers";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
 
 /* =========================================================
-   THEME
+   THEME CONSTANTS
 ========================================================= */
 
 const COLORS = {
@@ -127,320 +143,63 @@ const CATEGORY_FILTERS = [
   { value: "Investment", label: "Investment" },
 ];
 
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
-
 /* =========================================================
-   HELPERS
-========================================================= */
-
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
-
-function getMonthKey(dateValue) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) return "";
-
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-}
-
-function getYear(dateValue) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) return null;
-
-  return d.getFullYear();
-}
-
-function getCurrentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
-}
-
-function getCurrentYear() {
-  return new Date().getFullYear();
-}
-
-function formatMonthLabel(monthKey) {
-  if (!monthKey) return "Select month";
-
-  const [year, month] = monthKey.split("-").map(Number);
-
-  if (!year || !month) return "Select month";
-
-  return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function formatShortMonth(monthKey) {
-  if (!monthKey) return "";
-
-  const [year, month] = monthKey.split("-").map(Number);
-
-  return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
-    month: "short",
-  });
-}
-
-function fmtINR(value) {
-  const n = Number(value || 0);
-
-  if (n >= 10000000) {
-    return `₹${(n / 10000000).toFixed(1)}Cr`;
-  }
-
-  if (n >= 100000) {
-    return `₹${(n / 100000).toFixed(1)}L`;
-  }
-
-  if (n >= 1000) {
-    return `₹${(n / 1000).toFixed(1)}K`;
-  }
-
-  return `₹${Math.round(n).toLocaleString("en-IN")}`;
-}
-
-function formatFullINR(value) {
-  return `₹${Number(value || 0).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function toIsoWithClientTime(dateValue) {
-  if (!dateValue) {
-    return new Date().toISOString();
-  }
-
-  if (typeof dateValue === "string" && dateValue.length === 10) {
-    const now = new Date();
-
-    return new Date(
-      `${dateValue}T${now.toTimeString().slice(0, 8)}`,
-    ).toISOString();
-  }
-
-  const parsed = new Date(dateValue);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString();
-  }
-
-  return new Date().toISOString();
-}
-
-function formatTransactionDate(dateValue) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) return "Invalid date";
-
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatTransactionDateMobile(dateValue) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) return "Invalid date";
-
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-  });
-}
-
-function normalizeDate(value) {
-  if (!value) return null;
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
-}
-
-function safeNumber(value) {
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : 0;
-}
-
-function isDateInRange(dateValue, start, end) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) return false;
-
-  const startDate = new Date(start);
-  const endDate = new Date(end);
-
-  d.setHours(0, 0, 0, 0);
-  startDate.setHours(0, 0, 0, 0);
-  endDate.setHours(23, 59, 59, 999);
-
-  return d >= startDate && d <= endDate;
-}
-
-function getTimeFrameRange(timeFrame) {
-  const now = new Date();
-
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-
-  if (timeFrame === "daily") {
-    return {
-      start,
-      end: new Date(now),
-      label: "Today",
-    };
-  }
-
-  if (timeFrame === "weekly") {
-    const s = new Date(start);
-
-    s.setDate(start.getDate() - start.getDay());
-    s.setHours(0, 0, 0, 0);
-
-    return {
-      start: s,
-      end: new Date(now),
-      label: "This Week",
-    };
-  }
-
-  if (timeFrame === "monthly") {
-    return {
-      start: new Date(start.getFullYear(), start.getMonth(), 1),
-      end: new Date(now),
-      label: "This Month",
-    };
-  }
-
-  return {
-    start: new Date(start.getFullYear(), 0, 1),
-    end: new Date(now),
-    label: "This Year",
-  };
-}
-
-function getYearOptions(currentYear, count = 5) {
-  return Array.from({ length: count }, (_, index) => currentYear - index);
-}
-
-/* =========================================================
-   YEAR SELECTOR
+   YEAR SELECTOR COMPONENT
 ========================================================= */
 
 function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
   const years = useMemo(() => getYearOptions(currentYear, 6), [currentYear]);
-
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({
-    top: 0,
-    left: 0,
-    width: 220,
-  });
-
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 220 });
   const triggerRef = useRef(null);
-
   const isCurrentYear = selectedYear === currentYear;
 
   const updatePosition = () => {
     if (!triggerRef.current) return;
-
     const rect = triggerRef.current.getBoundingClientRect();
-
     const dropdownWidth = 220;
     const gap = 8;
     const padding = 12;
-
     let left = rect.left;
-
-    // Prevent right-side overflow
     if (left + dropdownWidth > window.innerWidth - padding) {
       left = window.innerWidth - dropdownWidth - padding;
     }
-
-    // Prevent left-side overflow
     left = Math.max(padding, left);
-
-    setPosition({
-      top: rect.bottom + gap,
-      left,
-      width: dropdownWidth,
-    });
+    setPosition({ top: rect.bottom + gap, left, width: dropdownWidth });
   };
 
-  const handleOpen = () => {
-    updatePosition();
-    setOpen((prev) => !prev);
-  };
-
-  const handleSelect = (year) => {
-    setSelectedYear(year);
-    setOpen(false);
-  };
-
-  // Update position while scrolling/resizing
   useEffect(() => {
     if (!open) return;
-
-    const handlePosition = () => {
-      updatePosition();
-    };
-
+    const handlePosition = () => updatePosition();
     window.addEventListener("resize", handlePosition);
     window.addEventListener("scroll", handlePosition, true);
-
     return () => {
       window.removeEventListener("resize", handlePosition);
       window.removeEventListener("scroll", handlePosition, true);
     };
   }, [open]);
 
-  // Escape
   useEffect(() => {
     if (!open) return;
-
     const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+      if (event.key === "Escape") setOpen(false);
     };
-
     document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
+    return () => document.removeEventListener("keydown", handleEscape);
   }, [open]);
 
-  // Outside click
   useEffect(() => {
     if (!open) return;
-
     const handleOutside = (event) => {
       if (triggerRef.current && !triggerRef.current.contains(event.target)) {
         const dropdown = document.getElementById("year-selector-dropdown");
-
         if (dropdown && !dropdown.contains(event.target)) {
           setOpen(false);
         }
       }
     };
-
     document.addEventListener("mousedown", handleOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, [open]);
 
   return (
@@ -448,98 +207,33 @@ function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={handleOpen}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Select expense year"
-        className="
-          group
-          relative
-          inline-flex
-          h-10
-          items-center
-          gap-2
-          rounded-full
-          border
-          border-violet-500/30
-          bg-[#080b18]
-          px-3
-          shadow-[0_0_0_1px_rgba(124,58,237,.08),0_8px_30px_rgba(0,0,0,.25)]
-          transition-all
-          duration-200
-          hover:border-violet-500/50
-          hover:bg-[#0b0f20]
-          focus:outline-none
-          focus:ring-2
-          focus:ring-violet-500/20
-        "
+        onClick={() => {
+          updatePosition();
+          setOpen((prev) => !prev);
+        }}
+        className="group relative inline-flex h-10 items-center gap-2 rounded-full border border-violet-500/30 bg-[#080b18] px-3 shadow-[0_0_0_1px_rgba(124,58,237,.08),0_8px_30px_rgba(0,0,0,.25)] transition-all duration-200 hover:border-violet-500/50 hover:bg-[#0b0f20] focus:outline-none focus:ring-2 focus:ring-violet-500/20"
       >
-        <span
-          className="
-            flex
-            h-7
-            w-7
-            items-center
-            justify-center
-            rounded-full
-            bg-violet-500/10
-            text-violet-400
-          "
-        >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-500/10 text-violet-400">
           <CalendarDays size={14} strokeWidth={2.2} />
         </span>
-
-        <span
-          className="
-            text-xs
-            font-black
-            tracking-tight
-            text-slate-100
-          "
-        >
+        <span className="text-xs font-black tracking-tight text-slate-100">
           {selectedYear}
         </span>
-
         {isCurrentYear && (
-          <span
-            className="
-              flex
-              items-center
-              gap-1.5
-              border-l
-              border-white/10
-              pl-2
-              text-[9px]
-              font-bold
-              text-emerald-400
-            "
-          >
+          <span className="flex items-center gap-1.5 border-l border-white/10 pl-2 text-[9px] font-bold text-emerald-400">
             <span className="relative flex h-1.5 w-1.5">
-              <span
-                className="
-                  absolute
-                  inset-0
-                  animate-ping
-                  rounded-full
-                  bg-emerald-400/50
-                "
-              />
+              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/50" />
               <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
             </span>
             Current
           </span>
         )}
-
         <ChevronDown
           size={14}
           strokeWidth={2.5}
-          className={`
-            ml-1
-            text-slate-500
-            transition-transform
-            duration-200
-            ${open ? "rotate-180 text-violet-400" : ""}
-          `}
+          className={`ml-1 text-slate-500 transition-transform duration-200 ${
+            open ? "rotate-180 text-violet-400" : ""
+          }`}
         />
       </button>
 
@@ -547,48 +241,18 @@ function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
         createPortal(
           <div
             id="year-selector-dropdown"
-            role="listbox"
-            aria-label="Select expense year"
             style={{
               position: "fixed",
               top: position.top,
               left: position.left,
               width: position.width,
             }}
-            className="
-              z-[999999]
-              overflow-hidden
-              rounded-xl
-              border
-              border-white/[0.08]
-              bg-[#080b18]/[0.98]
-              p-1.5
-              shadow-[0_24px_70px_rgba(0,0,0,.55),0_0_0_1px_rgba(139,92,246,.08)]
-              backdrop-blur-2xl
-            "
+            className="z-[999999] overflow-hidden rounded-xl border border-white/[0.08] bg-[#080b18]/[0.98] p-1.5 shadow-[0_24px_70px_rgba(0,0,0,.55),0_0_0_1px_rgba(139,92,246,.08)] backdrop-blur-2xl"
           >
-            <div
-              className="
-                flex
-                items-center
-                justify-between
-                px-2.5
-                pb-2
-                pt-1.5
-              "
-            >
-              <span
-                className="
-                  text-[9px]
-                  font-black
-                  uppercase
-                  tracking-[0.18em]
-                  text-slate-500
-                "
-              >
+            <div className="flex items-center justify-between px-2.5 pb-2 pt-1.5">
+              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
                 Select year
               </span>
-
               <CalendarDays size={12} className="text-violet-500/50" />
             </div>
 
@@ -596,91 +260,46 @@ function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
               {years.map((year) => {
                 const selected = year === selectedYear;
                 const current = year === currentYear;
-                const previous = year === currentYear - 1;
 
                 return (
                   <button
                     key={year}
                     type="button"
-                    role="option"
-                    aria-selected={selected}
-                    onClick={() => handleSelect(year)}
-                    className={`
-                      group/year
-                      flex
-                      w-full
-                      items-center
-                      justify-between
-                      rounded-xl
-                      px-3
-                      py-2.5
-                      text-left
-                      transition-all
-                      duration-150
-
-                      ${selected ? "bg-violet-500/10" : "hover:bg-white/[0.04]"}
-                    `}
+                    onClick={() => {
+                      setSelectedYear(year);
+                      setOpen(false);
+                    }}
+                    className={`group/year flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${
+                      selected ? "bg-violet-500/10" : "hover:bg-white/[0.04]"
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className={`
-                          flex
-                          h-7
-                          w-7
-                          items-center
-                          justify-center
-                          rounded-lg
-                          text-[10px]
-                          font-black
-                          ${
-                            selected
-                              ? "bg-violet-500/15 text-violet-400"
-                              : "bg-white/[0.04] text-slate-500"
-                          }
-                        `}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-black ${
+                          selected
+                            ? "bg-violet-500/15 text-violet-400"
+                            : "bg-white/[0.04] text-slate-500"
+                        }`}
                       >
                         {String(year).slice(-2)}
                       </span>
-
                       <div>
                         <div
-                          className={`
-                            text-xs
-                            font-extrabold
-                            ${selected ? "text-violet-300" : "text-slate-200"}
-                          `}
+                          className={`text-xs font-extrabold ${
+                            selected ? "text-violet-300" : "text-slate-200"
+                          }`}
                         >
                           {year}
                         </div>
-
                         {current && (
                           <div className="mt-0.5 text-[9px] font-semibold text-emerald-400">
                             Current year
                           </div>
                         )}
-
-                        {previous && (
-                          <div className="mt-0.5 text-[9px] text-slate-600">
-                            Previous year
-                          </div>
-                        )}
                       </div>
                     </div>
-
                     {selected && (
-                      <span
-                        className="
-                          flex
-                          h-5
-                          w-5
-                          items-center
-                          justify-center
-                          rounded-full
-                          bg-violet-500
-                          text-white
-                          shadow-[0_4px_12px_rgba(124,58,237,.35)]
-                        "
-                      >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-500 text-white shadow-[0_4px_12px_rgba(124,58,237,.35)]">
                         <Check size={11} strokeWidth={3} />
                       </span>
                     )}
@@ -695,47 +314,25 @@ function YearSelector({ selectedYear, setSelectedYear, currentYear }) {
   );
 }
 
+/* =========================================================
+   TIME FRAME SELECTOR
+========================================================= */
+
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   return (
-    <div
-      className="
-        flex
-        gap-1
-        overflow-x-auto
-        max-w-full
-        bg-slate-100/80
-        dark:bg-slate-800/80
-        p-1
-        rounded-2xl
-        border
-        border-slate-200/60
-        dark:border-slate-700/60
-        scrollbar-none
-      "
-    >
+    <div className="flex gap-1 overflow-x-auto max-w-full bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 scrollbar-none">
       {TIME_FRAMES.map((frame) => {
         const active = timeFrame === frame;
-
         return (
           <button
             key={frame}
             type="button"
             onClick={() => setTimeFrame(frame)}
-            className={`
-              shrink-0
-              px-3
-              sm:px-4
-              py-2
-              text-[11px]
-              font-bold
-              rounded-xl
-              transition-all
-              ${
-                active
-                  ? " bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-orange-500/20"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
-              }
-            `}
+            className={`shrink-0 px-3 sm:px-4 py-2 text-[11px] font-bold rounded-xl transition-all ${
+              active
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
+            }`}
           >
             {frame.charAt(0).toUpperCase() + frame.slice(1)}
           </button>
@@ -743,81 +340,6 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
       })}
     </div>
   );
-}
-
-function getMonthRange(monthKey) {
-  const [year, month] = monthKey.split("-").map(Number);
-
-  return {
-    start: new Date(year, month - 1, 1),
-    end: new Date(year, month, 0, 23, 59, 59, 999),
-  };
-}
-
-function getYearRange(year) {
-  return {
-    start: new Date(year, 0, 1),
-    end: new Date(year, 11, 31, 23, 59, 59, 999),
-  };
-}
-
-function getDateInputValue(dateValue) {
-  const d = new Date(dateValue);
-
-  if (Number.isNaN(d.getTime())) {
-    return new Date().toISOString().split("T")[0];
-  }
-
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function buildRecentMonths(count = 60) {
-  const result = [];
-  const now = new Date();
-
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-
-    result.push(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
-  }
-
-  return result;
-}
-
-function buildChartPoints(mode, periodValue) {
-  const points = [];
-
-  if (mode === "month") {
-    const [year, month] = periodValue.split("-").map(Number);
-
-    const days = new Date(year, month, 0).getDate();
-
-    for (let i = 1; i <= days; i++) {
-      points.push({
-        key: `${year}-${pad2(month)}-${pad2(i)}`,
-        date: new Date(year, month - 1, i),
-        label: String(i),
-        day: i,
-      });
-    }
-
-    return points;
-  }
-
-  const year = Number(periodValue);
-
-  for (let month = 0; month < 12; month++) {
-    points.push({
-      key: `${year}-${pad2(month + 1)}`,
-      date: new Date(year, month, 1),
-      label: new Date(year, month, 1).toLocaleDateString("en-IN", {
-        month: "short",
-      }),
-      month,
-    });
-  }
-
-  return points;
 }
 
 /* =========================================================
@@ -860,7 +382,6 @@ function Toast({ toasts }) {
           ) : (
             <Zap size={16} />
           )}
-
           <span className="text-xs sm:text-sm font-semibold">
             {toast.message}
           </span>
@@ -967,139 +488,6 @@ function CategoryPill({ cat }) {
 }
 
 /* =========================================================
-   PERIOD SELECTOR
-========================================================= */
-
-function PeriodSelector({
-  mode,
-  setMode,
-  month,
-  setMonth,
-  year,
-  setYear,
-  years,
-}) {
-  return (
-    <div
-      className="rounded-2xl border p-2 sm:p-2.5"
-      style={{
-        background: "#0b0f15",
-        borderColor: COLORS.border,
-      }}
-    >
-      <div className="flex flex-col sm:flex-row gap-2">
-        {/* Mode */}
-        <div
-          className="flex p-1 rounded-xl shrink-0"
-          style={{ background: "#141923" }}
-        >
-          <button
-            type="button"
-            onClick={() => setMode("month")}
-            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all"
-            style={
-              mode === "month"
-                ? {
-                    background: COLORS.green,
-                    color: "#06110d",
-                    boxShadow: "0 4px 18px #00e5a020",
-                  }
-                : {
-                    color: COLORS.textMuted,
-                  }
-            }
-          >
-            Month
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMode("year")}
-            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all"
-            style={
-              mode === "year"
-                ? {
-                    background: COLORS.green,
-                    color: "#06110d",
-                    boxShadow: "0 4px 18px #00e5a020",
-                  }
-                : {
-                    color: COLORS.textMuted,
-                  }
-            }
-          >
-            Year
-          </button>
-        </div>
-
-        {/* Period input */}
-        {mode === "month" ? (
-          <div className="relative flex-1 min-w-0">
-            <CalendarDays
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: COLORS.green }}
-            />
-
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="w-full h-[38px] pl-9 pr-3 rounded-xl text-xs font-bold outline-none appearance-none"
-              style={{
-                color: COLORS.text,
-                background: "#141923",
-                border: `1px solid ${COLORS.border}`,
-                colorScheme: "dark",
-              }}
-            />
-          </div>
-        ) : (
-          <div className="relative flex-1 min-w-0">
-            <CalendarDays
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: COLORS.green }}
-            />
-
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="w-full h-[38px] pl-9 pr-8 rounded-xl text-xs font-bold outline-none appearance-none"
-              style={{
-                color: COLORS.text,
-                background: "#141923",
-                border: `1px solid ${COLORS.border}`,
-              }}
-            >
-              {years.map((item) => (
-                <option
-                  key={item}
-                  value={item}
-                  style={{ background: "#141923" }}
-                >
-                  {item === getCurrentYear()
-                    ? `${item} — Current`
-                    : item === getCurrentYear() - 1
-                      ? `${item} — Previous Year`
-                      : item}
-                </option>
-              ))}
-            </select>
-
-            <ChevronDown
-              size={13}
-              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: COLORS.textMuted }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
    CATEGORY FILTER
 ========================================================= */
 
@@ -1115,7 +503,6 @@ function CategoryFilter({ value, onChange }) {
     };
 
     document.addEventListener("mousedown", handler);
-
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
@@ -1136,9 +523,7 @@ function CategoryFilter({ value, onChange }) {
         }}
       >
         <SlidersHorizontal size={13} />
-
         <span className="max-w-[100px] truncate">{current.label}</span>
-
         <ChevronDown
           size={12}
           className={`transition-transform ${open ? "rotate-180" : ""}`}
@@ -1184,9 +569,7 @@ function CategoryFilter({ value, onChange }) {
                       background: item.value === "all" ? COLORS.textDim : color,
                     }}
                   />
-
                   {item.label}
-
                   {active && <Check size={13} className="ml-auto" />}
                 </button>
               );
@@ -1199,7 +582,7 @@ function CategoryFilter({ value, onChange }) {
 }
 
 /* =========================================================
-   BREAKDOWN
+   INCOME BREAKDOWN
 ========================================================= */
 
 function IncomeBreakdown({ transactions }) {
@@ -1208,7 +591,6 @@ function IncomeBreakdown({ transactions }) {
 
     transactions.forEach((transaction) => {
       const category = transaction.category || "Other";
-
       map[category] = (map[category] || 0) + Number(transaction.amount || 0);
     });
 
@@ -1236,7 +618,6 @@ function IncomeBreakdown({ transactions }) {
           <h3 className="text-sm font-bold" style={{ color: COLORS.text }}>
             Income sources
           </h3>
-
           <p className="text-[10px] mt-1" style={{ color: COLORS.textDim }}>
             Where your money is coming from
           </p>
@@ -1259,14 +640,12 @@ function IncomeBreakdown({ transactions }) {
           style={{ background: "#0b0f15" }}
         >
           <Sparkles size={20} style={{ color: COLORS.textDim }} />
-
           <p
             className="text-xs font-semibold mt-3"
             style={{ color: COLORS.textMuted }}
           >
             No income sources
           </p>
-
           <p
             className="text-[10px] mt-1 max-w-[180px]"
             style={{ color: COLORS.textDim }}
@@ -1287,7 +666,6 @@ function IncomeBreakdown({ transactions }) {
                       className="h-2 w-2 rounded-full shrink-0"
                       style={{ background: color }}
                     />
-
                     <span
                       className="text-xs font-semibold truncate"
                       style={{ color: COLORS.text }}
@@ -1295,7 +673,6 @@ function IncomeBreakdown({ transactions }) {
                       {category.replace(/_/g, " ")}
                     </span>
                   </div>
-
                   <span
                     className="text-xs font-bold shrink-0"
                     style={{ color }}
@@ -1354,7 +731,6 @@ function CustomTooltip({ active, payload, label }) {
       <p className="text-[10px] mb-1" style={{ color: COLORS.textDim }}>
         {label}
       </p>
-
       <p className="text-sm font-black" style={{ color: COLORS.green }}>
         {formatFullINR(payload[0].value)}
       </p>
@@ -1382,9 +758,7 @@ function TransactionItem({
   });
 
   const category = transaction.category || "Extra_Income";
-
   const color = CATEGORY_COLOR[category] || COLORS.textMuted;
-
   const icon = CATEGORY_ICONS[category] || <IndianRupee size={16} />;
 
   const validate = () => {
@@ -1407,7 +781,6 @@ function TransactionItem({
     }
 
     setErrors(nextErrors);
-
     return !nextErrors.description && !nextErrors.amount;
   };
 
@@ -1449,7 +822,6 @@ function TransactionItem({
                 <span className="sm:hidden">
                   {formatTransactionDateMobile(transaction.date)}
                 </span>
-
                 <span className="hidden sm:inline">
                   {formatTransactionDate(transaction.date)}
                 </span>
@@ -1480,18 +852,11 @@ function TransactionItem({
                   category,
                   date: getDateInputValue(transaction.date),
                 });
-
-                setErrors({
-                  description: "",
-                  amount: "",
-                });
-
+                setErrors({ description: "", amount: "" });
                 setEditingId(transaction.id);
               }}
               className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-              style={{
-                color: COLORS.textDim,
-              }}
+              style={{ color: COLORS.textDim }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = COLORS.green;
                 e.currentTarget.style.background = `${COLORS.green}10`;
@@ -1509,9 +874,7 @@ function TransactionItem({
               type="button"
               onClick={() => onDelete(transaction.id)}
               className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-              style={{
-                color: COLORS.textDim,
-              }}
+              style={{ color: COLORS.textDim }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = COLORS.red;
                 e.currentTarget.style.background = `${COLORS.red}10`;
@@ -1525,7 +888,6 @@ function TransactionItem({
               <Trash2 size={13} />
             </button>
 
-            {/* Mobile menu buttons */}
             <div className="flex sm:hidden gap-1">
               <button
                 type="button"
@@ -1536,19 +898,11 @@ function TransactionItem({
                     category,
                     date: getDateInputValue(transaction.date),
                   });
-
-                  setErrors({
-                    description: "",
-                    amount: "",
-                  });
-
+                  setErrors({ description: "", amount: "" });
                   setEditingId(transaction.id);
                 }}
                 className="h-7 w-7 flex items-center justify-center rounded-lg"
-                style={{
-                  color: COLORS.textDim,
-                  background: "#141923",
-                }}
+                style={{ color: COLORS.textDim, background: "#141923" }}
               >
                 <Edit2 size={12} />
               </button>
@@ -1557,10 +911,7 @@ function TransactionItem({
                 type="button"
                 onClick={() => onDelete(transaction.id)}
                 className="h-7 w-7 flex items-center justify-center rounded-lg"
-                style={{
-                  color: COLORS.red,
-                  background: `${COLORS.red}08`,
-                }}
+                style={{ color: COLORS.red, background: `${COLORS.red}08` }}
               >
                 <Trash2 size={12} />
               </button>
@@ -1583,7 +934,6 @@ function TransactionItem({
               >
                 Description
               </label>
-
               <input
                 value={editForm.description}
                 onChange={(e) =>
@@ -1602,7 +952,6 @@ function TransactionItem({
                 }}
                 placeholder="Income description"
               />
-
               {errors.description && (
                 <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
                   {errors.description}
@@ -1618,7 +967,6 @@ function TransactionItem({
                 >
                   Amount
                 </label>
-
                 <input
                   type="number"
                   min="0"
@@ -1640,7 +988,6 @@ function TransactionItem({
                   }}
                   placeholder="Amount"
                 />
-
                 {errors.amount && (
                   <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
                     {errors.amount}
@@ -1655,7 +1002,6 @@ function TransactionItem({
                 >
                   Category
                 </label>
-
                 <select
                   value={editForm.category}
                   onChange={(e) =>
@@ -1672,13 +1018,7 @@ function TransactionItem({
                   }}
                 >
                   {INCOME_CATEGORIES.map((item) => (
-                    <option
-                      key={item}
-                      value={item}
-                      style={{
-                        background: "#141923",
-                      }}
-                    >
+                    <option key={item} value={item}>
                       {item.replace(/_/g, " ")}
                     </option>
                   ))}
@@ -1692,7 +1032,6 @@ function TransactionItem({
                 >
                   Date
                 </label>
-
                 <input
                   type="date"
                   value={editForm.date}
@@ -1734,11 +1073,7 @@ function TransactionItem({
               <button
                 type="button"
                 onClick={() => {
-                  setErrors({
-                    description: "",
-                    amount: "",
-                  });
-
+                  setErrors({ description: "", amount: "" });
                   onCancel();
                 }}
                 className="h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
@@ -1879,38 +1214,26 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
 }
 
 /* =========================================================
-   MAIN
+   MAIN COMPONENT
 ========================================================= */
 
 const Income = () => {
-  const {
-    transactions: outletTransactions = [],
-    refreshTransactions = () => {},
-  } = useOutletContext();
+ const {
+   transactions: outletTransactions = [],
+   refreshTransactions = () => {},
+   timeFrame,
+   setTimeFrame,
+ } = useOutletContext() || {};
 
   const [showModal, setShowModal] = useState(false);
-
   const [editingId, setEditingId] = useState(null);
-
   const [deleteTarget, setDeleteTarget] = useState(null);
-
   const [loading, setLoading] = useState(false);
-
   const [toasts, setToasts] = useState([]);
-
   const [search, setSearch] = useState("");
-
   const [categoryFilter, setCategoryFilter] = useState("all");
-
   const [showAll, setShowAll] = useState(false);
-
-  const [periodMode, setPeriodMode] = useState("month");
-
-  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
-
   const [selectedYear, setSelectedYear] = useState(getCurrentYear());
-
-  const [timeFrame, setTimeFrame] = useState("monthly");
 
   const currentYear = getCurrentYear();
 
@@ -1951,20 +1274,6 @@ const Income = () => {
   }, []);
 
   /* -----------------------------------------
-     AUTH
-  ----------------------------------------- */
-
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem("token");
-
-    return token
-      ? {
-          Authorization: `Bearer ${token}`,
-        }
-      : {};
-  }, []);
-
-  /* -----------------------------------------
      INCOME TRANSACTIONS
   ----------------------------------------- */
 
@@ -1975,79 +1284,26 @@ const Income = () => {
   }, [outletTransactions]);
 
   /* -----------------------------------------
-     AVAILABLE MONTHS
+     TIMEFRAME RANGE & TRANSACTIONS
   ----------------------------------------- */
 
-  const availableMonths = useMemo(() => {
-    const set = new Set(buildRecentMonths(60));
+  const timeFrameRange = useMemo(
+    () => getTimeFrameRange(timeFrame, selectedYear),
+    [timeFrame, selectedYear],
+  );
 
-    incomeTransactions.forEach((transaction) => {
-      const key = getMonthKey(transaction.date);
-
-      if (key) set.add(key);
-    });
-
-    return [...set].sort((a, b) => b.localeCompare(a));
-  }, [incomeTransactions]);
-
-  /* -----------------------------------------
-     AVAILABLE YEARS
-  ----------------------------------------- */
-
-  const availableYears = useMemo(() => {
-    const set = new Set();
-
-    const currentYear = getCurrentYear();
-
-    for (let year = currentYear; year >= currentYear - 10; year--) {
-      set.add(year);
-    }
-
-    incomeTransactions.forEach((transaction) => {
-      const year = getYear(transaction.date);
-
-      if (year) set.add(year);
-    });
-
-    return [...set].sort((a, b) => b - a);
-  }, [incomeTransactions]);
-
-  /* -----------------------------------------
-     PERIOD RANGE
-  ----------------------------------------- */
-
-  const periodRange = useMemo(() => {
-    if (periodMode === "month") {
-      return getMonthRange(selectedMonth);
-    }
-
-    return getYearRange(selectedYear);
-  }, [periodMode, selectedMonth, selectedYear]);
-
-  const periodLabel = useMemo(() => {
-    if (periodMode === "month") {
-      return formatMonthLabel(selectedMonth);
-    }
-
-    return String(selectedYear);
-  }, [periodMode, selectedMonth, selectedYear]);
-
-  /* -----------------------------------------
-     PERIOD TRANSACTIONS
-  ----------------------------------------- */
-
-  const periodTransactions = useMemo(() => {
+  const timeFrameTransactions = useMemo(() => {
     return incomeTransactions.filter((transaction) =>
-      isDateInRange(transaction.date, periodRange.start, periodRange.end),
+      isDateInRange(transaction.date, timeFrameRange.start, timeFrameRange.end),
     );
-  }, [incomeTransactions, periodRange]);
+  }, [incomeTransactions, timeFrameRange]);
 
   /* -----------------------------------------
      FILTERED TRANSACTIONS
   ----------------------------------------- */
 
   const filteredTransactions = useMemo(() => {
-    let list = [...periodTransactions];
+    let list = [...timeFrameTransactions];
 
     if (categoryFilter !== "all") {
       list = list.filter(
@@ -2062,7 +1318,6 @@ const Income = () => {
     if (query) {
       list = list.filter((transaction) => {
         const description = String(transaction.description || "").toLowerCase();
-
         const category = String(transaction.category || "").toLowerCase();
 
         return description.includes(query) || category.includes(query);
@@ -2070,7 +1325,7 @@ const Income = () => {
     }
 
     return list.sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [periodTransactions, categoryFilter, search]);
+  }, [timeFrameTransactions, categoryFilter, search]);
 
   /* -----------------------------------------
      KPI
@@ -2103,41 +1358,6 @@ const Income = () => {
     [filteredTransactions],
   );
 
-  const totalCount = filteredTransactions.length;
-
-  /* -----------------------------------------
-     PREVIOUS PERIOD COMPARISON
-  ----------------------------------------- */
-
-  const previousPeriodIncome = useMemo(() => {
-    let start;
-    let end;
-
-    if (periodMode === "month") {
-      const [year, month] = selectedMonth.split("-").map(Number);
-
-      start = new Date(year, month - 2, 1);
-
-      end = new Date(year, month - 1, 0, 23, 59, 59, 999);
-    } else {
-      start = new Date(selectedYear - 1, 0, 1);
-
-      end = new Date(selectedYear - 1, 11, 31, 23, 59, 59, 999);
-    }
-
-    return incomeTransactions
-      .filter((transaction) => isDateInRange(transaction.date, start, end))
-      .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  }, [incomeTransactions, periodMode, selectedMonth, selectedYear]);
-
-  const incomeChange = useMemo(() => {
-    if (previousPeriodIncome === 0) {
-      return totalIncome > 0 ? 100 : 0;
-    }
-
-    return ((totalIncome - previousPeriodIncome) / previousPeriodIncome) * 100;
-  }, [totalIncome, previousPeriodIncome]);
-
   /* -----------------------------------------
      CHART
   ----------------------------------------- */
@@ -2145,19 +1365,21 @@ const Income = () => {
   const chartPoints = useMemo(
     () =>
       buildChartPoints(
-        periodMode,
-        periodMode === "month" ? selectedMonth : String(selectedYear),
+        timeFrame === "daily" || timeFrame === "weekly" ? "month" : timeFrame,
+        timeFrame === "daily" || timeFrame === "weekly"
+          ? new Date().toISOString().split("T")[0].slice(0, 7)
+          : String(selectedYear),
       ),
-    [periodMode, selectedMonth, selectedYear],
+    [timeFrame, selectedYear],
   );
 
   const chartData = useMemo(() => {
     return chartPoints.map((point) => {
-      const income = periodTransactions
+      const income = timeFrameTransactions
         .filter((transaction) => {
           const d = new Date(transaction.date);
 
-          if (periodMode === "month") {
+          if (timeFrame === "daily" || timeFrame === "weekly") {
             return d.getDate() === point.day;
           }
 
@@ -2170,9 +1392,14 @@ const Income = () => {
         income,
       };
     });
-  }, [chartPoints, periodTransactions, periodMode]);
+  }, [chartPoints, timeFrameTransactions, timeFrame]);
 
-  const chartLabel = periodMode === "month" ? "Daily income" : "Monthly income";
+  const chartLabel =
+    timeFrame === "daily" || timeFrame === "weekly"
+      ? "Daily income"
+      : timeFrame === "monthly"
+        ? "Monthly income"
+        : "Yearly income";
 
   /* -----------------------------------------
      VISIBLE TRANSACTIONS
@@ -2190,9 +1417,6 @@ const Income = () => {
     setSearch("");
     setCategoryFilter("all");
     setShowAll(false);
-    setPeriodMode("month");
-    setSelectedMonth(getCurrentMonthKey());
-    setSelectedYear(getCurrentYear());
   }, []);
 
   /* -----------------------------------------
@@ -2201,7 +1425,6 @@ const Income = () => {
 
   const handleAddTransaction = useCallback(async () => {
     const description = String(newTransaction.description || "").trim();
-
     const amount = Number(newTransaction.amount);
 
     if (!description) {
@@ -2254,7 +1477,7 @@ const Income = () => {
     } finally {
       setLoading(false);
     }
-  }, [newTransaction, getAuthHeaders, refreshTransactions, addToast]);
+  }, [newTransaction, refreshTransactions, addToast]);
 
   /* -----------------------------------------
      EDIT
@@ -2264,7 +1487,6 @@ const Income = () => {
     if (!editingId) return;
 
     const description = String(editForm.description || "").trim();
-
     const amount = Number(editForm.amount);
 
     if (!description) {
@@ -2306,7 +1528,7 @@ const Income = () => {
     } finally {
       setLoading(false);
     }
-  }, [editingId, editForm, getAuthHeaders, refreshTransactions, addToast]);
+  }, [editingId, editForm, refreshTransactions, addToast]);
 
   /* -----------------------------------------
      DELETE
@@ -2332,7 +1554,7 @@ const Income = () => {
     } finally {
       setLoading(false);
     }
-  }, [deleteTarget, getAuthHeaders, refreshTransactions, addToast]);
+  }, [deleteTarget, refreshTransactions, addToast]);
 
   /* -----------------------------------------
      EXPORT
@@ -2382,13 +1604,7 @@ const Income = () => {
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders, addToast]);
-
-  const handleYearChange = useCallback((year) => {
-    setSelectedYear(year);
-    setShowAll(false);
-    setCategoryFilter("all");
-  }, []);
+  }, [addToast]);
 
   /* -----------------------------------------
      UI
@@ -2427,84 +1643,63 @@ const Income = () => {
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
-
-    .dark .recharts-cartesian-grid line {
-      stroke: #1e293b !important;
-    }
-
-    .dark .recharts-cartesian-axis-tick text {
-      fill: #64748b !important;
-    }
-
-    .recharts-tooltip-cursor {
-      fill: rgba(16,185,129,.08);
-    }
   `}</style>
 
       <Toast toasts={toasts} />
 
       <div className="min-h-screen pb-24 space-y-4 sm:space-y-5">
-        {/* ---------------------------------------------------------------- */}
-        {/* HEADER                                                           */}
-        {/* ---------------------------------------------------------------- */}
-
+        {/* HEADER */}
         <section
           className="
-        relative
-        overflow-hidden
-        rounded-[0.25rem]
-        sm:rounded-[2rem]
-        border
-        border-white/70
-        dark:border-slate-700
-        bg-gradient-to-br
-        from-white
-        via-emerald-50/50
-        to-violet-50/70
-        dark:from-slate-900
-        dark:via-slate-900
-        dark:to-emerald-950/30
-        p-4
-        sm:p-6
-        shadow-[0_20px_60px_rgba(16,185,129,0.08)]
-      "
+    relative
+    overflow-hidden
+    rounded-[0.25rem]
+    sm:rounded-[2rem]
+    border
+    border-white/70
+    dark:border-slate-700
+    bg-gradient-to-br
+    from-white
+    via-emerald-50/50
+    to-violet-50/70
+    dark:from-slate-900
+    dark:via-slate-900
+    dark:to-emerald-950/30
+    p-4
+    sm:p-6
+    shadow-[0_20px_60px_rgba(16,185,129,0.08)]
+  "
         >
           <div className="absolute -right-20 -top-20 w-52 h-52 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="absolute -left-20 -bottom-20 w-52 h-52 rounded-full bg-violet-500/10 blur-3xl" />
 
           <div className="relative">
-            {/* HEADER CARD */}
-
             <div
               className="
-            flex flex-col gap-5
-            rounded-2xl
-            border border-slate-200/70
-            bg-white/80
-            p-4
-            shadow-sm
-            backdrop-blur-xl
-            dark:border-slate-800/80
-            dark:bg-slate-950/70
-            sm:p-5
-            lg:p-6
-          "
+        flex flex-col gap-5
+        rounded-2xl
+        border border-slate-200/70
+        bg-white/80
+        p-4
+        shadow-sm
+        backdrop-blur-xl
+        dark:border-slate-800/80
+        dark:bg-slate-950/70
+        sm:p-5
+        lg:p-6
+      "
             >
-              {/* Top row */}
-
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                {/* Title */}
-
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2 shrink-0">
                       <span
                         className="
-                      absolute inset-0
-                      animate-ping
-                      rounded-full
-                      bg-emerald-400/60
-                    "
+                  absolute inset-0
+                  animate-ping
+                  rounded-full
+                  bg-emerald-400/60
+                "
                       />
 
                       <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
@@ -2512,12 +1707,12 @@ const Income = () => {
 
                     <span
                       className="
-                    text-[9px]
-                    font-black
-                    uppercase
-                    tracking-[0.2em]
-                    text-emerald-500
-                  "
+                text-[9px]
+                font-black
+                uppercase
+                tracking-[0.2em]
+                text-emerald-500
+              "
                     >
                       Income Intelligence
                     </span>
@@ -2526,14 +1721,14 @@ const Income = () => {
                   <div className="mt-2 flex flex-col gap-1">
                     <h1
                       className="
-                    text-2xl
-                    font-black
-                    tracking-[-0.03em]
-                    text-slate-900
-                    dark:text-white
-                    sm:text-3xl
-                    lg:text-[32px]
-                  "
+                text-2xl
+                font-black
+                tracking-[-0.03em]
+                text-slate-900
+                dark:text-white
+                sm:text-3xl
+                lg:text-[32px]
+              "
                     >
                       Income Tracker
                     </h1>
@@ -2541,62 +1736,58 @@ const Income = () => {
                     <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
                       Smart income insights for{" "}
                       <span className="font-bold text-slate-700 dark:text-slate-200">
-                        {periodLabel}
+                        {timeFrameRange.label}
                       </span>
                     </p>
                   </div>
                 </div>
 
-                {/* Actions */}
-
                 <div
                   className="
-                flex w-full items-center gap-2
-                lg:w-auto
-                lg:shrink-0
-              "
+            flex w-full items-center gap-2
+            lg:w-auto
+            lg:shrink-0
+          "
                 >
-                  {/* Export */}
-
                   <button
                     type="button"
                     onClick={handleExport}
                     disabled={loading}
                     aria-label="Export income"
                     className="
-                  inline-flex
-                  h-10
-                  shrink-0
-                  items-center
-                  justify-center
-                  gap-2
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-3
-                  text-xs
-                  font-bold
-                  text-slate-600
-                  shadow-sm
-                  transition-all
-                  hover:border-slate-300
-                  hover:bg-slate-50
-                  hover:text-slate-900
-                  active:scale-[.97]
-                  disabled:cursor-not-allowed
-                  disabled:opacity-50
-                  dark:border-slate-700
-                  dark:bg-slate-900
-                  dark:text-slate-300
-                  dark:hover:border-slate-600
-                  dark:hover:bg-slate-800
-                  dark:hover:text-white
-                  focus:outline-none
-                  focus:ring-2
-                  focus:ring-emerald-500/20
-                  sm:px-3.5
-                "
+              inline-flex
+              h-10
+              shrink-0
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border
+              border-slate-200
+              bg-white
+              px-3
+              text-xs
+              font-bold
+              text-slate-600
+              shadow-sm
+              transition-all
+              hover:border-slate-300
+              hover:bg-slate-50
+              hover:text-slate-900
+              active:scale-[.97]
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+              dark:border-slate-700
+              dark:bg-slate-900
+              dark:text-slate-300
+              dark:hover:border-slate-600
+              dark:hover:bg-slate-800
+              dark:hover:text-white
+              focus:outline-none
+              focus:ring-2
+              focus:ring-emerald-500/20
+              sm:px-3.5
+            "
                   >
                     {loading ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -2609,39 +1800,37 @@ const Income = () => {
                     </span>
                   </button>
 
-                  {/* Primary CTA */}
-
                   <button
                     type="button"
                     onClick={() => setShowModal(true)}
                     className="
-                  group
-                  inline-flex
-                  h-10
-                  shrink-0
-                  items-center
-                  justify-center
-                  gap-2
-                  rounded-xl
-                  bg-gradient-to-r
-                  from-emerald-500
-                  to-teal-500
-                  px-3.5
-                  text-xs
-                  font-black
-                  text-white
-                  shadow-lg
-                  shadow-emerald-500/20
-                  transition-all
-                  hover:-translate-y-0.5
-                  hover:shadow-xl
-                  hover:shadow-emerald-500/30
-                  active:scale-[.97]
-                  focus:outline-none
-                  focus:ring-2
-                  focus:ring-emerald-500/30
-                  sm:px-4
-                "
+              group
+              inline-flex
+              h-10
+              shrink-0
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              bg-gradient-to-r
+              from-emerald-500
+              to-teal-500
+              px-3.5
+              text-xs
+              font-black
+              text-white
+              shadow-lg
+              shadow-emerald-500/20
+              transition-all
+              hover:-translate-y-0.5
+              hover:shadow-xl
+              hover:shadow-emerald-500/30
+              active:scale-[.97]
+              focus:outline-none
+              focus:ring-2
+              focus:ring-emerald-500/30
+              sm:px-4
+            "
                   >
                     <Plus
                       size={15}
@@ -2654,39 +1843,36 @@ const Income = () => {
                 </div>
               </div>
 
-              {/* Divider */}
-
               <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
 
-              {/* Filters row */}
               <div
                 className="
-        flex flex-col gap-3
-        sm:flex-row
-        sm:items-center
-        sm:justify-between
-      "
+          flex flex-col gap-3
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
               >
-                {/* Timeframe */}
                 <div className="min-w-0 overflow-x-auto scrollbar-none">
                   <TimeFrameSelector
                     timeFrame={timeFrame}
                     setTimeFrame={(value) => {
                       setTimeFrame(value);
                       setShowAll(false);
+                      setCategoryFilter("all");
                     }}
                   />
                 </div>
+
                 <div className="min-w-0 flex-1 sm:flex-none">
                   <YearSelector
                     selectedYear={selectedYear}
-                    setSelectedYear={handleYearChange}
+                    setSelectedYear={setSelectedYear}
                     currentYear={currentYear}
                   />
                 </div>
               </div>
 
-              {/* Selected year indicator */}
               {selectedYear !== currentYear && (
                 <div
                   className="
@@ -2718,19 +1904,14 @@ const Income = () => {
           </div>
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* STAT CARDS                                                       */}
-        {/* ---------------------------------------------------------------- */}
-
+        {/* STAT CARDS */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             label="Total income"
             value={fmtINR(totalIncome)}
-            sub={periodLabel}
+            sub={timeFrameRange.label}
             icon={TrendingUp}
             accent="#10b981"
-            trend={incomeChange}
-            trendLabel="vs previous period"
           />
 
           <StatCard
@@ -2762,90 +1943,8 @@ const Income = () => {
           />
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* YEAR / PERIOD COMPARISON                                         */}
-        {/* ---------------------------------------------------------------- */}
-
-        {incomeChange !== undefined && (
-          <section
-            className="
-          rounded-3xl
-          border
-          border-emerald-100
-          dark:border-emerald-500/20
-          bg-gradient-to-br
-          from-emerald-50/70
-          via-white
-          to-violet-50/50
-          dark:from-emerald-500/10
-          dark:via-slate-900
-          dark:to-violet-500/10
-          p-4
-          sm:p-5
-          shadow-[0_12px_40px_rgba(16,185,129,0.06)]
-        "
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                  <TrendingUp size={17} className="text-emerald-500" />
-                </div>
-
-                <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.15em] text-emerald-500">
-                    Income performance
-                  </p>
-
-                  <h3 className="mt-0.5 text-sm font-black text-slate-800 dark:text-white">
-                    {incomeChange > 0
-                      ? "Income is trending upward"
-                      : incomeChange < 0
-                        ? "Income is trending downward"
-                        : "Income is stable"}
-                  </h3>
-                </div>
-              </div>
-
-              <div
-                className={`
-              inline-flex
-              w-fit
-              items-center
-              gap-2
-              rounded-xl
-              px-3
-              py-2
-              text-[10px]
-              font-black
-              ${
-                incomeChange > 0
-                  ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                  : incomeChange < 0
-                    ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
-              }
-            `}
-              >
-                {incomeChange > 0 ? (
-                  <TrendingUp size={12} />
-                ) : incomeChange < 0 ? (
-                  <TrendingDown size={12} />
-                ) : (
-                  <BarChart2 size={12} />
-                )}
-                {Math.abs(incomeChange).toFixed(0)}% vs previous period
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* ---------------------------------------------------------------- */}
-        {/* CHART + BREAKDOWN                                                */}
-        {/* ---------------------------------------------------------------- */}
-
+        {/* CHART + BREAKDOWN */}
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          {/* Chart */}
-
           <div
             className="
           xl:col-span-2
@@ -2874,13 +1973,8 @@ const Income = () => {
                 </div>
 
                 <p className="mt-1 ml-10 text-[10px] text-slate-400">
-                  {periodLabel}
+                  {timeFrameRange.label}
                 </p>
-              </div>
-
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                {fmtINR(totalIncome)}
               </div>
             </div>
 
@@ -2933,7 +2027,7 @@ const Income = () => {
                         fontSize: 9,
                       }}
                       interval={
-                        periodMode === "month"
+                        timeFrame === "monthly"
                           ? chartData.length > 20
                             ? 4
                             : 2
@@ -2963,7 +2057,7 @@ const Income = () => {
                       dataKey="income"
                       fill="url(#premiumIncomeGradient)"
                       radius={[6, 6, 0, 0]}
-                      maxBarSize={periodMode === "month" ? 18 : 32}
+                      maxBarSize={timeFrame === "monthly" ? 18 : 32}
                     >
                       {chartData.map((item, index) => (
                         <Cell
@@ -2973,23 +2067,6 @@ const Income = () => {
                         />
                       ))}
                     </Bar>
-
-                    {periodMode === "year" &&
-                      chartData.some(
-                        (item) =>
-                          item.month === new Date().getMonth() &&
-                          selectedYear === getCurrentYear(),
-                      ) && (
-                        <ReferenceLine
-                          x={new Date().toLocaleDateString("en-IN", {
-                            month: "short",
-                          })}
-                          stroke="#10b981"
-                          strokeWidth={1.5}
-                          strokeDasharray="4 4"
-                          strokeOpacity={0.4}
-                        />
-                      )}
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -3013,15 +2090,10 @@ const Income = () => {
             </div>
           </div>
 
-          {/* Breakdown */}
-
           <IncomeBreakdown transactions={filteredTransactions} />
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* TRANSACTIONS                                                     */}
-        {/* ---------------------------------------------------------------- */}
-
+        {/* TRANSACTIONS */}
         <section
           className="
         rounded-3xl
@@ -3035,8 +2107,6 @@ const Income = () => {
         dark:shadow-black/20
       "
         >
-          {/* Toolbar */}
-
           <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -3056,14 +2126,12 @@ const Income = () => {
                   </div>
 
                   <p className="mt-0.5 text-[10px] text-slate-400">
-                    {periodLabel}
+                    {timeFrameRange.label}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Search */}
-
                 <div className="relative flex-1 sm:flex-none">
                   <Search
                     size={13}
@@ -3130,8 +2198,6 @@ const Income = () => {
                   )}
                 </div>
 
-                {/* Category */}
-
                 <CategoryFilter
                   value={categoryFilter}
                   onChange={(value) => {
@@ -3139,8 +2205,6 @@ const Income = () => {
                     setShowAll(false);
                   }}
                 />
-
-                {/* Reset */}
 
                 {(search || categoryFilter !== "all") && (
                   <button
@@ -3168,75 +2232,7 @@ const Income = () => {
                 )}
               </div>
             </div>
-
-            {/* Active filters */}
-
-            {(search || categoryFilter !== "all") && (
-              <div className="mt-3 flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">
-                  Active filters:
-                </span>
-
-                {categoryFilter !== "all" && (
-                  <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
-                    {categoryFilter.replace(/_/g, " ")}
-                  </span>
-                )}
-
-                {search && (
-                  <span className="max-w-[150px] truncate px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
-                    "{search}"
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="ml-auto flex items-center gap-1 text-[9px] font-black text-emerald-500"
-                >
-                  <RotateCcw size={10} />
-                  Clear
-                </button>
-              </div>
-            )}
           </div>
-
-          {/* Desktop column header */}
-
-          <div
-            className="
-          hidden
-          md:grid
-          grid-cols-[110px_150px_1fr_150px_100px]
-          gap-3
-          px-5
-          py-2.5
-          bg-slate-50/70
-          dark:bg-slate-950/40
-          border-b
-          border-slate-100
-          dark:border-slate-800
-        "
-          >
-            {["Date", "Amount", "Description", "Category", "Actions"].map(
-              (heading) => (
-                <span
-                  key={heading}
-                  className="
-                text-[9px]
-                font-black
-                uppercase
-                tracking-[0.14em]
-                text-slate-400
-              "
-                >
-                  {heading}
-                </span>
-              ),
-            )}
-          </div>
-
-          {/* Transaction list */}
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {visibleTransactions.length > 0 ? (
@@ -3279,7 +2275,7 @@ const Income = () => {
                 <p className="mt-1 max-w-xs text-xs text-slate-400">
                   {search || categoryFilter !== "all"
                     ? "Try changing your search or filters."
-                    : `No income recorded for ${periodLabel}.`}
+                    : `No income recorded for ${timeFrameRange.label}.`}
                 </p>
 
                 {search || categoryFilter !== "all" ? (
@@ -3335,8 +2331,6 @@ const Income = () => {
             )}
           </div>
 
-          {/* Pagination */}
-
           {filteredTransactions.length > 10 && (
             <div className="border-t border-slate-100 dark:border-slate-800">
               {!showAll ? (
@@ -3388,61 +2382,7 @@ const Income = () => {
           )}
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* FOOTER INSIGHT                                                   */}
-        {/* ---------------------------------------------------------------- */}
-
-        <section
-          className="
-        rounded-3xl
-        border
-        border-emerald-100
-        dark:border-emerald-500/20
-        bg-gradient-to-br
-        from-emerald-50/70
-        via-white
-        to-violet-50/50
-        dark:from-emerald-500/10
-        dark:via-slate-900
-        dark:to-violet-500/10
-        p-4
-        sm:p-5
-        shadow-[0_12px_40px_rgba(16,185,129,0.05)]
-      "
-        >
-          <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
-              <Sparkles size={15} className="text-emerald-500" />
-            </div>
-
-            <div>
-              <p className="text-xs font-black text-slate-800 dark:text-white">
-                Income insight
-              </p>
-
-              <p className="text-[10px] sm:text-xs leading-relaxed mt-1 text-slate-500 dark:text-slate-400">
-                {totalIncome > 0
-                  ? `You earned ${formatFullINR(totalIncome)} during ${periodLabel}. ${
-                      incomeChange > 0
-                        ? `That's ${Math.abs(incomeChange).toFixed(
-                            0,
-                          )}% higher than the previous period.`
-                        : incomeChange < 0
-                          ? `That's ${Math.abs(incomeChange).toFixed(
-                              0,
-                            )}% lower than the previous period.`
-                          : "Your income is unchanged compared with the previous period."
-                    }`
-                  : `Start adding income transactions for ${periodLabel} to unlock detailed income insights.`}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* MOBILE QUICK ADD                                                 */}
-        {/* ---------------------------------------------------------------- */}
-
+        {/* MOBILE QUICK ADD */}
         <button
           type="button"
           onClick={() => setShowModal(true)}
@@ -3473,10 +2413,6 @@ const Income = () => {
         </button>
       </div>
 
-      {/* ================================================================ */}
-      {/* ADD MODAL                                                        */}
-      {/* ================================================================ */}
-
       <AddTransactionModal
         showModal={showModal}
         setShowModal={setShowModal}
@@ -3486,10 +2422,6 @@ const Income = () => {
         loading={loading}
         lockType="income"
       />
-
-      {/* ================================================================ */}
-      {/* DELETE                                                            */}
-      {/* ================================================================ */}
 
       {deleteTarget && (
         <DeleteModal

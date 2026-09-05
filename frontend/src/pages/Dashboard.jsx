@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -16,8 +16,11 @@ import {
 } from "../components/Helpers";
 
 import AddTransactionModal from "../components/Add";
+import YearSelector from "../components/common/YearSelector";
+import Toast from "../components/common/Toast.common";
 
 import { INCOME_CATEGORY_ICONS, EXPENSE_CATEGORY_ICONS } from "../assets/color";
+
 
 import {
   ResponsiveContainer,
@@ -34,18 +37,14 @@ import {
 
 import {
   Activity,
-  AlertCircle,
   ArrowUpRight,
   BarChart2,
-  Check,
-  ChevronDown,
   Download,
   Plus,
   PieChart as PieChartIcon,
   RefreshCw,
   Target,
   X,
-  Zap,
 } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
@@ -248,75 +247,10 @@ function getErrorMessage(error, fallback) {
   );
 }
 
-/* ============================================================================
-   TOAST
-============================================================================ */
-
-function Toast({ toasts }) {
-  return (
-    <div
-      className="pointer-events-none fixed right-4 top-4 z-[9999] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2 sm:right-5 sm:top-5"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {toasts.map((toast) => {
-        const isSuccess = toast.type === "success";
-        const isError = toast.type === "error";
-
-        return (
-          <div
-            key={toast.id}
-            className="pointer-events-auto flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl"
-            style={{
-              animation: "toastSlide .35s cubic-bezier(.34,1.56,.64,1) both",
-              background: isSuccess
-                ? "linear-gradient(135deg,rgba(5,35,27,.96),rgba(7,48,35,.96))"
-                : isError
-                  ? "linear-gradient(135deg,rgba(42,10,10,.96),rgba(58,12,12,.96))"
-                  : "linear-gradient(135deg,rgba(18,7,31,.96),rgba(28,13,46,.96))",
-              borderColor: isSuccess
-                ? "#065f3c"
-                : isError
-                  ? "#7f1d1d"
-                  : "#3b1e6e",
-            }}
-          >
-            <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-              style={{
-                background: isSuccess
-                  ? "#10b98120"
-                  : isError
-                    ? "#ef444420"
-                    : "#7c3aed20",
-              }}
-            >
-              {isSuccess ? (
-                <Check size={13} color="#10b981" />
-              ) : isError ? (
-                <AlertCircle size={13} color="#ef4444" />
-              ) : (
-                <Zap size={13} color="#a855f7" />
-              )}
-            </span>
-
-            <span
-              className="text-xs font-semibold leading-5"
-              style={{
-                color: isSuccess ? "#34d399" : isError ? "#f87171" : "#c4b5fd",
-              }}
-            >
-              {toast.message}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+<Toast toasts={Toast} variant="dark" />;
 
 /* ============================================================================
-   DASHBOARD HEADER
+   DASHBOARD HEADER - UPDATED WITH YEAR SELECTOR
 ============================================================================ */
 
 function DashboardHeader({
@@ -326,9 +260,10 @@ function DashboardHeader({
   handleExport,
   onAddTransaction,
   exporting,
+  selectedYear = 2024,
+  onYearChange = () => {},
+  currentYear = 2024,
 }) {
-  const currentYear = getCurrentYear();
-
   return (
     <section className="relative overflow-hidden rounded-[24px] border border-[#1a2035] bg-[#0E1320] p-5 shadow-[0_8px_40px_rgba(0,0,0,.35)] sm:p-6 lg:p-7">
       <div
@@ -422,28 +357,13 @@ function DashboardHeader({
             </div>
           </div>
 
-          <div className="flex w-full items-center justify-between gap-2 xl:w-auto xl:justify-end">
-            <div className="flex h-11 items-center overflow-hidden rounded-xl border border-[#7c3aed40] bg-[#0a0f1e]">
-              <div className="flex h-full items-center gap-2 border-r border-[#1a2035] px-3">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#7c3aed15]">
-                  <BarChart2 size={12} color="#a78bfa" />
-                </div>
-
-                <span className="text-xs font-bold tabular-nums text-[#e2e8f0]">
-                  {currentYear}
-                </span>
-              </div>
-
-              <div className="flex h-full items-center gap-2 px-3">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,.8)]" />
-
-                <span className="text-[10px] font-bold text-[#9ca3af]">
-                  Current
-                </span>
-
-                <ChevronDown size={12} color="#374151" />
-              </div>
-            </div>
+          {/* YEAR SELECTOR - ADDED HERE */}
+          <div className="flex w-full items-center justify-end gap-2 xl:w-auto">
+            <YearSelector
+              selectedYear={selectedYear}
+              onYearChange={onYearChange}
+              currentYear={currentYear}
+            />
           </div>
         </div>
       </div>
@@ -1094,6 +1014,7 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(getCurrentYear());
 
   const [overviewMeta, setOverviewMeta] = useState({
     monthlyIncome: null,
@@ -1157,6 +1078,15 @@ const Dashboard = () => {
     }, 3500);
 
     toastTimersRef.current.set(id, timer);
+  }, []);
+
+  /* --------------------------------------------------------------------------
+     YEAR CHANGE HANDLER - ADDED
+  -------------------------------------------------------------------------- */
+
+  const handleYearChange = useCallback((year) => {
+    setSelectedYear(year);
+    // Add any additional logic when year changes if needed
   }, []);
 
   /* --------------------------------------------------------------------------
@@ -1881,9 +1811,7 @@ const Dashboard = () => {
 
       <Toast toasts={toasts} />
 
-      {/* --------------------------------------------------------------------
-          MODALS
-      --------------------------------------------------------------------- */}
+      {/* MODALS */}
 
       <TransactionsModal
         open={showIncomeModal}
@@ -1903,13 +1831,11 @@ const Dashboard = () => {
         type="expense"
       />
 
-      {/* --------------------------------------------------------------------
-          PAGE
-      --------------------------------------------------------------------- */}
+      {/* PAGE */}
 
       <main className="min-h-screen bg-[#080b12] px-3 py-3 text-slate-200 sm:px-5 sm:py-5 lg:px-6">
         <div className="mx-auto max-w-[1500px] space-y-4">
-          {/* HEADER */}
+          {/* HEADER - UPDATED WITH YEAR SELECTOR */}
 
           <div className="dashboard-fade">
             <DashboardHeader
@@ -1919,6 +1845,9 @@ const Dashboard = () => {
               handleExport={handleExport}
               onAddTransaction={() => setShowModal(true)}
               exporting={exporting}
+              selectedYear={selectedYear}
+              onYearChange={handleYearChange}
+              currentYear={getCurrentYear()}
             />
           </div>
 

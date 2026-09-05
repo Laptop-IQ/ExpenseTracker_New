@@ -972,32 +972,6 @@ const Layout = ({ onLogout, user }) => {
             </div>
           </header>
 
-          {/* ================================================================
-              FILTER BAR
-          ================================================================ */}
-
-          <div className="dashboard-toolbar">
-            <div>
-              <span className="toolbar-label">Overview period</span>
-            </div>
-
-            <div className="period-switch">
-              {Object.entries(timeframeLabels).map(([key, label]) => (
-                <button
-                  type="button"
-                  key={key}
-                  className={timeFrame === key ? "active" : ""}
-                  onClick={() => setTimeFrame(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ================================================================
-              STATS
-          ================================================================ */}
 
           <section className="stats-grid">
             <StatCard
