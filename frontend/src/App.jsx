@@ -1,12 +1,13 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
 import ContactUs from "./pages/ContactUs";
-import Goals from "./components/Goals";
+import Goals from "./pages/Goals";
 import VerifyOtp from "./components/VerifyOtp";
 import ForgotPassword from "./components/ForgotPassword";
 import Income from "./pages/Income";
