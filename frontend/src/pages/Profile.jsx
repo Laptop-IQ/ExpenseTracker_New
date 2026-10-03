@@ -109,7 +109,7 @@ const PasswordInput = memo(
 PasswordInput.displayName = "PasswordInput";
 
 /* ── Profile ───────────────────────────────────────────────────────────────── */
-const Profile = ({ onUpdateProfile, onLogout }) => {
+const Profile = ({ onLogout }) => {
   const navigate = useNavigate();
   const [user, setUser] = useState({ name: "", email: "", joinDate: "" });
   const [tempUser, setTempUser] = useState({ ...user });
@@ -127,7 +127,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
   });
   const [passwordErrors, setPasswordErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState(null);
 
   const [profileImage, setProfileImage] = useState(null);
   const [previewImage, setPreviewImage] = useState("");
@@ -179,7 +178,7 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
       }
     };
     fetchUserData();
-  }, [handleApiRequest]);
+  }, [handleApiRequest, addNotification]);
 
   useEffect(() => {
     const savedUser = JSON.parse(localStorage.getItem("user"));
@@ -321,7 +320,7 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
       setPreviewImage("");
       setEditMode(false);
       addNotification("Profile image updated successfully!");
-    } catch (err) {
+    } catch {
       addNotification("Upload failed");
     } finally {
       setLoading(false);
@@ -432,7 +431,6 @@ const Profile = ({ onUpdateProfile, onLogout }) => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         .profile-root * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
 
         @keyframes fadeUp {

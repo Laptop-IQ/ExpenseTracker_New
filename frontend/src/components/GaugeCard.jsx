@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ function fmtINR(n) {
 }
 
 // ─── Arc Gauge ─────────────────────────────────────────────────────────────────
-function ArcGauge({ percentage, gradientStart, gradientEnd, isNegative, uid }) {
+function ArcGauge({ percentage, gradientStart, gradientEnd, uid }) {
   const clampedPct = Math.min(Math.max(percentage, 0), 100);
 
   const cx = 80,
@@ -232,10 +232,7 @@ const GaugeCard = ({
 
   const isNegative = value < 0;
   const absValue = Math.abs(value);
-  const percentage = useMemo(
-    () => Math.min((absValue / Math.max(max, 1)) * 100, 100),
-    [absValue, max],
-  );
+  const percentage = Math.min((absValue / Math.max(max, 1)) * 100, 100);
 
   const gradientStart = isNegative
     ? "#f97316"
@@ -246,13 +243,15 @@ const GaugeCard = ({
 
   const uid = name.replace(/\s+/g, "-").toLowerCase();
 
-  const tier = useMemo(() => {
-    if (isNegative) return { label: "Deficit", color: "#FF3D71" };
-    if (percentage >= 80) return { label: "Excellent", color: "#1AFFD5" };
-    if (percentage >= 50) return { label: "On track", color: "#7c3aed" };
-    if (percentage >= 25) return { label: "Low", color: "#f59e0b" };
-    return { label: "Critical", color: "#FF3D71" };
-  }, [percentage, isNegative]);
+  const tier = isNegative
+    ? { label: "Deficit", color: "#FF3D71" }
+    : percentage >= 80
+      ? { label: "Excellent", color: "#1AFFD5" }
+      : percentage >= 50
+        ? { label: "On track", color: "#7c3aed" }
+        : percentage >= 25
+          ? { label: "Low", color: "#f59e0b" }
+          : { label: "Critical", color: "#FF3D71" };
 
   return (
     <>
@@ -401,7 +400,6 @@ const GaugeCard = ({
               percentage={percentage}
               gradientStart={gradientStart}
               gradientEnd={gradientEnd}
-              isNegative={isNegative}
               uid={uid}
             />
           </div>

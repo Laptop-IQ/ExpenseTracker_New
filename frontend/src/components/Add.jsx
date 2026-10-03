@@ -124,9 +124,11 @@ const AddTransactionModal = ({
     }
   }, [showModal]);
 
+  const manualCategory = Boolean(newTransaction?.[MANUAL_FLAG]);
+
   useEffect(() => {
     const text = newTransaction?.description?.trim() ?? "";
-    if (!text || newTransaction?.[MANUAL_FLAG]) {
+    if (!text || manualCategory) {
       setAiDetection(null);
       return;
     }
@@ -147,7 +149,7 @@ const AddTransactionModal = ({
       }
     }, 380);
     return () => clearTimeout(debounceRef.current);
-  }, [newTransaction?.description, setNewTransaction]);
+  }, [newTransaction?.description, manualCategory, setNewTransaction]);
 
   const handleTypeToggle = useCallback(
     (t) => {
@@ -173,7 +175,7 @@ const AddTransactionModal = ({
     [newTransaction?.description, setNewTransaction],
   );
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const e = { description: "", amount: "" };
     if (!newTransaction?.description?.trim())
       e.description = "Description is required";
@@ -182,7 +184,7 @@ const AddTransactionModal = ({
     else if (isNaN(a) || a <= 0) e.amount = "Enter a valid amount";
     setErrors(e);
     return !e.description && !e.amount;
-  };
+  }, [newTransaction]);
 
   const handleSubmit = useCallback(() => {
     if (!validate()) return;
@@ -194,7 +196,7 @@ const AddTransactionModal = ({
       return clean;
     });
     setTimeout(() => handleAddTransaction(), 0);
-  }, [newTransaction, handleAddTransaction, setNewTransaction]);
+  }, [newTransaction, validate, handleAddTransaction, setNewTransaction]);
 
   const today = new Date().toISOString().split("T")[0];
   const minDate = `${new Date().getFullYear()}-01-01`;

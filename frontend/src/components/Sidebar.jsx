@@ -96,14 +96,8 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
 
 
 /* ─── SidebarContent ──────────────────────────────────────────────────────────── */
-const SidebarContent = ({ collapsed, user, onNavClick }) => {
+const SidebarContent = ({ collapsed, onNavClick }) => {
   const navigate = useNavigate();
-  const {
-    name = "User",
-    email = "user@example.com",
-    profilePic = "",
-  } = user || {};
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
      
@@ -215,9 +209,8 @@ const SidebarContent = ({ collapsed, user, onNavClick }) => {
 };
 
 /* ─── Mobile Bottom Nav Bar ───────────────────────────────────────────────────── */
-const MobileBottomNav = ({ onMenuOpen }) => {
+const MobileBottomNav = () => {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
 
   const items = [
     { text: "Home", path: "/", icon: Home },
@@ -272,7 +265,7 @@ const MobileBottomNav = ({ onMenuOpen }) => {
 };
 
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
-const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
+const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
   const sidebarRef = useRef(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -324,7 +317,6 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
         </div>
         <SidebarContent
           collapsed={isCollapsed}
-          user={user}
           onNavClick={() => {}}
         />
       </motion.aside>
@@ -455,7 +447,6 @@ const Sidebar = ({ user, isCollapsed, setIsCollapsed }) => {
 
               <SidebarContent
                 collapsed={false}
-                user={user}
                 onNavClick={() => setMobileOpen(false)}
               />
             </motion.aside>

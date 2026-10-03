@@ -175,7 +175,7 @@ export function getYearRange(year) {
   };
 }
 
-export function getTimeFrameRange(timeFrame, selectedYear) {
+export function getTimeFrameRange(timeFrame, selectedYear, selectedMonth) {
   const now = new Date();
 
   if (timeFrame === "daily") {
@@ -201,13 +201,19 @@ export function getTimeFrameRange(timeFrame, selectedYear) {
   }
 
   if (timeFrame === "monthly") {
-    const year =
-      selectedYear === now.getFullYear() ? now.getFullYear() : selectedYear;
-    const month = selectedYear === now.getFullYear() ? now.getMonth() : 0;
+    const year = selectedYear;
+    const month =
+      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
+        ? selectedMonth
+        : selectedYear === now.getFullYear()
+          ? now.getMonth()
+          : 0;
     const start = new Date(year, month, 1);
+    const isCurrentMonth =
+      year === now.getFullYear() && month === now.getMonth();
 
     let end;
-    if (selectedYear === now.getFullYear()) {
+    if (isCurrentMonth) {
       end = new Date(now);
     } else {
       end = new Date(year, month + 1, 0);
@@ -217,12 +223,11 @@ export function getTimeFrameRange(timeFrame, selectedYear) {
     return {
       start,
       end,
-      label:
-        selectedYear === now.getFullYear()
-          ? "This Month"
-          : `${start.toLocaleDateString("en-IN", {
-              month: "long",
-            })} ${year}`,
+      label: isCurrentMonth
+        ? "This Month"
+        : `${start.toLocaleDateString("en-IN", {
+            month: "long",
+          })} ${year}`,
     };
   }
 
@@ -281,7 +286,7 @@ export function buildChartPoints(mode, periodValue) {
   return points;
 }
 
-export function generateChartPoints(timeFrame, selectedYear) {
+export function generateChartPoints(timeFrame, selectedYear, selectedMonth) {
   const now = new Date();
   const points = [];
 
@@ -323,7 +328,12 @@ export function generateChartPoints(timeFrame, selectedYear) {
 
   if (timeFrame === "monthly") {
     const year = selectedYear;
-    const month = selectedYear === now.getFullYear() ? now.getMonth() : 0;
+    const month =
+      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
+        ? selectedMonth
+        : selectedYear === now.getFullYear()
+          ? now.getMonth()
+          : 0;
     const days = new Date(year, month + 1, 0).getDate();
 
     for (let i = 1; i <= days; i++) {

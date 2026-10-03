@@ -1,5 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { Outlet } from "react-router-dom";
 import axios from "axios";
 import {
   AlertCircle,
@@ -46,7 +52,7 @@ const API_BASE = import.meta.env.VITE_API_BASE;
    CATEGORIES
 ============================================================================ */
 
-export const CATEGORY_ICONS = {
+const CATEGORY_ICONS = {
   Salary: <Wallet />,
   Extra_Income: <Banknote />,
   Freelance: <Briefcase />,
@@ -71,7 +77,7 @@ export const CATEGORY_ICONS = {
   Annual_Expense: <PieChart />,
 };
 
-export const INCOME_CATEGORIES = [
+const INCOME_CATEGORIES = [
   "Salary",
   "Extra_Income",
   "Freelance",
@@ -79,7 +85,7 @@ export const INCOME_CATEGORIES = [
   "Side_Hustles",
 ];
 
-export const EXPENSE_CATEGORIES = [
+const EXPENSE_CATEGORIES = [
   "Food",
   "Grocery",
   "Dairy",
@@ -701,12 +707,35 @@ function TransactionSkeleton() {
 }
 
 /* ============================================================================
+   PAGE SKELETON (shown while a lazy page chunk loads)
+============================================================================ */
+
+function PageSkeleton() {
+  return (
+    <div
+      className="space-y-4 p-1 animate-pulse"
+      role="status"
+      aria-label="Loading page"
+    >
+      <div className="h-32 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((item) => (
+          <div
+            key={item}
+            className="h-28 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60"
+          />
+        ))}
+      </div>
+      <div className="h-64 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60" />
+    </div>
+  );
+}
+
+/* ============================================================================
    MAIN LAYOUT
 ============================================================================ */
 
 const Layout = ({ onLogout, user }) => {
-  const navigate = useNavigate();
-
   const {
     transactions,
     loading,
@@ -1086,7 +1115,9 @@ const Layout = ({ onLogout, user }) => {
             <div className="dashboard-left">
               <PanelCard delay={0.25}>
                 <div className="outlet-wrapper mt-5">
-                  <Outlet context={outletContext} />
+                  <Suspense fallback={<PageSkeleton />}>
+                    <Outlet context={outletContext} />
+                  </Suspense>
                 </div>
               </PanelCard>
             </div>

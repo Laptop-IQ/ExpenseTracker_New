@@ -422,7 +422,6 @@ function GoalCard({ goal, onEdit, onDelete, onContribute, deleting }) {
   const ml = monthsLeft(goal.deadline);
   const isCompleted = goal.isCompleted || percentage >= 100;
   const isOverdue = ml !== null && ml < 0;
-  const daysUntilDeadline = ml !== null ? ml * 30 : null;
 
   return (
     <div
@@ -820,7 +819,7 @@ function GoalCard({ goal, onEdit, onDelete, onContribute, deleting }) {
 // EMPTY STATE
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EmptyState({ onAdd }) {
+function EmptyState({ onAdd, filtered = false }) {
   return (
     <div
       style={{
@@ -856,7 +855,7 @@ function EmptyState({ onAdd }) {
           marginBottom: 8,
         }}
       >
-        No goals yet
+        {filtered ? "No goals for this month" : "No goals yet"}
       </h2>
       <p
         style={{
@@ -867,7 +866,9 @@ function EmptyState({ onAdd }) {
           lineHeight: 1.6,
         }}
       >
-        Create your first savings goal and start building the future you want.
+        {filtered
+          ? "No goal has its deadline in the selected month. Clear the filter to see all goals."
+          : "Create your first savings goal and start building the future you want."}
         Track progress and celebrate milestones along the way.
       </p>
       <button
@@ -1602,6 +1603,8 @@ export default function GoalsPage() {
   const [deletingId, setDeletingId] = useState(null);
   const [modal, setModal] = useState(null);
   const [filter, setFilter] = useState("all");
+  // deadline month filter, "" = all months, otherwise "YYYY-MM"
+  const [monthFilter, setMonthFilter] = useState("");
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = "info") => {
@@ -1777,16 +1780,40 @@ export default function GoalsPage() {
       contributeGoal(payload.id, payload.amount);
   }
 
-  const overallPct =
-    summary.totalTarget > 0
-      ? Math.round((summary.totalSaved / summary.totalTarget) * 100)
-      : 0;
-
   const visibleGoals = useMemo(() => {
-    if (filter === "done") return goals.filter((g) => g.isCompleted);
-    if (filter === "active") return goals.filter((g) => !g.isCompleted);
-    return goals;
-  }, [goals, filter]);
+    let list = goals;
+
+    if (filter === "done") list = list.filter((g) => g.isCompleted);
+    else if (filter === "active") list = list.filter((g) => !g.isCompleted);
+
+    if (monthFilter) {
+      list = list.filter((g) => g.deadline === monthFilter);
+    }
+
+    return list;
+  }, [goals, filter, monthFilter]);
+
+  // With a month filter the server summary no longer matches what is on screen,
+  // so the numbers are recomputed from the visible goals.
+  const viewSummary = useMemo(() => {
+    if (!monthFilter) return summary;
+
+    return visibleGoals.reduce(
+      (acc, g) => ({
+        totalTarget: acc.totalTarget + (Number(g.target) || 0),
+        totalSaved: acc.totalSaved + (Number(g.saved) || 0),
+        totalMonthly: acc.totalMonthly + (Number(g.monthly) || 0),
+        onTrack: null,
+        count: acc.count + 1,
+      }),
+      { totalTarget: 0, totalSaved: 0, totalMonthly: 0, onTrack: null, count: 0 },
+    );
+  }, [summary, monthFilter, visibleGoals]);
+
+  const overallPct =
+    viewSummary.totalTarget > 0
+      ? Math.round((viewSummary.totalSaved / viewSummary.totalTarget) * 100)
+      : 0;
 
   return (
     <>
@@ -1859,11 +1886,88 @@ export default function GoalsPage() {
             <p style={{ fontSize: 14, color: "#94a3b8", margin: 0 }}>
               {loading
                 ? "Loading…"
-                : `${summary.count} goal${summary.count !== 1 ? "s" : ""} · ${summary.onTrack} on track`}
+                : `${viewSummary.count} goal${viewSummary.count !== 1 ? "s" : ""}${
+                    viewSummary.onTrack !== null
+                      ? ` · ${viewSummary.onTrack} on track`
+                      : ""
+                  }`}
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            {/* Deadline month filter */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 6px 4px 10px",
+                background: "rgba(15,23,42,0.6)",
+                border: `1px solid ${
+                  monthFilter ? "rgba(99,102,241,0.5)" : "rgba(71,85,105,0.2)"
+                }`,
+                borderRadius: 11,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Deadline
+              </span>
+
+              <input
+                type="month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                aria-label="Filter goals by deadline month"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#e2e8f0",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  colorScheme: "dark",
+                  minWidth: 118,
+                }}
+              />
+
+              {monthFilter && (
+                <button
+                  type="button"
+                  onClick={() => setMonthFilter("")}
+                  aria-label="Clear month filter"
+                  style={{
+                    background: "rgba(99,102,241,0.15)",
+                    border: "none",
+                    color: "#a5b4fc",
+                    borderRadius: 6,
+                    width: 22,
+                    height: 22,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
             {/* Filter tabs */}
             <div
               style={{
@@ -1951,19 +2055,19 @@ export default function GoalsPage() {
           <StatBadge
             icon={<Target size={16} />}
             label="Total target"
-            value={loading ? "—" : fmtINR(summary.totalTarget)}
+            value={loading ? "—" : fmtINR(viewSummary.totalTarget)}
             accent="#6366f1"
           />
           <StatBadge
             icon={<PiggyBank size={16} />}
             label="Total saved"
-            value={loading ? "—" : fmtINR(summary.totalSaved)}
+            value={loading ? "—" : fmtINR(viewSummary.totalSaved)}
             accent="#10b981"
           />
           <StatBadge
             icon={<Zap size={16} />}
             label="Monthly commit"
-            value={loading ? "—" : fmtINR(summary.totalMonthly)}
+            value={loading ? "—" : fmtINR(viewSummary.totalMonthly)}
             accent="#f59e0b"
           />
           <StatBadge
@@ -2030,7 +2134,7 @@ export default function GoalsPage() {
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {fmtINR(summary.totalSaved)} of {fmtINR(summary.totalTarget)}
+                {fmtINR(viewSummary.totalSaved)} of {fmtINR(viewSummary.totalTarget)}
               </p>
             </div>
             <div
@@ -2068,7 +2172,10 @@ export default function GoalsPage() {
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => <GoalSkeleton key={i} />)
           ) : visibleGoals.length === 0 ? (
-            <EmptyState onAdd={() => setModal({ mode: "new" })} />
+            <EmptyState
+              filtered={Boolean(monthFilter)}
+              onAdd={() => setModal({ mode: "new" })}
+            />
           ) : (
             visibleGoals.map((g) => (
               <GoalCard

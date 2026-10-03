@@ -66,9 +66,25 @@ import {
   getAuthHeaders,
 } from "../utils/commonHelpers";
 import YearSelector from "../components/common/YearSelector";
+import MonthSelector from "../components/common/MonthSelector";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 /* =========================================================
    THEME CONSTANTS
@@ -1059,6 +1075,12 @@ const Income = () => {
   const [selectedYear, setSelectedYear] = useState(getCurrentYear());
 
   const currentYear = getCurrentYear();
+  const currentMonth = new Date().getMonth();
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+
+  // Yearly view only: null = "All months"
+  const [yearMonth, setYearMonth] = useState(null);
 
   const [editForm, setEditForm] = useState({
     description: "",
@@ -1111,9 +1133,14 @@ const Income = () => {
   ----------------------------------------- */
 
   const timeFrameRange = useMemo(
-    () => getTimeFrameRange(timeFrame, selectedYear),
-    [timeFrame, selectedYear],
+    () => getTimeFrameRange(timeFrame, selectedYear, selectedMonth),
+    [timeFrame, selectedYear, selectedMonth],
   );
+
+  const rangeLabel =
+    timeFrame === "yearly" && yearMonth !== null
+      ? `${MONTH_NAMES[yearMonth]} ${selectedYear}`
+      : timeFrameRange.label;
 
   const timeFrameTransactions = useMemo(() => {
     return incomeTransactions.filter((transaction) =>
@@ -1127,6 +1154,13 @@ const Income = () => {
 
   const filteredTransactions = useMemo(() => {
     let list = [...timeFrameTransactions];
+
+    // Yearly view + a specific month chosen -> narrow to that month
+    if (timeFrame === "yearly" && yearMonth !== null) {
+      list = list.filter(
+        (transaction) => new Date(transaction.date).getMonth() === yearMonth,
+      );
+    }
 
     if (categoryFilter !== "all") {
       list = list.filter(
@@ -1148,7 +1182,7 @@ const Income = () => {
     }
 
     return list.sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [timeFrameTransactions, categoryFilter, search]);
+  }, [timeFrameTransactions, categoryFilter, search, timeFrame, yearMonth]);
 
   /* -----------------------------------------
      KPI
@@ -1188,12 +1222,16 @@ const Income = () => {
   const chartPoints = useMemo(
     () =>
       buildChartPoints(
-        timeFrame === "daily" || timeFrame === "weekly" ? "month" : timeFrame,
-        timeFrame === "daily" || timeFrame === "weekly"
-          ? new Date().toISOString().split("T")[0].slice(0, 7)
-          : String(selectedYear),
+        timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
+          ? "month"
+          : timeFrame,
+        timeFrame === "monthly"
+          ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`
+          : timeFrame === "daily" || timeFrame === "weekly"
+            ? new Date().toISOString().split("T")[0].slice(0, 7)
+            : String(selectedYear),
       ),
-    [timeFrame, selectedYear],
+    [timeFrame, selectedYear, selectedMonth],
   );
 
   const chartData = useMemo(() => {
@@ -1202,7 +1240,11 @@ const Income = () => {
         .filter((transaction) => {
           const d = new Date(transaction.date);
 
-          if (timeFrame === "daily" || timeFrame === "weekly") {
+          if (
+            timeFrame === "daily" ||
+            timeFrame === "weekly" ||
+            timeFrame === "monthly"
+          ) {
             return d.getDate() === point.day;
           }
 
@@ -1218,11 +1260,9 @@ const Income = () => {
   }, [chartPoints, timeFrameTransactions, timeFrame]);
 
   const chartLabel =
-    timeFrame === "daily" || timeFrame === "weekly"
+    timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
       ? "Daily income"
-      : timeFrame === "monthly"
-        ? "Monthly income"
-        : "Yearly income";
+      : "Yearly income";
 
   /* -----------------------------------------
      VISIBLE TRANSACTIONS
@@ -1422,7 +1462,7 @@ const Income = () => {
       URL.revokeObjectURL(url);
 
       addToast("Export ready.", "success");
-    } catch (error) {
+    } catch {
       addToast("Export failed.", "error");
     } finally {
       setLoading(false);
@@ -1559,7 +1599,7 @@ const Income = () => {
                     <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
                       Smart income insights for{" "}
                       <span className="font-bold text-slate-700 dark:text-slate-200">
-                        {timeFrameRange.label}
+                        {rangeLabel}
                       </span>
                     </p>
                   </div>
@@ -1687,12 +1727,51 @@ const Income = () => {
                   />
                 </div>
 
-                <div className="min-w-0 flex-1 sm:flex-none">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
                   <YearSelector
                     selectedYear={selectedYear}
-                    setSelectedYear={setSelectedYear}
+                    setSelectedYear={(year) => {
+                      setSelectedYear(year);
+
+                      // future months are not selectable in the current year
+                      if (year === currentYear) {
+                        setSelectedMonth((month) =>
+                          Math.min(month, currentMonth),
+                        );
+                        setYearMonth((month) =>
+                          month !== null && month > currentMonth ? null : month,
+                        );
+                      }
+                    }}
                     currentYear={currentYear}
                   />
+
+                  {timeFrame === "yearly" && (
+                    <MonthSelector
+                      allowAll
+                      selectedMonth={yearMonth}
+                      setSelectedMonth={(month) => {
+                        setYearMonth(month);
+                        setShowAll(false);
+                      }}
+                      selectedYear={selectedYear}
+                      currentYear={currentYear}
+                      currentMonth={currentMonth}
+                    />
+                  )}
+
+                  {timeFrame === "monthly" && (
+                    <MonthSelector
+                      selectedMonth={selectedMonth}
+                      setSelectedMonth={(month) => {
+                        setSelectedMonth(month);
+                        setShowAll(false);
+                      }}
+                      selectedYear={selectedYear}
+                      currentYear={currentYear}
+                      currentMonth={currentMonth}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -1732,7 +1811,7 @@ const Income = () => {
           <StatCard
             label="Total income"
             value={fmtINR(totalIncome)}
-            sub={timeFrameRange.label}
+            sub={rangeLabel}
             icon={TrendingUp}
             accent="#10b981"
           />
@@ -1796,7 +1875,7 @@ const Income = () => {
                 </div>
 
                 <p className="mt-1 ml-10 text-[10px] text-slate-400">
-                  {timeFrameRange.label}
+                  {rangeLabel}
                 </p>
               </div>
             </div>
@@ -1949,7 +2028,7 @@ const Income = () => {
                   </div>
 
                   <p className="mt-0.5 text-[10px] text-slate-400">
-                    {timeFrameRange.label}
+                    {rangeLabel}
                   </p>
                 </div>
               </div>
@@ -2098,7 +2177,7 @@ const Income = () => {
                 <p className="mt-1 max-w-xs text-xs text-slate-400">
                   {search || categoryFilter !== "all"
                     ? "Try changing your search or filters."
-                    : `No income recorded for ${timeFrameRange.label}.`}
+                    : `No income recorded for ${rangeLabel}.`}
                 </p>
 
                 {search || categoryFilter !== "all" ? (

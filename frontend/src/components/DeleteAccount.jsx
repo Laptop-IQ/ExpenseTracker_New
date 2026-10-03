@@ -19,7 +19,7 @@ const DeleteAccount = () => {
 
     setLoading(true);
     try {
-      const res = await axios.delete(`${API_BASE}/user/delete-account`, {
+      await axios.delete(`${API_BASE}/user/delete-account`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

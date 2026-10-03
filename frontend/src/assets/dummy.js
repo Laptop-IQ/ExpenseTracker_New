@@ -31,7 +31,7 @@ export const gaugeData = [
 const categories = ['Food', 'Housing', 'Transport', 'Shopping', 'Entertainment', 'Utilities', 'Healthcare'];
 
 // Generate dummy transactions
-export const dummyTransactions = Array.from({ length: 100 }, (_, i) => {
+export const dummyTransactions = Array.from({ length: 100 }, () => {
   const isExpense = Math.random() > 0.3; // 70% chance of being an expense
   const amount = (Math.random() * 500 + 10).toFixed(2);
   const category = categories[Math.floor(Math.random() * categories.length)];

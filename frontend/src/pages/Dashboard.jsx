@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import {
   useCallback,
   useEffect,
@@ -17,6 +16,8 @@ import {
 
 import AddTransactionModal from "../components/Add";
 import YearSelector from "../components/common/YearSelector";
+import MonthSelector from "../components/common/MonthSelector";
+import { getTimeFrameRange as getPeriodRange } from "../utils/commonHelpers";
 import Toast from "../components/common/Toast.common";
 
 import { INCOME_CATEGORY_ICONS, EXPENSE_CATEGORY_ICONS } from "../assets/color";
@@ -263,6 +264,11 @@ function DashboardHeader({
   selectedYear = 2024,
   onYearChange = () => {},
   currentYear = 2024,
+  selectedMonth = 0,
+  onMonthChange = () => {},
+  yearMonth = null,
+  onYearMonthChange = () => {},
+  currentMonth = 0,
 }) {
   return (
     <section className="relative overflow-hidden rounded-[24px] border border-[#1a2035] bg-[#0E1320] p-5 shadow-[0_8px_40px_rgba(0,0,0,.35)] sm:p-6 lg:p-7">
@@ -361,9 +367,30 @@ function DashboardHeader({
           <div className="flex w-full items-center justify-end gap-2 xl:w-auto">
             <YearSelector
               selectedYear={selectedYear}
-              onYearChange={onYearChange}
+              setSelectedYear={onYearChange}
               currentYear={currentYear}
             />
+
+            {timeFrame === "monthly" && (
+              <MonthSelector
+                selectedMonth={selectedMonth}
+                setSelectedMonth={onMonthChange}
+                selectedYear={selectedYear}
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+              />
+            )}
+
+            {timeFrame === "yearly" && (
+              <MonthSelector
+                allowAll
+                selectedMonth={yearMonth}
+                setSelectedMonth={onYearMonthChange}
+                selectedYear={selectedYear}
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1016,6 +1043,14 @@ const Dashboard = () => {
   const [exporting, setExporting] = useState(false);
   const [selectedYear, setSelectedYear] = useState(getCurrentYear());
 
+  const currentYear = getCurrentYear();
+  const currentMonth = new Date().getMonth();
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+
+  // Yearly view only: null = "All months"
+  const [yearMonth, setYearMonth] = useState(null);
+
   const [overviewMeta, setOverviewMeta] = useState({
     monthlyIncome: null,
     monthlyExpense: null,
@@ -1048,10 +1083,12 @@ const Dashboard = () => {
   -------------------------------------------------------------------------- */
 
   useEffect(() => {
-    return () => {
-      toastTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    const timers = toastTimersRef.current;
 
-      toastTimersRef.current.clear();
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+
+      timers.clear();
     };
   }, []);
 
@@ -1084,9 +1121,34 @@ const Dashboard = () => {
      YEAR CHANGE HANDLER - ADDED
   -------------------------------------------------------------------------- */
 
-  const handleYearChange = useCallback((year) => {
-    setSelectedYear(year);
-    // Add any additional logic when year changes if needed
+  const handleYearChange = useCallback(
+    (year) => {
+      setSelectedYear(year);
+
+      // future months are not selectable in the current year
+      if (year === currentYear) {
+        setSelectedMonth((month) => Math.min(month, currentMonth));
+        setYearMonth((month) =>
+          month !== null && month > currentMonth ? null : month,
+        );
+      }
+
+      setShowAllIncome(false);
+      setShowAllExpense(false);
+    },
+    [currentYear, currentMonth],
+  );
+
+  const handleMonthChange = useCallback((month) => {
+    setSelectedMonth(month);
+    setShowAllIncome(false);
+    setShowAllExpense(false);
+  }, []);
+
+  const handleYearMonthChange = useCallback((month) => {
+    setYearMonth(month);
+    setShowAllIncome(false);
+    setShowAllExpense(false);
   }, []);
 
   /* --------------------------------------------------------------------------
@@ -1127,18 +1189,53 @@ const Dashboard = () => {
       return previousYearRange;
     }
 
+    if (timeFrame === "monthly") {
+      return getPeriodRange("monthly", selectedYear, selectedMonth);
+    }
+
+    if (timeFrame === "yearly") {
+      return yearMonth !== null
+        ? getPeriodRange("monthly", selectedYear, yearMonth)
+        : getPeriodRange("yearly", selectedYear);
+    }
+
     return getTimeFrameRange(timeFrame);
-  }, [timeFrame, previousYearRange]);
+  }, [timeFrame, previousYearRange, selectedYear, selectedMonth, yearMonth]);
 
   const timeFrameRange = activeRange;
 
-  const prevTimeFrameRange = useMemo(
-    () =>
-      getPreviousTimeFrameRange(
-        timeFrame === "previous_year" ? "yearly" : timeFrame,
-      ),
-    [timeFrame],
-  );
+  const prevTimeFrameRange = useMemo(() => {
+    // month before the selected month (Date handles the January rollover)
+    const previousMonthOf = (year, month) => ({
+      start: new Date(year, month - 1, 1),
+      end: new Date(year, month, 0, 23, 59, 59, 999),
+      label: "Previous Month",
+    });
+
+    if (timeFrame === "monthly") {
+      return previousMonthOf(selectedYear, selectedMonth);
+    }
+
+    if (timeFrame === "yearly") {
+      return yearMonth !== null
+        ? previousMonthOf(selectedYear, yearMonth)
+        : {
+            start: new Date(selectedYear - 1, 0, 1),
+            end: new Date(selectedYear - 1, 11, 31, 23, 59, 59, 999),
+            label: "Last Year",
+          };
+    }
+
+    return getPreviousTimeFrameRange(
+      timeFrame === "previous_year" ? "yearly" : timeFrame,
+    );
+  }, [timeFrame, selectedYear, selectedMonth, yearMonth]);
+
+  // Server overview (/dashboard) only describes the real current month
+  const useServerOverview =
+    timeFrame === "monthly" &&
+    selectedYear === currentYear &&
+    selectedMonth === currentMonth;
 
   /* --------------------------------------------------------------------------
      NORMALIZED TRANSACTIONS
@@ -1204,30 +1301,30 @@ const Dashboard = () => {
   }, [prevFilteredTransactions]);
 
   const displayIncome = useMemo(() => {
-    if (timeFrame === "monthly" && overviewMeta.monthlyIncome != null) {
+    if (useServerOverview && overviewMeta.monthlyIncome != null) {
       return Number(overviewMeta.monthlyIncome) || 0;
     }
 
     return currentData.income;
-  }, [timeFrame, overviewMeta.monthlyIncome, currentData.income]);
+  }, [useServerOverview, overviewMeta.monthlyIncome, currentData.income]);
 
   const displayExpenses = useMemo(() => {
-    if (timeFrame === "monthly" && overviewMeta.monthlyExpense != null) {
+    if (useServerOverview && overviewMeta.monthlyExpense != null) {
       return Number(overviewMeta.monthlyExpense) || 0;
     }
 
     return currentData.expenses;
-  }, [timeFrame, overviewMeta.monthlyExpense, currentData.expenses]);
+  }, [useServerOverview, overviewMeta.monthlyExpense, currentData.expenses]);
 
   const displaySavings = displayIncome - displayExpenses;
 
   const prevExpenseVal = useMemo(() => {
-    if (timeFrame === "monthly" && overviewMeta.previousMonthExpense != null) {
+    if (useServerOverview && overviewMeta.previousMonthExpense != null) {
       return Number(overviewMeta.previousMonthExpense) || 0;
     }
 
     return prevData.expenses;
-  }, [timeFrame, overviewMeta.previousMonthExpense, prevData.expenses]);
+  }, [useServerOverview, overviewMeta.previousMonthExpense, prevData.expenses]);
 
   const savingsPct =
     displayIncome > 0 ? Math.round((displaySavings / displayIncome) * 100) : 0;
@@ -1247,10 +1344,24 @@ const Dashboard = () => {
   -------------------------------------------------------------------------- */
 
   const barChartData = useMemo(() => {
-    const now = new Date();
+    // 7 months ending at the month being viewed
+    const anchor =
+      timeFrame === "monthly"
+        ? new Date(selectedYear, selectedMonth, 1)
+        : timeFrame === "yearly"
+          ? yearMonth !== null
+            ? new Date(selectedYear, yearMonth, 1)
+            : selectedYear === currentYear
+              ? new Date(selectedYear, currentMonth, 1)
+              : new Date(selectedYear, 11, 1)
+          : new Date(currentYear, currentMonth, 1);
 
     return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - 6 + index, 1);
+      const date = new Date(
+        anchor.getFullYear(),
+        anchor.getMonth() - 6 + index,
+        1,
+      );
 
       const monthIndex = date.getMonth();
 
@@ -1281,7 +1392,15 @@ const Dashboard = () => {
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
       };
     });
-  }, [normalizedTransactions]);
+  }, [
+    normalizedTransactions,
+    timeFrame,
+    selectedYear,
+    selectedMonth,
+    yearMonth,
+    currentYear,
+    currentMonth,
+  ]);
 
   /* --------------------------------------------------------------------------
      PIE DATA
@@ -1289,7 +1408,7 @@ const Dashboard = () => {
 
   const pieData = useMemo(() => {
     if (
-      timeFrame === "monthly" &&
+      useServerOverview &&
       Array.isArray(overviewMeta.expenseDistribution) &&
       overviewMeta.expenseDistribution.length
     ) {
@@ -1319,7 +1438,7 @@ const Dashboard = () => {
         value: Math.round(Number(value) || 0),
       }))
       .filter((item) => item.value > 0);
-  }, [filteredTransactions, overviewMeta.expenseDistribution, timeFrame]);
+  }, [filteredTransactions, overviewMeta.expenseDistribution, useServerOverview]);
 
   /* --------------------------------------------------------------------------
      TRANSACTIONS
@@ -1357,12 +1476,12 @@ const Dashboard = () => {
   );
 
   const incomeList =
-    timeFrame === "monthly" && serverIncome.length > 0
+    useServerOverview && serverIncome.length > 0
       ? serverIncome
       : incomeTransactions;
 
   const expenseList =
-    timeFrame === "monthly" && serverExpense.length > 0
+    useServerOverview && serverExpense.length > 0
       ? serverExpense
       : expenseTransactions;
 
@@ -1435,7 +1554,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    if (timeFrame !== "monthly") {
+    if (!useServerOverview) {
       return undefined;
     }
 
@@ -1444,7 +1563,7 @@ const Dashboard = () => {
     fetchDashboardOverview(controller.signal);
 
     return () => controller.abort();
-  }, [timeFrame, fetchDashboardOverview]);
+  }, [useServerOverview, fetchDashboardOverview]);
 
   /* --------------------------------------------------------------------------
      GOALS API
@@ -1578,7 +1697,7 @@ const Dashboard = () => {
 
       await Promise.resolve(refreshTransactions?.());
 
-      if (timeFrame === "monthly") {
+      if (useServerOverview) {
         await fetchDashboardOverview();
       }
 
@@ -1601,7 +1720,7 @@ const Dashboard = () => {
     refreshTransactions,
     fetchDashboardOverview,
     fetchSavingGoals,
-    timeFrame,
+    useServerOverview,
     addToast,
   ]);
 
@@ -1697,7 +1816,6 @@ const Dashboard = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
         :root {
           color-scheme: dark;
@@ -1847,7 +1965,12 @@ const Dashboard = () => {
               exporting={exporting}
               selectedYear={selectedYear}
               onYearChange={handleYearChange}
-              currentYear={getCurrentYear()}
+              currentYear={currentYear}
+              selectedMonth={selectedMonth}
+              onMonthChange={handleMonthChange}
+              yearMonth={yearMonth}
+              onYearMonthChange={handleYearMonthChange}
+              currentMonth={currentMonth}
             />
           </div>
 

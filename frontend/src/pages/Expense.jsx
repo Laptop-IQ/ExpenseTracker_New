@@ -1,6 +1,5 @@
 import ReactDOM from "react-dom";
 import { useOutletContext } from "react-router-dom";
-import { createPortal } from "react-dom";
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 
 import {
@@ -63,6 +62,7 @@ import {
 import axios from "axios";
 import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
 import YearSelector from "../components/common/YearSelector";
+import MonthSelector from "../components/common/MonthSelector";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -136,6 +136,21 @@ const EXPENSE_CATEGORIES = [
 
 const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 /* -------------------------------------------------------------------------- */
 /*                                   HELPERS                                  */
 /* -------------------------------------------------------------------------- */
@@ -205,15 +220,11 @@ function normalizeDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function getYearOptions(currentYear, count = 5) {
-  return Array.from({ length: count }, (_, index) => currentYear - index);
-}
-
 function formatCategory(category) {
   return String(category || "Other").replace(/_/g, " ");
 }
 
-function getTimeFrameRange(timeFrame, selectedYear) {
+function getTimeFrameRange(timeFrame, selectedYear, selectedMonth) {
   const now = new Date();
 
   if (timeFrame === "daily") {
@@ -242,16 +253,19 @@ function getTimeFrameRange(timeFrame, selectedYear) {
   }
 
   if (timeFrame === "monthly") {
-    const year =
-      selectedYear === now.getFullYear() ? now.getFullYear() : selectedYear;
-
-    const month = selectedYear === now.getFullYear() ? now.getMonth() : 0;
-
+    const year = selectedYear;
+    const month =
+      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
+        ? selectedMonth
+        : selectedYear === now.getFullYear()
+          ? now.getMonth()
+          : 0;
     const start = new Date(year, month, 1);
+    const isCurrentMonth =
+      year === now.getFullYear() && month === now.getMonth();
 
     let end;
-
-    if (selectedYear === now.getFullYear()) {
+    if (isCurrentMonth) {
       end = new Date(now);
     } else {
       end = new Date(year, month + 1, 0);
@@ -261,12 +275,11 @@ function getTimeFrameRange(timeFrame, selectedYear) {
     return {
       start,
       end,
-      label:
-        selectedYear === now.getFullYear()
-          ? "This Month"
-          : `${start.toLocaleDateString("en-IN", {
-              month: "long",
-            })} ${year}`,
+      label: isCurrentMonth
+        ? "This Month"
+        : `${start.toLocaleDateString("en-IN", {
+            month: "long",
+          })} ${year}`,
     };
   }
 
@@ -287,7 +300,7 @@ function getTimeFrameRange(timeFrame, selectedYear) {
   };
 }
 
-function generateChartPoints(timeFrame, selectedYear) {
+function generateChartPoints(timeFrame, selectedYear, selectedMonth) {
   const now = new Date();
   const points = [];
 
@@ -337,7 +350,12 @@ function generateChartPoints(timeFrame, selectedYear) {
 
   if (timeFrame === "monthly") {
     const year = selectedYear;
-    const month = selectedYear === now.getFullYear() ? now.getMonth() : 0;
+    const month =
+      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
+        ? selectedMonth
+        : selectedYear === now.getFullYear()
+          ? now.getMonth()
+          : 0;
 
     const days = new Date(year, month + 1, 0).getDate();
 
@@ -725,7 +743,7 @@ function FilterDropdown({ value, onChange }) {
       },
       {
         value: "month",
-        label: "This Month",
+        label: "Selected Month",
       },
       {
         value: "year",
@@ -1773,12 +1791,6 @@ function AddTransactionModal({
 
   useEffect(() => {
     if (!showModal) {
-      setAiDetection(null);
-      setErrors({
-        description: "",
-        amount: "",
-      });
-
       clearTimeout(debounceRef.current);
       return;
     }
@@ -2288,7 +2300,6 @@ function AddTransactionModal({
 /* -------------------------------------------------------------------------- */
 
 function YearComparisonCard({
-  currentYear,
   selectedYear,
   currentTotal,
   previousTotal,
@@ -2407,6 +2418,13 @@ const ExpensePage = () => {
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
+  const currentMonth = new Date().getMonth();
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+
+  // Yearly view only: null = "All months"
+  const [yearMonth, setYearMonth] = useState(null);
+
   const [showModal, setShowModal] = useState(false);
 
   const [editingId, setEditingId] = useState(null);
@@ -2478,13 +2496,18 @@ const ExpensePage = () => {
   /* ---------------------------------------------------------------------- */
 
   const timeFrameRange = useMemo(
-    () => getTimeFrameRange(timeFrame, selectedYear),
-    [timeFrame, selectedYear],
+    () => getTimeFrameRange(timeFrame, selectedYear, selectedMonth),
+    [timeFrame, selectedYear, selectedMonth],
   );
 
+  const rangeLabel =
+    timeFrame === "yearly" && yearMonth !== null
+      ? `${MONTH_NAMES[yearMonth]} ${selectedYear}`
+      : timeFrameRange.label;
+
   const chartPoints = useMemo(
-    () => generateChartPoints(timeFrame, selectedYear),
-    [timeFrame, selectedYear],
+    () => generateChartPoints(timeFrame, selectedYear, selectedMonth),
+    [timeFrame, selectedYear, selectedMonth],
   );
 
   /* ---------------------------------------------------------------------- */
@@ -2546,10 +2569,10 @@ const ExpensePage = () => {
   /*                             FILTERING                                  */
   /* ---------------------------------------------------------------------- */
 
-  const filteredTransactions = useMemo(() => {
+  // category / search / "month" dropdown filters (used by the chart too, so the
+  // yearly chart keeps showing the full-year trend)
+  const baseFilteredTransactions = useMemo(() => {
     let list = timeFrameTransactions;
-
-    const now = new Date();
 
     if (filter === "month") {
       list = list.filter((transaction) => {
@@ -2557,8 +2580,8 @@ const ExpensePage = () => {
 
         return (
           date &&
-          date.getFullYear() === now.getFullYear() &&
-          date.getMonth() === now.getMonth()
+          date.getFullYear() === selectedYear &&
+          date.getMonth() === selectedMonth
         );
       });
     } else if (filter === "year") {
@@ -2590,7 +2613,20 @@ const ExpensePage = () => {
     }
 
     return list;
-  }, [timeFrameTransactions, filter, search, selectedYear]);
+  }, [timeFrameTransactions, filter, search, selectedYear, selectedMonth]);
+
+  // Yearly view + a specific month chosen -> narrow stats/list to that month
+  const filteredTransactions = useMemo(() => {
+    if (timeFrame !== "yearly" || yearMonth === null) {
+      return baseFilteredTransactions;
+    }
+
+    return baseFilteredTransactions.filter((transaction) => {
+      const date = normalizeDate(transaction.date);
+
+      return date && date.getMonth() === yearMonth;
+    });
+  }, [baseFilteredTransactions, timeFrame, yearMonth]);
 
   /* ---------------------------------------------------------------------- */
   /*                              STATS                                     */
@@ -2642,7 +2678,7 @@ const ExpensePage = () => {
   const chartData = useMemo(() => {
     const map = new Map();
 
-    for (const transaction of filteredTransactions) {
+    for (const transaction of baseFilteredTransactions) {
       const date = normalizeDate(transaction.date);
 
       if (!date) continue;
@@ -2680,7 +2716,7 @@ const ExpensePage = () => {
         expense: map.get(key) || 0,
       };
     });
-  }, [filteredTransactions, chartPoints, timeFrame]);
+  }, [baseFilteredTransactions, chartPoints, timeFrame]);
 
   /* ---------------------------------------------------------------------- */
   /*                           ADD EXPENSE                                  */
@@ -2864,7 +2900,7 @@ const ExpensePage = () => {
       URL.revokeObjectURL(url);
 
       addToast("Expense export is ready.", "success");
-    } catch (error) {
+    } catch {
       addToast("Export failed. Please try again.", "error");
     } finally {
       setLoading(false);
@@ -2881,8 +2917,35 @@ const ExpensePage = () => {
     setShowAll(false);
   }, []);
 
-  const handleYearChange = useCallback((year) => {
-    setSelectedYear(year);
+  const handleYearChange = useCallback(
+    (year) => {
+      setSelectedYear(year);
+
+      // future months are not selectable in the current year
+      if (year === currentYear) {
+        setSelectedMonth((month) => Math.min(month, currentMonth));
+      }
+
+      // a month that does not exist yet in the new year -> back to all months
+      if (year === currentYear) {
+        setYearMonth((month) =>
+          month !== null && month > currentMonth ? null : month,
+        );
+      }
+
+      setShowAll(false);
+      setFilter("all");
+    },
+    [currentYear, currentMonth],
+  );
+
+  const handleYearMonthChange = useCallback((month) => {
+    setYearMonth(month);
+    setShowAll(false);
+  }, []);
+
+  const handleMonthChange = useCallback((month) => {
+    setSelectedMonth(month);
     setShowAll(false);
     setFilter("all");
   }, []);
@@ -3052,7 +3115,7 @@ const ExpensePage = () => {
                     <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
                       Smart spending insights for{" "}
                       <span className="font-bold text-slate-700 dark:text-slate-200">
-                        {timeFrameRange.label}
+                        {rangeLabel}
                       </span>
                     </p>
                   </div>
@@ -3187,12 +3250,33 @@ const ExpensePage = () => {
                     }}
                   />
                 </div>
-                <div className="min-w-0 flex-1 sm:flex-none">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
                   <YearSelector
                     selectedYear={selectedYear}
                     setSelectedYear={handleYearChange}
                     currentYear={currentYear}
                   />
+
+                  {timeFrame === "monthly" && (
+                    <MonthSelector
+                      selectedMonth={selectedMonth}
+                      setSelectedMonth={handleMonthChange}
+                      selectedYear={selectedYear}
+                      currentYear={currentYear}
+                      currentMonth={currentMonth}
+                    />
+                  )}
+
+                  {timeFrame === "yearly" && (
+                    <MonthSelector
+                      allowAll
+                      selectedMonth={yearMonth}
+                      setSelectedMonth={handleYearMonthChange}
+                      selectedYear={selectedYear}
+                      currentYear={currentYear}
+                      currentMonth={currentMonth}
+                    />
+                  )}
                 </div>
               </div>
               {/* Selected year indicator */}
@@ -3235,7 +3319,7 @@ const ExpensePage = () => {
           <StatCard
             label="Total expenses"
             value={fmtINR(totalExpense)}
-            sub={timeFrameRange.label}
+            sub={rangeLabel}
             icon={TrendingDown}
             accent="#f97316"
             trend={timeFrame === "yearly" ? spendingTrend : undefined}
@@ -3273,7 +3357,6 @@ const ExpensePage = () => {
 
         {timeFrame === "yearly" && (
           <YearComparisonCard
-            currentYear={currentYear}
             selectedYear={selectedYear}
             currentTotal={selectedYearTotal}
             previousTotal={previousYearTotal}
@@ -3313,7 +3396,7 @@ const ExpensePage = () => {
                 </div>
 
                 <p className="mt-1 ml-10 text-[10px] text-slate-400">
-                  {timeFrameRange.label}
+                  {rangeLabel}
                 </p>
               </div>
 
@@ -3483,7 +3566,7 @@ const ExpensePage = () => {
                   </div>
 
                   <p className="mt-0.5 text-[10px] text-slate-400">
-                    {timeFrameRange.label}
+                    {rangeLabel}
                   </p>
                 </div>
               </div>
@@ -3576,7 +3659,7 @@ const ExpensePage = () => {
                     {filter === "year"
                       ? selectedYear
                       : filter === "month"
-                        ? "This month"
+                        ? `${MONTH_NAMES[selectedMonth]} ${selectedYear}`
                         : formatCategory(filter)}
                   </span>
                 )}
@@ -3817,14 +3900,17 @@ const ExpensePage = () => {
       {/* MODALS                                                             */}
       {/* ------------------------------------------------------------------ */}
 
-      <AddTransactionModal
-        showModal={showModal}
-        setShowModal={setShowModal}
-        newTransaction={newTransaction}
-        setNewTransaction={setNewTransaction}
-        handleAddTransaction={handleAddTransaction}
-        loading={loading}
-      />
+      {/* mounted only while open, so its local state resets on every open */}
+      {showModal && (
+        <AddTransactionModal
+          showModal={showModal}
+          setShowModal={setShowModal}
+          newTransaction={newTransaction}
+          setNewTransaction={setNewTransaction}
+          handleAddTransaction={handleAddTransaction}
+          loading={loading}
+        />
+      )}
 
       {deleteTarget && (
         <DeleteModal

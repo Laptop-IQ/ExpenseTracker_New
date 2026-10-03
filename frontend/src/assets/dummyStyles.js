@@ -180,7 +180,6 @@ export const incomeStyles = {
   emptyStateIcon:
     "w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4 rounded-full bg-green-50 flex items-center justify-center",
   emptyStateText: "text-gray-600 font-medium text-sm md:text-base",
-  emptyStateSubtext: "text-xs md:text-sm text-gray-500 mt-1 md:mt-2",
   emptyStateButton:
     "mt-3 md:mt-4 flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-3 py-2 md:px-4 md:py-2.5 rounded-lg md:rounded-xl transition-all shadow-md hover:shadow-lg mx-auto text-sm md:text-base",
 
@@ -210,8 +209,6 @@ export const incomeStyles = {
   iconBlue: "p-2 bg-blue-100 rounded-lg",
   iconPurple: "p-2 bg-purple-100 rounded-lg",
 
-  borderGreen: "border-l-4 border-Green-500",
-  borderPurple: "border-l-4 border-Purple-500",
   borderRose: "border-l-4 border-Rose-800",
 
   // Icon text colors
@@ -273,7 +270,6 @@ export const expensePageStyles = {
   emptyStateIcon:
     "w-16 h-16 mx-auto mb-4 rounded-full bg-orange-50 ",
   emptyStateText: "text-gray-600 font-medium",
-  emptyStateSubtext: "text-sm text-gray-500 mt-2",
 
   // Icons
   iconOrange: "p-2 bg-orange-100 rounded-lg",
@@ -811,7 +807,7 @@ export const styles = {
     description: "font-medium text-gray-800 truncate max-w-[120px]",
     meta: "text-xs text-gray-500 mt-1",
     amount: (type) =>
-      `font-semibold ₹{type === "income" ? "text-teal-600" : "text-orange-600"}`,
+      `font-semibold ${type === "income" ? "text-teal-600" : "text-orange-600"}`,
     emptyState: "text-center py-8",
     emptyIconContainer:
       "w-16 h-16 mx-auto mb-4 rounded-full bg-purple-100 flex items-center justify-center",
