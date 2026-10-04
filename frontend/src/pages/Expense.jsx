@@ -63,6 +63,15 @@ import axios from "axios";
 import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
 import YearSelector from "../components/common/YearSelector";
 import MonthSelector from "../components/common/MonthSelector";
+import CustomRangePicker from "../components/common/CustomRangePicker";
+import {
+  chartKeyForDate,
+  chartKeyForPoint,
+  generateChartPoints,
+  getTimeFrameRange,
+  isDailyGranularity,
+} from "../utils/commonHelpers";
+import { usePeriod } from "../utils/usePeriod";
 
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -134,7 +143,7 @@ const EXPENSE_CATEGORIES = [
   "Other",
 ];
 
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
+const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
 
 const MONTH_NAMES = [
   "January",
@@ -222,175 +231,6 @@ function normalizeDate(value) {
 
 function formatCategory(category) {
   return String(category || "Other").replace(/_/g, " ");
-}
-
-function getTimeFrameRange(timeFrame, selectedYear, selectedMonth) {
-  const now = new Date();
-
-  if (timeFrame === "daily") {
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(now);
-
-    return {
-      start,
-      end,
-      label: "Today",
-    };
-  }
-
-  if (timeFrame === "weekly") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    start.setHours(0, 0, 0, 0);
-
-    return {
-      start,
-      end: new Date(now),
-      label: "This Week",
-    };
-  }
-
-  if (timeFrame === "monthly") {
-    const year = selectedYear;
-    const month =
-      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
-        ? selectedMonth
-        : selectedYear === now.getFullYear()
-          ? now.getMonth()
-          : 0;
-    const start = new Date(year, month, 1);
-    const isCurrentMonth =
-      year === now.getFullYear() && month === now.getMonth();
-
-    let end;
-    if (isCurrentMonth) {
-      end = new Date(now);
-    } else {
-      end = new Date(year, month + 1, 0);
-      end.setHours(23, 59, 59, 999);
-    }
-
-    return {
-      start,
-      end,
-      label: isCurrentMonth
-        ? "This Month"
-        : `${start.toLocaleDateString("en-IN", {
-            month: "long",
-          })} ${year}`,
-    };
-  }
-
-  const start = new Date(selectedYear, 0, 1);
-
-  const end =
-    selectedYear === now.getFullYear()
-      ? new Date(now)
-      : new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-
-  return {
-    start,
-    end,
-    label:
-      selectedYear === now.getFullYear()
-        ? `Year ${selectedYear} · YTD`
-        : `Year ${selectedYear}`,
-  };
-}
-
-function generateChartPoints(timeFrame, selectedYear, selectedMonth) {
-  const now = new Date();
-  const points = [];
-
-  if (timeFrame === "daily") {
-    for (let i = 0; i < 24; i++) {
-      const hour = new Date(now);
-      hour.setHours(i, 0, 0, 0);
-
-      points.push({
-        date: hour,
-        label: hour.toLocaleTimeString([], {
-          hour: "2-digit",
-        }),
-        hour: i,
-        isCurrent: i === now.getHours(),
-      });
-    }
-
-    return points;
-  }
-
-  if (timeFrame === "weekly") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    start.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-
-      points.push({
-        date: day,
-        label: day.toLocaleDateString("en-IN", {
-          weekday: "short",
-        }),
-        day: day.getDate(),
-        month: day.getMonth(),
-        isCurrent:
-          day.getDate() === now.getDate() &&
-          day.getMonth() === now.getMonth() &&
-          day.getFullYear() === now.getFullYear(),
-      });
-    }
-
-    return points;
-  }
-
-  if (timeFrame === "monthly") {
-    const year = selectedYear;
-    const month =
-      Number.isInteger(selectedMonth) && selectedMonth >= 0 && selectedMonth <= 11
-        ? selectedMonth
-        : selectedYear === now.getFullYear()
-          ? now.getMonth()
-          : 0;
-
-    const days = new Date(year, month + 1, 0).getDate();
-
-    for (let i = 1; i <= days; i++) {
-      const day = new Date(year, month, i);
-
-      points.push({
-        date: day,
-        label: String(i),
-        day: i,
-        month,
-        isCurrent:
-          selectedYear === now.getFullYear() &&
-          month === now.getMonth() &&
-          i === now.getDate(),
-      });
-    }
-
-    return points;
-  }
-
-  for (let i = 0; i < 12; i++) {
-    const month = new Date(selectedYear, i, 1);
-
-    points.push({
-      date: month,
-      label: month.toLocaleDateString("en-IN", {
-        month: "short",
-      }),
-      month: i,
-      isCurrent: selectedYear === now.getFullYear() && i === now.getMonth(),
-    });
-  }
-
-  return points;
 }
 
 function isDateInRange(dateValue, start, end) {
@@ -680,11 +520,12 @@ function CategoryPill({ cat }) {
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   return (
     <div
+      role="group"
+      aria-label="Time frame"
       className="
         flex
+        w-full
         gap-1
-        overflow-x-auto
-        max-w-full
         bg-slate-100/80
         dark:bg-slate-800/80
         p-1
@@ -692,7 +533,9 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
         border
         border-slate-200/60
         dark:border-slate-700/60
-        scrollbar-none
+        @3xl:inline-flex
+        @3xl:w-auto
+        @3xl:shrink-0
       "
     >
       {TIME_FRAMES.map((frame) => {
@@ -703,15 +546,19 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
             key={frame}
             type="button"
             onClick={() => setTimeFrame(frame)}
+            aria-pressed={active}
             className={`
-              shrink-0
-              px-3
+              flex-1
+              whitespace-nowrap
+              px-1
               sm:px-4
-              py-2
+              @3xl:flex-none
+              min-h-10
               text-[11px]
               font-bold
               rounded-xl
               transition-all
+              active:scale-[.97]
               ${
                 active
                   ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
@@ -2407,23 +2254,34 @@ function YearComparisonCard({
 /* -------------------------------------------------------------------------- */
 
 const ExpensePage = () => {
+  const outletContext = useOutletContext();
+
   const {
-    transactions: outletTransactions = [],
+    // The layout pre-filters `transactions` for its own cards; the page needs
+    // everything so it can show any year / month / custom range.
+    allTransactions,
+    transactions: layoutTransactions = [],
     timeFrame = "monthly",
     setTimeFrame = () => {},
     refreshTransactions = () => {},
-  } = useOutletContext();
+  } = outletContext;
+
+  const outletTransactions = allTransactions ?? layoutTransactions;
 
   const currentYear = new Date().getFullYear();
-
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-
   const currentMonth = new Date().getMonth();
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-
-  // Yearly view only: null = "All months"
-  const [yearMonth, setYearMonth] = useState(null);
+  // year / month / custom range - shared with the layout stat cards
+  const {
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    yearMonth, // Yearly view only: null = "All months"
+    setYearMonth,
+    customRange,
+    setCustomRange,
+  } = usePeriod(outletContext);
 
   const [showModal, setShowModal] = useState(false);
 
@@ -2496,8 +2354,9 @@ const ExpensePage = () => {
   /* ---------------------------------------------------------------------- */
 
   const timeFrameRange = useMemo(
-    () => getTimeFrameRange(timeFrame, selectedYear, selectedMonth),
-    [timeFrame, selectedYear, selectedMonth],
+    () =>
+      getTimeFrameRange(timeFrame, selectedYear, selectedMonth, customRange),
+    [timeFrame, selectedYear, selectedMonth, customRange],
   );
 
   const rangeLabel =
@@ -2506,8 +2365,9 @@ const ExpensePage = () => {
       : timeFrameRange.label;
 
   const chartPoints = useMemo(
-    () => generateChartPoints(timeFrame, selectedYear, selectedMonth),
-    [timeFrame, selectedYear, selectedMonth],
+    () =>
+      generateChartPoints(timeFrame, selectedYear, selectedMonth, customRange),
+    [timeFrame, selectedYear, selectedMonth, customRange],
   );
 
   /* ---------------------------------------------------------------------- */
@@ -2683,40 +2543,16 @@ const ExpensePage = () => {
 
       if (!date) continue;
 
-      let key;
-
-      if (timeFrame === "daily") {
-        key = date.getHours();
-      } else if (timeFrame === "weekly") {
-        key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-      } else if (timeFrame === "monthly") {
-        key = date.getDate();
-      } else {
-        key = date.getMonth();
-      }
+      const key = chartKeyForDate(timeFrame, date, customRange);
 
       map.set(key, (map.get(key) || 0) + safeNumber(transaction.amount));
     }
 
-    return chartPoints.map((point) => {
-      let key;
-
-      if (timeFrame === "daily") {
-        key = point.hour;
-      } else if (timeFrame === "weekly") {
-        key = `${point.date.getFullYear()}-${point.date.getMonth()}-${point.date.getDate()}`;
-      } else if (timeFrame === "monthly") {
-        key = point.date.getDate();
-      } else {
-        key = point.date.getMonth();
-      }
-
-      return {
-        ...point,
-        expense: map.get(key) || 0,
-      };
-    });
-  }, [baseFilteredTransactions, chartPoints, timeFrame]);
+    return chartPoints.map((point) => ({
+      ...point,
+      expense: map.get(chartKeyForPoint(timeFrame, point, customRange)) || 0,
+    }));
+  }, [baseFilteredTransactions, chartPoints, timeFrame, customRange]);
 
   /* ---------------------------------------------------------------------- */
   /*                           ADD EXPENSE                                  */
@@ -2936,19 +2772,31 @@ const ExpensePage = () => {
       setShowAll(false);
       setFilter("all");
     },
-    [currentYear, currentMonth],
+    [currentYear, currentMonth, setSelectedYear, setSelectedMonth, setYearMonth],
   );
 
   const handleYearMonthChange = useCallback((month) => {
     setYearMonth(month);
     setShowAll(false);
-  }, []);
+  }, [setYearMonth]);
 
-  const handleMonthChange = useCallback((month) => {
-    setSelectedMonth(month);
-    setShowAll(false);
-    setFilter("all");
-  }, []);
+  const handleMonthChange = useCallback(
+    (month) => {
+      setSelectedMonth(month);
+      setShowAll(false);
+      setFilter("all");
+    },
+    [setSelectedMonth],
+  );
+
+  const handleCustomRangeChange = useCallback(
+    (range) => {
+      setCustomRange(range);
+      setShowAll(false);
+      setFilter("all");
+    },
+    [setCustomRange],
+  );
 
   const visibleTransactions = showAll
     ? filteredTransactions
@@ -2959,7 +2807,7 @@ const ExpensePage = () => {
       ? "Hourly spending"
       : timeFrame === "weekly"
         ? "Weekly spending"
-        : timeFrame === "monthly"
+        : isDailyGranularity(timeFrame, customRange)
           ? "Daily spending"
           : "Monthly spending";
 
@@ -3230,17 +3078,11 @@ const ExpensePage = () => {
               {/* Divider */}
               <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
 
-              {/* Filters row */}
-              <div
-                className="
-        flex flex-col gap-3
-        sm:flex-row
-        sm:items-center
-        sm:justify-between
-      "
-              >
-                {/* Timeframe */}
-                <div className="min-w-0 overflow-x-auto scrollbar-none">
+              {/* Filters row — container query: side by side only when the card
+                  is wide enough, so the pills never get squeezed (sidebar open
+                  or collapsed makes no difference) */}
+              <div className="@container">
+                <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
                   <TimeFrameSelector
                     timeFrame={timeFrame}
                     setTimeFrame={(value) => {
@@ -3249,34 +3091,42 @@ const ExpensePage = () => {
                       setFilter("all");
                     }}
                   />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
-                  <YearSelector
-                    selectedYear={selectedYear}
-                    setSelectedYear={handleYearChange}
-                    currentYear={currentYear}
-                  />
 
-                  {timeFrame === "monthly" && (
-                    <MonthSelector
-                      selectedMonth={selectedMonth}
-                      setSelectedMonth={handleMonthChange}
-                      selectedYear={selectedYear}
-                      currentYear={currentYear}
-                      currentMonth={currentMonth}
-                    />
-                  )}
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 @3xl:flex @3xl:flex-none @3xl:items-center">
+                    {timeFrame === "custom" ? (
+                      <CustomRangePicker
+                        customRange={customRange}
+                        setCustomRange={handleCustomRangeChange}
+                      />
+                    ) : (
+                      <YearSelector
+                        selectedYear={selectedYear}
+                        setSelectedYear={handleYearChange}
+                        currentYear={currentYear}
+                      />
+                    )}
 
-                  {timeFrame === "yearly" && (
-                    <MonthSelector
-                      allowAll
-                      selectedMonth={yearMonth}
-                      setSelectedMonth={handleYearMonthChange}
-                      selectedYear={selectedYear}
-                      currentYear={currentYear}
-                      currentMonth={currentMonth}
-                    />
-                  )}
+                    {timeFrame === "monthly" && (
+                      <MonthSelector
+                        selectedMonth={selectedMonth}
+                        setSelectedMonth={handleMonthChange}
+                        selectedYear={selectedYear}
+                        currentYear={currentYear}
+                        currentMonth={currentMonth}
+                      />
+                    )}
+
+                    {timeFrame === "yearly" && (
+                      <MonthSelector
+                        allowAll
+                        selectedMonth={yearMonth}
+                        setSelectedMonth={handleYearMonthChange}
+                        selectedYear={selectedYear}
+                        currentYear={currentYear}
+                        currentMonth={currentMonth}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
               {/* Selected year indicator */}

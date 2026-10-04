@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { CalendarRange, Check, ChevronDown } from "lucide-react";
+import React, { useCallback, useRef, useState } from "react";
+import { CalendarRange, Check } from "lucide-react";
+import SelectorPopover, { SelectorTrigger } from "./SelectorPopover";
 
 const MONTHS = [
   "January",
@@ -31,12 +31,12 @@ function MonthSelector({
   currentYear = new Date().getFullYear(),
   currentMonth = new Date().getMonth(),
   allowAll = false,
+  className = "",
 }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 260 });
-
   const triggerRef = useRef(null);
-  const dropdownRef = useRef(null);
+
+  const close = useCallback(() => setOpen(false), []);
 
   const isAll = selectedMonth === null || selectedMonth === undefined;
 
@@ -47,71 +47,6 @@ function MonthSelector({
     selectedYear > currentYear ||
     (selectedYear === currentYear && monthIndex > currentMonth);
 
-  const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return;
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    const dropdownWidth = 260;
-    const gap = 8;
-    const padding = 12;
-
-    let left = rect.left;
-
-    if (left + dropdownWidth > window.innerWidth - padding) {
-      left = window.innerWidth - dropdownWidth - padding;
-    }
-
-    left = Math.max(padding, left);
-
-    setPosition({ top: rect.bottom + gap, left, width: dropdownWidth });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [open, updatePosition]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleOutside = (event) => {
-      const target = event.target;
-
-      if (
-        triggerRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) {
-        return;
-      }
-
-      setOpen(false);
-    };
-
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open]);
-
   const handleSelect = (monthIndex) => {
     if (monthIndex !== null && isFuture(monthIndex)) return;
 
@@ -120,94 +55,29 @@ function MonthSelector({
     triggerRef.current?.focus();
   };
 
-  const handleToggle = () => {
-    if (!open) updatePosition();
-    setOpen((prev) => !prev);
-  };
-
   return (
     <>
-      <button
+      <SelectorTrigger
         ref={triggerRef}
-        type="button"
-        onClick={handleToggle}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="
-          group relative
-          inline-flex h-10
-          items-center gap-2
-          rounded-full
-          border border-violet-500/30
-          bg-[#080b18]
-          px-3
-          shadow-[0_0_0_1px_rgba(124,58,237,.08),0_8px_30px_rgba(0,0,0,.25)]
-          transition-all duration-200
-          hover:border-violet-500/50
-          hover:bg-[#0b0f20]
-          focus:outline-none
-          focus:ring-2
-          focus:ring-violet-500/20
-        "
+        icon={CalendarRange}
+        label={isAll ? "All months" : MONTHS[selectedMonth]}
+        isCurrent={isCurrentMonth}
+        open={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={className}
+      />
+
+      <SelectorPopover
+        open={open}
+        onClose={close}
+        triggerRef={triggerRef}
+        title={`Select month · ${selectedYear}`}
+        ariaLabel="Select month"
+        icon={CalendarRange}
+        width={260}
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-500/10 text-violet-400">
-          <CalendarRange size={14} strokeWidth={2.2} />
-        </span>
-
-        <span className="text-xs font-black tracking-tight text-slate-100">
-          {isAll ? "All months" : MONTHS[selectedMonth]}
-        </span>
-
-        {isCurrentMonth && (
-          <span className="flex items-center gap-1.5 border-l border-white/10 pl-2 text-[9px] font-bold text-emerald-400">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/50" />
-              <span className="relative h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </span>
-            Current
-          </span>
-        )}
-
-        <ChevronDown
-          size={14}
-          strokeWidth={2.5}
-          className={`ml-1 text-slate-500 transition-transform duration-200 ${
-            open ? "rotate-180 text-violet-400" : ""
-          }`}
-        />
-      </button>
-
-      {open &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            role="listbox"
-            aria-label="Select month"
-            style={{
-              position: "fixed",
-              top: position.top,
-              left: position.left,
-              width: position.width,
-              zIndex: 999999,
-            }}
-            className="
-              overflow-hidden
-              rounded-xl
-              border border-white/[0.08]
-              bg-[#080b18]/[0.98]
-              p-1.5
-              shadow-[0_24px_70px_rgba(0,0,0,.55),0_0_0_1px_rgba(139,92,246,.08)]
-              backdrop-blur-2xl
-            "
-          >
-            <div className="flex items-center justify-between px-2.5 pb-2 pt-1.5">
-              <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Select month · {selectedYear}
-              </span>
-
-              <CalendarRange size={12} className="text-violet-500/50" />
-            </div>
-
+        {({ isSheet }) => (
+          <>
             {allowAll && (
               <button
                 type="button"
@@ -216,13 +86,13 @@ function MonthSelector({
                 onClick={() => handleSelect(null)}
                 className={`
                   mb-1 flex w-full items-center justify-between
-                  rounded-lg px-3 py-2.5
-                  text-xs font-extrabold
-                  transition-all duration-150
+                  rounded-lg px-3
+                  font-extrabold transition-all duration-150
+                  ${isSheet ? "min-h-12 text-sm" : "py-2.5 text-xs"}
                   ${
                     isAll
                       ? "bg-violet-500/15 text-violet-300"
-                      : "text-slate-200 hover:bg-white/[0.04]"
+                      : "text-slate-200 hover:bg-white/[0.04] active:bg-white/[0.06]"
                   }
                 `}
               >
@@ -235,7 +105,7 @@ function MonthSelector({
               </button>
             )}
 
-            <div className="grid grid-cols-3 gap-1">
+            <div className={`grid grid-cols-3 ${isSheet ? "gap-2" : "gap-1"}`}>
               {MONTHS.map((name, index) => {
                 const selected = !isAll && index === selectedMonth;
                 const disabled = isFuture(index);
@@ -251,18 +121,16 @@ function MonthSelector({
                     disabled={disabled}
                     onClick={() => handleSelect(index)}
                     className={`
-                      relative
-                      flex flex-col items-center justify-center
-                      rounded-lg
-                      px-2 py-2.5
-                      text-xs font-extrabold
+                      relative flex flex-col items-center justify-center
+                      rounded-lg px-2 font-extrabold
                       transition-all duration-150
+                      ${isSheet ? "min-h-14 text-sm" : "py-2.5 text-xs"}
                       ${
                         selected
                           ? "bg-violet-500/15 text-violet-300"
                           : disabled
                             ? "cursor-not-allowed text-slate-700"
-                            : "text-slate-200 hover:bg-white/[0.04]"
+                            : "text-slate-200 hover:bg-white/[0.04] active:bg-white/[0.08]"
                       }
                     `}
                   >
@@ -283,9 +151,9 @@ function MonthSelector({
                 );
               })}
             </div>
-          </div>,
-          document.body,
+          </>
         )}
+      </SelectorPopover>
     </>
   );
 }

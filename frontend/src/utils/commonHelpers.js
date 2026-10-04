@@ -175,7 +175,88 @@ export function getYearRange(year) {
   };
 }
 
-export function getTimeFrameRange(timeFrame, selectedYear, selectedMonth) {
+/* --------------------------------------------------------------------------
+   CUSTOM MONTH RANGE
+   A range is { start, end } where each value is a "month index":
+   year * 12 + month (month is 0-11). Plain integers keep comparisons,
+   "last N months" maths and year changes trivial.
+-------------------------------------------------------------------------- */
+
+const MONTH_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const MONTH_SHORT = MONTH_LONG.map((name) => name.slice(0, 3));
+
+export const toMonthIndex = (year, month) => year * 12 + month;
+
+export const fromMonthIndex = (index) => ({
+  year: Math.floor(index / 12),
+  month: ((index % 12) + 12) % 12,
+});
+
+export const getCurrentMonthIndex = (now = new Date()) =>
+  toMonthIndex(now.getFullYear(), now.getMonth());
+
+export function getDefaultCustomRange(now = new Date()) {
+  const max = getCurrentMonthIndex(now);
+
+  return { start: max - 2, end: max };
+}
+
+/** Sorts start/end, clamps to the current month and fills missing values. */
+export function normalizeCustomRange(range, now = new Date()) {
+  const max = getCurrentMonthIndex(now);
+
+  let start = Number.isInteger(range?.start) ? range.start : max - 2;
+  let end = Number.isInteger(range?.end) ? range.end : max;
+
+  if (start > end) [start, end] = [end, start];
+
+  return { start: Math.min(start, max), end: Math.min(end, max) };
+}
+
+export function getCustomMonthCount(range) {
+  const { start, end } = normalizeCustomRange(range);
+
+  return end - start + 1;
+}
+
+export function formatCustomRangeLabel(range) {
+  const { start, end } = normalizeCustomRange(range);
+  const from = fromMonthIndex(start);
+  const to = fromMonthIndex(end);
+
+  if (start === end) return `${MONTH_LONG[from.month]} ${from.year}`;
+
+  if (from.year === to.year) {
+    return `${MONTH_SHORT[from.month]} – ${MONTH_SHORT[to.month]} ${to.year}`;
+  }
+
+  return `${MONTH_SHORT[from.month]} ${from.year} – ${MONTH_SHORT[to.month]} ${to.year}`;
+}
+
+/* --------------------------------------------------------------------------
+   TIME FRAME RANGE
+-------------------------------------------------------------------------- */
+
+export function getTimeFrameRange(
+  timeFrame,
+  selectedYear,
+  selectedMonth,
+  customRange,
+) {
   const now = new Date();
 
   if (timeFrame === "daily") {
@@ -228,6 +309,25 @@ export function getTimeFrameRange(timeFrame, selectedYear, selectedMonth) {
         : `${start.toLocaleDateString("en-IN", {
             month: "long",
           })} ${year}`,
+    };
+  }
+
+  if (timeFrame === "custom") {
+    const { start: startIndex, end: endIndex } = normalizeCustomRange(
+      customRange,
+      now,
+    );
+
+    const from = fromMonthIndex(startIndex);
+    const to = fromMonthIndex(endIndex);
+
+    return {
+      start: new Date(from.year, from.month, 1),
+      end:
+        endIndex === getCurrentMonthIndex(now)
+          ? new Date(now)
+          : new Date(to.year, to.month + 1, 0, 23, 59, 59, 999),
+      label: formatCustomRangeLabel({ start: startIndex, end: endIndex }),
     };
   }
 
@@ -286,9 +386,45 @@ export function buildChartPoints(mode, periodValue) {
   return points;
 }
 
-export function generateChartPoints(timeFrame, selectedYear, selectedMonth) {
+export function generateChartPoints(
+  timeFrame,
+  selectedYear,
+  selectedMonth,
+  customRange,
+) {
   const now = new Date();
   const points = [];
+
+  if (timeFrame === "custom") {
+    const { start, end } = normalizeCustomRange(customRange, now);
+
+    // one month -> daily bars, several months -> one bar per month
+    if (start === end) {
+      const { year, month } = fromMonthIndex(start);
+
+      return generateChartPoints("monthly", year, month);
+    }
+
+    const multiYear = fromMonthIndex(start).year !== fromMonthIndex(end).year;
+
+    for (let index = start; index <= end; index++) {
+      const { year, month } = fromMonthIndex(index);
+      const date = new Date(year, month, 1);
+
+      points.push({
+        key: `${year}-${pad2(month + 1)}`,
+        date,
+        label: multiYear
+          ? `${MONTH_SHORT[month]} '${String(year).slice(-2)}`
+          : MONTH_SHORT[month],
+        month,
+        year,
+        isCurrent: index === getCurrentMonthIndex(now),
+      });
+    }
+
+    return points;
+  }
 
   if (timeFrame === "daily") {
     for (let i = 0; i < 24; i++) {
@@ -369,6 +505,112 @@ export function generateChartPoints(timeFrame, selectedYear, selectedMonth) {
 /* --------------------------------------------------------------------------
    AUTH HELPERS
 -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   PERIOD HELPERS (shared by the Layout stat cards, pages and Dashboard)
+-------------------------------------------------------------------------- */
+
+/** Range for the whole period selection (year / month / yearly-month / custom). */
+export function resolvePeriodRange({
+  timeFrame,
+  selectedYear,
+  selectedMonth,
+  yearMonth,
+  customRange,
+}) {
+  if (timeFrame === "yearly" && yearMonth !== null && yearMonth !== undefined) {
+    return getTimeFrameRange("monthly", selectedYear, yearMonth);
+  }
+
+  return getTimeFrameRange(timeFrame, selectedYear, selectedMonth, customRange);
+}
+
+/**
+ * [currentStart, nextStart) is the selected period, [previousStart,
+ * currentStart) the equally sized period before it. Returns null for
+ * daily / weekly, which are always relative to "now".
+ */
+export function getPeriodBounds({
+  timeFrame,
+  selectedYear,
+  selectedMonth,
+  yearMonth,
+  customRange,
+}) {
+  const monthBounds = (year, month) => ({
+    currentStart: new Date(year, month, 1),
+    nextStart: new Date(year, month + 1, 1),
+    previousStart: new Date(year, month - 1, 1),
+    previousLabel: "Previous Month",
+  });
+
+  if (timeFrame === "monthly") return monthBounds(selectedYear, selectedMonth);
+
+  if (timeFrame === "yearly") {
+    if (yearMonth !== null && yearMonth !== undefined) {
+      return monthBounds(selectedYear, yearMonth);
+    }
+
+    return {
+      currentStart: new Date(selectedYear, 0, 1),
+      nextStart: new Date(selectedYear + 1, 0, 1),
+      previousStart: new Date(selectedYear - 1, 0, 1),
+      previousLabel: "Last Year",
+    };
+  }
+
+  if (timeFrame === "custom") {
+    const { start, end } = normalizeCustomRange(customRange);
+    const from = fromMonthIndex(start);
+    const to = fromMonthIndex(end);
+    const count = end - start + 1;
+
+    return {
+      currentStart: new Date(from.year, from.month, 1),
+      nextStart: new Date(to.year, to.month + 1, 1),
+      previousStart: new Date(from.year, from.month - count, 1),
+      previousLabel: "Previous Period",
+    };
+  }
+
+  return null;
+}
+
+/* --------------------------------------------------------------------------
+   CHART KEYS - one place decides how a transaction maps to a chart bar
+-------------------------------------------------------------------------- */
+
+/** true when bars are days of one month (instead of months of a year) */
+export function isDailyGranularity(timeFrame, customRange) {
+  return (
+    timeFrame === "monthly" ||
+    (timeFrame === "custom" && getCustomMonthCount(customRange) === 1)
+  );
+}
+
+export function chartKeyForDate(timeFrame, date, customRange) {
+  if (timeFrame === "daily") return date.getHours();
+
+  if (timeFrame === "weekly") {
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  if (timeFrame === "monthly") return date.getDate();
+
+  if (timeFrame === "custom") {
+    return isDailyGranularity(timeFrame, customRange)
+      ? date.getDate()
+      : `${date.getFullYear()}-${date.getMonth()}`;
+  }
+
+  return date.getMonth();
+}
+
+export function chartKeyForPoint(timeFrame, point, customRange) {
+  if (timeFrame === "daily") return point.hour;
+
+  return chartKeyForDate(timeFrame, point.date, customRange);
+}
 
 export function getAuthHeaders() {
   const token = localStorage.getItem("token");

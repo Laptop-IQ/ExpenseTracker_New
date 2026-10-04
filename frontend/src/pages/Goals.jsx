@@ -1,3 +1,4 @@
+import { CoinLoaderBlock } from "../components/common/CoinLoader";
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import axios from "axios";
 import {
@@ -282,76 +283,6 @@ function StatBadge({ icon, label, value, accent }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // LOADING SKELETON
 // ─────────────────────────────────────────────────────────────────────────────
-
-function GoalSkeleton() {
-  return (
-    <div
-      style={{
-        background: "rgba(15,23,42,0.4)",
-        border: "1px solid rgba(71,85,105,0.2)",
-        borderRadius: 16,
-        padding: "20px",
-        animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
-      }}
-    >
-      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 10,
-            background: "rgba(71,85,105,0.2)",
-          }}
-        />
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              height: 16,
-              width: "60%",
-              background: "rgba(71,85,105,0.2)",
-              borderRadius: 6,
-              marginBottom: 8,
-            }}
-          />
-          <div
-            style={{
-              height: 12,
-              width: "40%",
-              background: "rgba(71,85,105,0.2)",
-              borderRadius: 4,
-            }}
-          />
-        </div>
-      </div>
-      <div
-        style={{
-          height: 6,
-          background: "rgba(71,85,105,0.2)",
-          borderRadius: 3,
-          marginBottom: 12,
-        }}
-      />
-      <div style={{ display: "flex", gap: 8 }}>
-        <div
-          style={{
-            flex: 1,
-            height: 28,
-            background: "rgba(71,85,105,0.2)",
-            borderRadius: 6,
-          }}
-        />
-        <div
-          style={{
-            width: 60,
-            height: 28,
-            background: "rgba(71,85,105,0.2)",
-            borderRadius: 6,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ICON BUTTON
@@ -1827,6 +1758,17 @@ export default function GoalsPage() {
         @keyframes pulse { 0%, 100% { opacity: 0.4 } 50% { opacity: 0.8 } }
         .goals-container { animation: fadeIn 0.4s ease-out both }
         .stats-row { animation: slideDown 0.5s ease-out both }
+        .goals-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+        .goals-deadline input[type="month"] { min-height: 32px }
+        @media (max-width: 640px) {
+          /* thumb-friendly: filters on their own full-width rows */
+          .goals-controls { display: grid; grid-template-columns: auto 1fr; width: 100% }
+          .goals-deadline, .goals-tabs { grid-column: 1 / -1 }
+          .goals-deadline { min-height: 46px }
+          .goals-deadline input[type="month"] { flex: 1; min-height: 38px; font-size: 14px !important }
+          .goals-tabs button { flex: 1; min-height: 40px }
+          .goals-new { min-height: 44px }
+        }
         .goals-grid > * { animation: fadeUp 0.5s ease-out both }
         .goals-grid > :nth-child(1) { animation-delay: 0.05s }
         .goals-grid > :nth-child(2) { animation-delay: 0.1s }
@@ -1894,16 +1836,10 @@ export default function GoalsPage() {
             </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
+          <div className="goals-controls">
             {/* Deadline month filter */}
             <div
+              className="goals-deadline"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1970,6 +1906,9 @@ export default function GoalsPage() {
 
             {/* Filter tabs */}
             <div
+              className="goals-tabs"
+              role="group"
+              aria-label="Goal status"
               style={{
                 display: "flex",
                 gap: 2,
@@ -2013,10 +1952,12 @@ export default function GoalsPage() {
 
             {/* Create button */}
             <button
+              className="goals-new"
               onClick={() => setModal({ mode: "new" })}
               style={{
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
                 padding: "10px 18px",
                 borderRadius: 11,
@@ -2170,7 +2111,9 @@ export default function GoalsPage() {
           }}
         >
           {loading ? (
-            Array.from({ length: 4 }).map((_, i) => <GoalSkeleton key={i} />)
+            <div style={{ gridColumn: "1 / -1" }}>
+              <CoinLoaderBlock label="Loading goals" minHeight="40vh" />
+            </div>
           ) : visibleGoals.length === 0 ? (
             <EmptyState
               filtered={Boolean(monthFilter)}

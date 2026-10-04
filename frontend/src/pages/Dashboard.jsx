@@ -15,9 +15,12 @@ import {
 } from "../components/Helpers";
 
 import AddTransactionModal from "../components/Add";
-import YearSelector from "../components/common/YearSelector";
-import MonthSelector from "../components/common/MonthSelector";
-import { getTimeFrameRange as getPeriodRange } from "../utils/commonHelpers";
+import CustomRangePicker from "../components/common/CustomRangePicker";
+import {
+  normalizeCustomRange,
+  fromMonthIndex,
+} from "../utils/commonHelpers";
+import { usePeriod } from "../utils/usePeriod";
 import Toast from "../components/common/Toast.common";
 
 import { INCOME_CATEGORY_ICONS, EXPENSE_CATEGORY_ICONS } from "../assets/color";
@@ -54,13 +57,14 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
    CONSTANTS
 ============================================================================ */
 
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
+const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
 
 const TIME_FRAME_LABELS = {
   daily: "Daily",
   weekly: "Weekly",
   monthly: "Monthly",
   yearly: "Yearly",
+  custom: "Custom",
 };
 
 const INCOME_CAT_COLORS = {
@@ -251,7 +255,7 @@ function getErrorMessage(error, fallback) {
 <Toast toasts={Toast} variant="dark" />;
 
 /* ============================================================================
-   DASHBOARD HEADER - UPDATED WITH YEAR SELECTOR
+   DASHBOARD HEADER
 ============================================================================ */
 
 function DashboardHeader({
@@ -261,14 +265,8 @@ function DashboardHeader({
   handleExport,
   onAddTransaction,
   exporting,
-  selectedYear = 2024,
-  onYearChange = () => {},
-  currentYear = 2024,
-  selectedMonth = 0,
-  onMonthChange = () => {},
-  yearMonth = null,
-  onYearMonthChange = () => {},
-  currentMonth = 0,
+  customRange,
+  onCustomRangeChange = () => {},
 }) {
   return (
     <section className="relative overflow-hidden rounded-[24px] border border-[#1a2035] bg-[#0E1320] p-5 shadow-[0_8px_40px_rgba(0,0,0,.35)] sm:p-6 lg:p-7">
@@ -306,41 +304,51 @@ function DashboardHeader({
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleExport}
               disabled={exporting}
-              className="group flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1a2035] bg-[#0a0f1e] px-4 text-xs font-semibold text-[#6b7280] shadow-[0_4px_16px_rgba(0,0,0,.25)] transition-all duration-200 hover:border-[#7c3aed50] hover:bg-[#10162a] hover:text-[#c4b5fd] active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60"
+              aria-label={exporting ? "Exporting" : "Export data"}
+              title="Export"
+              className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#1a2035] bg-[#0a0f1e] text-[#8b93a7] shadow-[0_4px_16px_rgba(0,0,0,.25)] transition-all duration-200 hover:border-[#7c3aed50] hover:bg-[#10162a] hover:text-[#c4b5fd] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60"
             >
               {exporting ? (
-                <RefreshCw size={14} className="animate-spin" />
+                <RefreshCw size={16} className="animate-spin" />
               ) : (
                 <Download
-                  size={14}
+                  size={16}
                   className="transition-transform duration-200 group-hover:-translate-y-0.5"
                 />
               )}
-
-              <span>{exporting ? "Exporting…" : "Export"}</span>
             </button>
 
             <button
               type="button"
               onClick={onAddTransaction}
-              className="flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#9333ea] px-5 text-xs font-bold text-white shadow-[0_8px_24px_rgba(124,58,237,.25)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_10px_30px_rgba(124,58,237,.35)] active:scale-[.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]/70"
+              className="group flex h-11 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#7c3aed] to-[#9333ea] px-5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(124,58,237,.3)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_10px_30px_rgba(124,58,237,.4)] active:scale-[.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a78bfa]/70"
             >
-              <Plus size={14} strokeWidth={2} />
-              <span>Add</span>
+              <Plus
+                size={16}
+                strokeWidth={2.5}
+                className="transition-transform duration-200 group-hover:rotate-90"
+              />
+              <span>Add Transaction</span>
             </button>
           </div>
         </div>
 
         <div className="my-5 h-px bg-gradient-to-r from-transparent via-[#1a2035] to-transparent" />
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="w-full overflow-x-auto pb-0.5 xl:w-auto">
-            <div className="inline-flex min-w-max items-center gap-1 rounded-xl border border-[#1a2035] bg-[#0a0f1e] p-1">
+        {/* Responsive filter row. Year/month selectors are intentionally removed:
+            Monthly always means the current month, Yearly always means the current year. */}
+        <div className="@container min-w-0">
+          <div className="flex min-w-0 flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+            <div
+              role="group"
+              aria-label="Time frame"
+              className="flex min-w-0 w-full items-center gap-1 rounded-xl border border-[#1a2035] bg-[#0a0f1e] p-1 @3xl:inline-flex @3xl:w-auto @3xl:shrink-0"
+            >
               {TIME_FRAMES.map((frame) => {
                 const active = timeFrame === frame;
 
@@ -350,7 +358,7 @@ function DashboardHeader({
                     type="button"
                     onClick={() => onTimeFrameChange(frame)}
                     aria-pressed={active}
-                    className={`relative rounded-lg px-3.5 py-2 text-[11px] font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60 sm:px-4 sm:text-xs ${
+                    className={`relative min-h-10 min-w-0 flex-1 whitespace-nowrap rounded-lg px-0 text-[10px] font-semibold transition-all duration-200 active:scale-[.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60 sm:px-2 @3xl:flex-none @3xl:px-4 ${
                       active
                         ? "bg-gradient-to-br from-[#7c3aed] to-[#9333ea] text-white shadow-[0_0_16px_rgba(124,58,237,.30)]"
                         : "text-[#4b5563] hover:bg-[#111827] hover:text-[#9ca3af]"
@@ -361,35 +369,14 @@ function DashboardHeader({
                 );
               })}
             </div>
-          </div>
 
-          {/* YEAR SELECTOR - ADDED HERE */}
-          <div className="flex w-full items-center justify-end gap-2 xl:w-auto">
-            <YearSelector
-              selectedYear={selectedYear}
-              setSelectedYear={onYearChange}
-              currentYear={currentYear}
-            />
-
-            {timeFrame === "monthly" && (
-              <MonthSelector
-                selectedMonth={selectedMonth}
-                setSelectedMonth={onMonthChange}
-                selectedYear={selectedYear}
-                currentYear={currentYear}
-                currentMonth={currentMonth}
-              />
-            )}
-
-            {timeFrame === "yearly" && (
-              <MonthSelector
-                allowAll
-                selectedMonth={yearMonth}
-                setSelectedMonth={onYearMonthChange}
-                selectedYear={selectedYear}
-                currentYear={currentYear}
-                currentMonth={currentMonth}
-              />
+            {timeFrame === "custom" && (
+              <div className="min-w-0 @3xl:shrink-0">
+                <CustomRangePicker
+                  customRange={customRange}
+                  setCustomRange={onCustomRangeChange}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -1025,12 +1012,19 @@ function BudgetBreakdown({ sortedPieData, pieTotal, displayExpenses }) {
 ============================================================================ */
 
 const Dashboard = () => {
+  const outletContext = useOutletContext() || {};
+
   const {
-    transactions: outletTransactions = [],
+    // The layout pre-filters `transactions` for its own cards; the dashboard
+    // needs everything (any period + the 7-month chart).
+    allTransactions,
+    transactions: layoutTransactions = [],
     timeFrame = "monthly",
     setTimeFrame = () => {},
     refreshTransactions,
-  } = useOutletContext() || {};
+  } = outletContext;
+
+  const outletTransactions = allTransactions ?? layoutTransactions;
 
   const navigate = useNavigate();
 
@@ -1041,15 +1035,13 @@ const Dashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(getCurrentYear());
 
   const currentYear = getCurrentYear();
   const currentMonth = new Date().getMonth();
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-
-  // Yearly view only: null = "All months"
-  const [yearMonth, setYearMonth] = useState(null);
+  // Dashboard period: Monthly/Yearly are always relative to the current date;
+  // Custom is the only manually selectable range.
+  const { customRange, setCustomRange } = usePeriod(outletContext);
 
   const [overviewMeta, setOverviewMeta] = useState({
     monthlyIncome: null,
@@ -1117,39 +1109,14 @@ const Dashboard = () => {
     toastTimersRef.current.set(id, timer);
   }, []);
 
-  /* --------------------------------------------------------------------------
-     YEAR CHANGE HANDLER - ADDED
-  -------------------------------------------------------------------------- */
-
-  const handleYearChange = useCallback(
-    (year) => {
-      setSelectedYear(year);
-
-      // future months are not selectable in the current year
-      if (year === currentYear) {
-        setSelectedMonth((month) => Math.min(month, currentMonth));
-        setYearMonth((month) =>
-          month !== null && month > currentMonth ? null : month,
-        );
-      }
-
+  const handleCustomRangeChange = useCallback(
+    (range) => {
+      setCustomRange(range);
       setShowAllIncome(false);
       setShowAllExpense(false);
     },
-    [currentYear, currentMonth],
+    [setCustomRange],
   );
-
-  const handleMonthChange = useCallback((month) => {
-    setSelectedMonth(month);
-    setShowAllIncome(false);
-    setShowAllExpense(false);
-  }, []);
-
-  const handleYearMonthChange = useCallback((month) => {
-    setYearMonth(month);
-    setShowAllIncome(false);
-    setShowAllExpense(false);
-  }, []);
 
   /* --------------------------------------------------------------------------
      DATE RANGE
@@ -1189,53 +1156,72 @@ const Dashboard = () => {
       return previousYearRange;
     }
 
-    if (timeFrame === "monthly") {
-      return getPeriodRange("monthly", selectedYear, selectedMonth);
+    // Monthly = current month, Yearly = current year. Only Custom is manual.
+    if (timeFrame === "monthly" || timeFrame === "yearly") {
+      return getTimeFrameRange(timeFrame, currentYear, currentMonth, customRange);
     }
 
-    if (timeFrame === "yearly") {
-      return yearMonth !== null
-        ? getPeriodRange("monthly", selectedYear, yearMonth)
-        : getPeriodRange("yearly", selectedYear);
+    if (timeFrame === "custom") {
+      return getTimeFrameRange("custom", currentYear, currentMonth, customRange);
     }
 
     return getTimeFrameRange(timeFrame);
-  }, [timeFrame, previousYearRange, selectedYear, selectedMonth, yearMonth]);
+  }, [timeFrame, previousYearRange, currentYear, currentMonth, customRange]);
 
   const timeFrameRange = activeRange;
 
   const prevTimeFrameRange = useMemo(() => {
-    // month before the selected month (Date handles the January rollover)
-    const previousMonthOf = (year, month) => ({
-      start: new Date(year, month - 1, 1),
-      end: new Date(year, month, 0, 23, 59, 59, 999),
-      label: "Previous Month",
-    });
+    const bounds =
+      timeFrame === "monthly" || timeFrame === "yearly" || timeFrame === "custom"
+        ? (() => {
+            if (timeFrame === "custom") {
+              const range = normalizeCustomRange(customRange);
+              const start = fromMonthIndex(range.start);
+              const end = fromMonthIndex(range.end);
+              const count = range.end - range.start + 1;
 
-    if (timeFrame === "monthly") {
-      return previousMonthOf(selectedYear, selectedMonth);
-    }
+              return {
+                currentStart: new Date(start.year, start.month, 1),
+                nextStart: new Date(end.year, end.month + 1, 1),
+                previousStart: new Date(start.year, start.month - count, 1),
+                previousLabel: "Previous Period",
+              };
+            }
 
-    if (timeFrame === "yearly") {
-      return yearMonth !== null
-        ? previousMonthOf(selectedYear, yearMonth)
-        : {
-            start: new Date(selectedYear - 1, 0, 1),
-            end: new Date(selectedYear - 1, 11, 31, 23, 59, 59, 999),
-            label: "Last Year",
-          };
+            if (timeFrame === "monthly") {
+              return {
+                currentStart: new Date(currentYear, currentMonth, 1),
+                nextStart: new Date(currentYear, currentMonth + 1, 1),
+                previousStart: new Date(currentYear, currentMonth - 1, 1),
+                previousLabel: "Previous Month",
+              };
+            }
+
+            return {
+              currentStart: new Date(currentYear, 0, 1),
+              nextStart: new Date(currentYear + 1, 0, 1),
+              previousStart: new Date(currentYear - 1, 0, 1),
+              previousLabel: "Last Year",
+            };
+          })()
+        : null;
+
+    // equally sized period right before the selected one
+    if (bounds) {
+      return {
+        start: bounds.previousStart,
+        end: new Date(bounds.currentStart.getTime() - 1),
+        label: bounds.previousLabel,
+      };
     }
 
     return getPreviousTimeFrameRange(
       timeFrame === "previous_year" ? "yearly" : timeFrame,
     );
-  }, [timeFrame, selectedYear, selectedMonth, yearMonth]);
+  }, [timeFrame, currentYear, currentMonth, customRange]);
 
-  // Server overview (/dashboard) only describes the real current month
-  const useServerOverview =
-    timeFrame === "monthly" &&
-    selectedYear === currentYear &&
-    selectedMonth === currentMonth;
+  // Server overview (/dashboard) only describes the real current month.
+  const useServerOverview = timeFrame === "monthly";
 
   /* --------------------------------------------------------------------------
      NORMALIZED TRANSACTIONS
@@ -1345,16 +1331,12 @@ const Dashboard = () => {
 
   const barChartData = useMemo(() => {
     // 7 months ending at the month being viewed
+    const customEnd = fromMonthIndex(normalizeCustomRange(customRange).end);
+
     const anchor =
-      timeFrame === "monthly"
-        ? new Date(selectedYear, selectedMonth, 1)
-        : timeFrame === "yearly"
-          ? yearMonth !== null
-            ? new Date(selectedYear, yearMonth, 1)
-            : selectedYear === currentYear
-              ? new Date(selectedYear, currentMonth, 1)
-              : new Date(selectedYear, 11, 1)
-          : new Date(currentYear, currentMonth, 1);
+      timeFrame === "custom"
+        ? new Date(customEnd.year, customEnd.month, 1)
+        : new Date(currentYear, currentMonth, 1);
 
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(
@@ -1395,9 +1377,7 @@ const Dashboard = () => {
   }, [
     normalizedTransactions,
     timeFrame,
-    selectedYear,
-    selectedMonth,
-    yearMonth,
+    customRange,
     currentYear,
     currentMonth,
   ]);
@@ -1953,7 +1933,7 @@ const Dashboard = () => {
 
       <main className="min-h-screen bg-[#080b12] px-3 py-3 text-slate-200 sm:px-5 sm:py-5 lg:px-6">
         <div className="mx-auto max-w-[1500px] space-y-4">
-          {/* HEADER - UPDATED WITH YEAR SELECTOR */}
+          {/* HEADER */}
 
           <div className="dashboard-fade">
             <DashboardHeader
@@ -1963,14 +1943,8 @@ const Dashboard = () => {
               handleExport={handleExport}
               onAddTransaction={() => setShowModal(true)}
               exporting={exporting}
-              selectedYear={selectedYear}
-              onYearChange={handleYearChange}
-              currentYear={currentYear}
-              selectedMonth={selectedMonth}
-              onMonthChange={handleMonthChange}
-              yearMonth={yearMonth}
-              onYearMonthChange={handleYearMonthChange}
-              currentMonth={currentMonth}
+              customRange={customRange}
+              onCustomRangeChange={handleCustomRangeChange}
             />
           </div>
 

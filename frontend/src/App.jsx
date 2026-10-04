@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 
 import axios from "axios";
 import NotificationBar from "./Context/NotificationBar";
+import CoinLoader from "./components/common/CoinLoader";
 
 // Route-level code splitting: every screen is its own chunk, so the first
 // paint only downloads what the current screen needs.
@@ -49,8 +50,8 @@ const prefetchMainPages = () => {
 };
 
 const FullPageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
-    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+  <div className="min-h-screen flex items-center justify-center bg-[#070a14]">
+    <CoinLoader size={64} />
   </div>
 );
 

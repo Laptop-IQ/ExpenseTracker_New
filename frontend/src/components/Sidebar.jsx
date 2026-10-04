@@ -8,10 +8,11 @@ import {
   Home,
   LogOut,
   Menu,
+  Pin,
+  PinOff,
   User,
   X,
   Target,
-  ChevronRight,
 } from "lucide-react";
 
 /* ─── Constants ──────────────────────────────────────────────────────────────── */
@@ -54,6 +55,7 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
     >
       <motion.span
         aria-hidden
+        initial={false}
         animate={{ opacity: isActive && !collapsed ? 1 : 0 }}
         transition={{ duration: 0.15 }}
         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/60"
@@ -73,6 +75,7 @@ const NavItem = ({ text, path, Icon, collapsed, onClick }) => {
       </motion.span>
 
       <motion.span
+        initial={false}
         animate={{
           maxWidth: collapsed ? 0 : 180,
           opacity: collapsed ? 0 : 1,
@@ -107,6 +110,7 @@ const SidebarContent = ({ collapsed, onNavClick }) => {
         className="flex-1 overflow-y-auto py-3 px-2.5 space-y-1"
       >
         <motion.p
+          initial={false}
           animate={{
             opacity: collapsed ? 0 : 1,
             height: collapsed ? 0 : "auto",
@@ -149,6 +153,7 @@ const SidebarContent = ({ collapsed, onNavClick }) => {
             <HelpCircle size={20} aria-hidden />
           </motion.span>
           <motion.span
+            initial={false}
             animate={{
               maxWidth: collapsed ? 0 : 180,
               opacity: collapsed ? 0 : 1,
@@ -187,6 +192,7 @@ const SidebarContent = ({ collapsed, onNavClick }) => {
             <LogOut size={20} aria-hidden />
           </motion.span>
           <motion.span
+            initial={false}
             animate={{
               maxWidth: collapsed ? 0 : 180,
               opacity: collapsed ? 0 : 1,
@@ -265,9 +271,59 @@ const MobileBottomNav = () => {
 };
 
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
-const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
+/**
+ * Desktop: the sidebar rests at its slim width and opens by itself when the
+ * cursor (or keyboard focus) enters it, floating over the page so the content
+ * never jumps. `pinned` keeps it open and lets the page make room for it.
+ */
+const HOVER_OPEN_DELAY = 70; // ms - ignores a cursor just passing by
+const HOVER_CLOSE_DELAY = 200; // ms - forgives small slips out of the panel
+
+const Sidebar = ({ pinned = false, setPinned = () => {} }) => {
   const sidebarRef = useRef(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const openTimer = useRef(null);
+  const closeTimer = useRef(null);
+
+  const expanded = pinned || hovered;
+  const isCollapsed = !expanded;
+  const floating = hovered && !pinned;
+
+  const clearTimers = () => {
+    window.clearTimeout(openTimer.current);
+    window.clearTimeout(closeTimer.current);
+  };
+
+  const handlePointerEnter = () => {
+    clearTimers();
+    openTimer.current = window.setTimeout(
+      () => setHovered(true),
+      HOVER_OPEN_DELAY,
+    );
+  };
+
+  const handlePointerLeave = () => {
+    clearTimers();
+    closeTimer.current = window.setTimeout(
+      () => setHovered(false),
+      HOVER_CLOSE_DELAY,
+    );
+  };
+
+  const handleFocusIn = () => {
+    clearTimers();
+    setHovered(true);
+  };
+
+  const handleFocusOut = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      handlePointerLeave();
+    }
+  };
+
+  useEffect(() => clearTimers, []);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
@@ -290,7 +346,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     <>
       {/* ═══ DESKTOP SIDEBAR ═══ */}
       <motion.aside
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700/60 shadow-sm dark:shadow-black/20 overflow-hidden"
+        aria-label="Main navigation"
+        onMouseEnter={handlePointerEnter}
+        onMouseLeave={handlePointerLeave}
+        onFocusCapture={handleFocusIn}
+        onBlurCapture={handleFocusOut}
+        className={`hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700/60 overflow-hidden transition-shadow duration-300 ${
+          floating
+            ? "shadow-2xl shadow-black/30 dark:shadow-black/60"
+            : "shadow-sm dark:shadow-black/20"
+        }`}
+        initial={false}
         animate={{ width: isCollapsed ? COLLAPSED : EXPANDED }}
         transition={SPRING}
       >
@@ -299,6 +365,7 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
             <span className="text-white font-bold text-sm select-none">F</span>
           </div>
           <motion.div
+            initial={false}
             animate={{
               maxWidth: isCollapsed ? 0 : 180,
               opacity: isCollapsed ? 0 : 1,
@@ -314,35 +381,29 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
               Expense Tracker
             </p>
           </motion.div>
+
+          {expanded && (
+            <button
+              type="button"
+              onClick={() => setPinned((value) => !value)}
+              aria-pressed={pinned}
+              aria-label={pinned ? "Unpin sidebar" : "Pin sidebar open"}
+              title={pinned ? "Unpin sidebar" : "Pin sidebar open"}
+              className={`ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${
+                pinned
+                  ? "bg-violet-500/15 text-violet-500"
+                  : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              {pinned ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />}
+            </button>
+          )}
         </div>
         <SidebarContent
           collapsed={isCollapsed}
           onNavClick={() => {}}
         />
       </motion.aside>
-
-      {/* Collapse toggle (desktop only) */}
-      <motion.div
-        className="hidden lg:block fixed z-50 top-[72px]"
-        animate={{ left: (isCollapsed ? COLLAPSED : EXPANDED) - 14 }}
-        transition={SPRING}
-      >
-        <motion.button
-          onClick={() => setIsCollapsed((c) => !c)}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 shadow-md hover:border-violet-400 dark:hover:border-violet-500 hover:text-violet-600 dark:hover:text-violet-400 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-        >
-          <motion.span
-            animate={{ rotate: isCollapsed ? 0 : 180 }}
-            transition={SPRING}
-            className="flex items-center justify-center"
-          >
-            <ChevronRight size={13} strokeWidth={2.5} aria-hidden />
-          </motion.span>
-        </motion.button>
-      </motion.div>
 
       {/* ═══ MOBILE HEADER BAR ═══ */}
       <header

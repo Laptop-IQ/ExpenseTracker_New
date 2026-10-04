@@ -52,12 +52,18 @@ import {
 
 import { learnCategory } from "../utils/smartCategoryAI";
 import AddTransactionModal from "../components/Add";
+import CustomRangePicker from "../components/common/CustomRangePicker";
+import { usePeriod } from "../utils/usePeriod";
 import {
   fmtINR,
   formatFullINR,
   getCurrentYear,
   getTimeFrameRange,
   buildChartPoints,
+  chartKeyForDate,
+  chartKeyForPoint,
+  generateChartPoints,
+  isDailyGranularity,
   isDateInRange,
   formatTransactionDate,
   formatTransactionDateMobile,
@@ -69,7 +75,7 @@ import YearSelector from "../components/common/YearSelector";
 import MonthSelector from "../components/common/MonthSelector";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly"];
+const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
 
 const MONTH_NAMES = [
   "January",
@@ -159,7 +165,11 @@ const CATEGORY_FILTERS = [
 
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
   return (
-    <div className="flex gap-1 overflow-x-auto max-w-full bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 scrollbar-none">
+    <div
+      role="group"
+      aria-label="Time frame"
+      className="flex w-full gap-1 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 @3xl:inline-flex @3xl:w-auto @3xl:shrink-0"
+    >
       {TIME_FRAMES.map((frame) => {
         const active = timeFrame === frame;
         return (
@@ -167,7 +177,8 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
             key={frame}
             type="button"
             onClick={() => setTimeFrame(frame)}
-            className={`shrink-0 px-3 sm:px-4 py-2 text-[11px] font-bold rounded-xl transition-all ${
+            aria-pressed={active}
+            className={`flex-1 whitespace-nowrap px-1 sm:px-4 @3xl:flex-none min-h-10 text-[11px] font-bold rounded-xl transition-all active:scale-[.97] ${
               active
                 ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
                 : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
@@ -1057,12 +1068,19 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
 ========================================================= */
 
 const Income = () => {
- const {
-   transactions: outletTransactions = [],
-   refreshTransactions = () => {},
-   timeFrame,
-   setTimeFrame,
- } = useOutletContext() || {};
+  const outletContext = useOutletContext() || {};
+
+  const {
+    // The layout pre-filters `transactions` for its own cards; the page needs
+    // everything so it can show any year / month / custom range.
+    allTransactions,
+    transactions: layoutTransactions = [],
+    refreshTransactions = () => {},
+    timeFrame,
+    setTimeFrame,
+  } = outletContext;
+
+  const outletTransactions = allTransactions ?? layoutTransactions;
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1072,15 +1090,21 @@ const Income = () => {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(getCurrentYear());
 
   const currentYear = getCurrentYear();
   const currentMonth = new Date().getMonth();
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-
-  // Yearly view only: null = "All months"
-  const [yearMonth, setYearMonth] = useState(null);
+  // year / month / custom range - shared with the layout stat cards
+  const {
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    yearMonth, // Yearly view only: null = "All months"
+    setYearMonth,
+    customRange,
+    setCustomRange,
+  } = usePeriod(outletContext);
 
   const [editForm, setEditForm] = useState({
     description: "",
@@ -1133,8 +1157,9 @@ const Income = () => {
   ----------------------------------------- */
 
   const timeFrameRange = useMemo(
-    () => getTimeFrameRange(timeFrame, selectedYear, selectedMonth),
-    [timeFrame, selectedYear, selectedMonth],
+    () =>
+      getTimeFrameRange(timeFrame, selectedYear, selectedMonth, customRange),
+    [timeFrame, selectedYear, selectedMonth, customRange],
   );
 
   const rangeLabel =
@@ -1219,22 +1244,50 @@ const Income = () => {
      CHART
   ----------------------------------------- */
 
-  const chartPoints = useMemo(
-    () =>
-      buildChartPoints(
-        timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
-          ? "month"
-          : timeFrame,
-        timeFrame === "monthly"
-          ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`
-          : timeFrame === "daily" || timeFrame === "weekly"
-            ? new Date().toISOString().split("T")[0].slice(0, 7)
-            : String(selectedYear),
-      ),
-    [timeFrame, selectedYear, selectedMonth],
-  );
+  const chartPoints = useMemo(() => {
+    if (timeFrame === "custom") {
+      return generateChartPoints(
+        timeFrame,
+        selectedYear,
+        selectedMonth,
+        customRange,
+      );
+    }
+
+    return buildChartPoints(
+      timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
+        ? "month"
+        : timeFrame,
+      timeFrame === "monthly"
+        ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`
+        : timeFrame === "daily" || timeFrame === "weekly"
+          ? new Date().toISOString().split("T")[0].slice(0, 7)
+          : String(selectedYear),
+    );
+  }, [timeFrame, selectedYear, selectedMonth, customRange]);
 
   const chartData = useMemo(() => {
+    // custom range: bars are days (one month) or months (several months)
+    if (timeFrame === "custom") {
+      const totals = new Map();
+
+      for (const transaction of timeFrameTransactions) {
+        const key = chartKeyForDate(
+          timeFrame,
+          new Date(transaction.date),
+          customRange,
+        );
+
+        totals.set(key, (totals.get(key) || 0) + Number(transaction.amount || 0));
+      }
+
+      return chartPoints.map((point) => ({
+        ...point,
+        income:
+          totals.get(chartKeyForPoint(timeFrame, point, customRange)) || 0,
+      }));
+    }
+
     return chartPoints.map((point) => {
       const income = timeFrameTransactions
         .filter((transaction) => {
@@ -1257,12 +1310,19 @@ const Income = () => {
         income,
       };
     });
-  }, [chartPoints, timeFrameTransactions, timeFrame]);
+  }, [chartPoints, timeFrameTransactions, timeFrame, customRange]);
+
+  // bars are days of one month (monthly / single-month custom) or months
+  const dailyBars = isDailyGranularity(timeFrame, customRange);
 
   const chartLabel =
-    timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
+    timeFrame === "daily" ||
+    timeFrame === "weekly" ||
+    isDailyGranularity(timeFrame, customRange)
       ? "Daily income"
-      : "Yearly income";
+      : timeFrame === "custom"
+        ? "Monthly income"
+        : "Yearly income";
 
   /* -----------------------------------------
      VISIBLE TRANSACTIONS
@@ -1708,15 +1768,9 @@ const Income = () => {
 
               <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
 
-              <div
-                className="
-          flex flex-col gap-3
-          sm:flex-row
-          sm:items-center
-          sm:justify-between
-        "
-              >
-                <div className="min-w-0 overflow-x-auto scrollbar-none">
+              {/* Filters row — container query so the pills never get squeezed */}
+              <div className="@container">
+                <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
                   <TimeFrameSelector
                     timeFrame={timeFrame}
                     setTimeFrame={(value) => {
@@ -1725,53 +1779,63 @@ const Income = () => {
                       setCategoryFilter("all");
                     }}
                   />
-                </div>
 
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
-                  <YearSelector
-                    selectedYear={selectedYear}
-                    setSelectedYear={(year) => {
-                      setSelectedYear(year);
-
-                      // future months are not selectable in the current year
-                      if (year === currentYear) {
-                        setSelectedMonth((month) =>
-                          Math.min(month, currentMonth),
-                        );
-                        setYearMonth((month) =>
-                          month !== null && month > currentMonth ? null : month,
-                        );
-                      }
-                    }}
-                    currentYear={currentYear}
-                  />
-
-                  {timeFrame === "yearly" && (
-                    <MonthSelector
-                      allowAll
-                      selectedMonth={yearMonth}
-                      setSelectedMonth={(month) => {
-                        setYearMonth(month);
-                        setShowAll(false);
-                      }}
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 @3xl:flex @3xl:flex-none @3xl:items-center">
+                    {timeFrame === "custom" ? (
+                      <CustomRangePicker
+                        customRange={customRange}
+                        setCustomRange={(range) => {
+                          setCustomRange(range);
+                          setShowAll(false);
+                        }}
+                      />
+                    ) : (
+                    <YearSelector
                       selectedYear={selectedYear}
-                      currentYear={currentYear}
-                      currentMonth={currentMonth}
-                    />
-                  )}
+                      setSelectedYear={(year) => {
+                        setSelectedYear(year);
 
-                  {timeFrame === "monthly" && (
-                    <MonthSelector
-                      selectedMonth={selectedMonth}
-                      setSelectedMonth={(month) => {
-                        setSelectedMonth(month);
-                        setShowAll(false);
+                        // future months are not selectable in the current year
+                        if (year === currentYear) {
+                          setSelectedMonth((month) =>
+                            Math.min(month, currentMonth),
+                          );
+                          setYearMonth((month) =>
+                            month !== null && month > currentMonth ? null : month,
+                          );
+                        }
                       }}
-                      selectedYear={selectedYear}
                       currentYear={currentYear}
-                      currentMonth={currentMonth}
                     />
-                  )}
+                    )}
+
+                    {timeFrame === "yearly" && (
+                      <MonthSelector
+                        allowAll
+                        selectedMonth={yearMonth}
+                        setSelectedMonth={(month) => {
+                          setYearMonth(month);
+                          setShowAll(false);
+                        }}
+                        selectedYear={selectedYear}
+                        currentYear={currentYear}
+                        currentMonth={currentMonth}
+                      />
+                    )}
+
+                    {timeFrame === "monthly" && (
+                      <MonthSelector
+                        selectedMonth={selectedMonth}
+                        setSelectedMonth={(month) => {
+                          setSelectedMonth(month);
+                          setShowAll(false);
+                        }}
+                        selectedYear={selectedYear}
+                        currentYear={currentYear}
+                        currentMonth={currentMonth}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1929,7 +1993,7 @@ const Income = () => {
                         fontSize: 9,
                       }}
                       interval={
-                        timeFrame === "monthly"
+                        dailyBars
                           ? chartData.length > 20
                             ? 4
                             : 2
@@ -1959,7 +2023,7 @@ const Income = () => {
                       dataKey="income"
                       fill="url(#premiumIncomeGradient)"
                       radius={[6, 6, 0, 0]}
-                      maxBarSize={timeFrame === "monthly" ? 18 : 32}
+                      maxBarSize={dailyBars ? 18 : 32}
                     >
                       {chartData.map((item, index) => (
                         <Cell

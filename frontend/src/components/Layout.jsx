@@ -43,6 +43,9 @@ import {
 } from "lucide-react";
 
 import Sidebar from "./Sidebar";
+import CoinLoader, { CoinLoaderBlock } from "./common/CoinLoader";
+import { useCreatePeriod } from "../utils/usePeriod";
+import { getPeriodBounds, resolvePeriodRange } from "../utils/commonHelpers";
 import AddTransactionModal from "../components/Add";
 import "./Layout.css";
 
@@ -192,10 +195,15 @@ function useTransactions() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // becomes true once the first request has finished (success or failure)
+  const [loaded, setLoaded] = useState(false);
+
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const fetchTransactions = useCallback(async () => {
     if (!API_BASE) {
+      setLoaded(true);
+
       throw new Error(
         "VITE_API_BASE is missing. Please configure your environment variable.",
       );
@@ -241,6 +249,7 @@ function useTransactions() {
       throw error;
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, []);
 
@@ -338,6 +347,7 @@ function useTransactions() {
   return {
     transactions,
     loading,
+    loaded,
     lastUpdated,
     fetchTransactions,
     addTransaction,
@@ -350,8 +360,19 @@ function useTransactions() {
    FILTER
 ============================================================================ */
 
-function filterTransactions(transactions, frame) {
+function filterTransactions(transactions, frame, period) {
   const now = new Date();
+
+  // monthly / yearly / custom follow the selected period (year, month, range)
+  if (frame === "monthly" || frame === "yearly" || frame === "custom") {
+    const { start, end } = resolvePeriodRange({ timeFrame: frame, ...period });
+
+    return transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+
+      return date >= start && date <= end;
+    });
+  }
 
   const startOfToday = new Date(
     now.getFullYear(),
@@ -402,7 +423,7 @@ function filterTransactions(transactions, frame) {
    STATS
 ============================================================================ */
 
-function calculateStats(transactions, timeFrame) {
+function calculateStats(transactions, timeFrame, period) {
   const now = new Date();
 
   const startOfToday = new Date(
@@ -415,7 +436,18 @@ function calculateStats(transactions, timeFrame) {
   let previousPeriodStart;
   let nextPeriodStart;
 
-  switch (timeFrame) {
+  // monthly / yearly / custom: bounds come from the selected period
+  const bounds = getPeriodBounds({ timeFrame, ...period });
+
+  switch (bounds ? "period" : timeFrame) {
+    case "period": {
+      currentPeriodStart = bounds.currentStart;
+      nextPeriodStart = bounds.nextStart;
+      previousPeriodStart = bounds.previousStart;
+
+      break;
+    }
+
     case "daily": {
       currentPeriodStart = startOfToday;
 
@@ -444,20 +476,8 @@ function calculateStats(transactions, timeFrame) {
       break;
     }
 
-    case "yearly": {
-      // This Year
-      currentPeriodStart = new Date(now.getFullYear(), 0, 1);
-
-      nextPeriodStart = new Date(now.getFullYear() + 1, 0, 1);
-
-      previousPeriodStart = new Date(now.getFullYear() - 1, 0, 1);
-
-      break;
-    }
-
-    case "monthly":
     default: {
-      // This Month
+      // fallback: current month
       currentPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
       nextPeriodStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -695,42 +715,6 @@ function Toast({ message, type = "success", onDone }) {
    LOADING ROW
 ============================================================================ */
 
-function TransactionSkeleton() {
-  return (
-    <div className="transaction-skeleton">
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
-  );
-}
-
-/* ============================================================================
-   PAGE SKELETON (shown while a lazy page chunk loads)
-============================================================================ */
-
-function PageSkeleton() {
-  return (
-    <div
-      className="space-y-4 p-1 animate-pulse"
-      role="status"
-      aria-label="Loading page"
-    >
-      <div className="h-32 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60" />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className="h-28 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60"
-          />
-        ))}
-      </div>
-      <div className="h-64 rounded-3xl bg-slate-200/60 dark:bg-slate-800/60" />
-    </div>
-  );
-}
-
 /* ============================================================================
    MAIN LAYOUT
 ============================================================================ */
@@ -739,6 +723,7 @@ const Layout = ({ onLogout, user }) => {
   const {
     transactions,
     loading,
+    loaded,
     lastUpdated,
     fetchTransactions,
     addTransaction,
@@ -752,7 +737,25 @@ const Layout = ({ onLogout, user }) => {
 
   const [timeFrame, setTimeFrame] = useState("monthly");
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // year / month / custom range - shared with every page through the outlet
+  const period = useCreatePeriod();
+
+  // slim by default, opens on hover; "pinned" keeps it open (remembered)
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    try {
+      return localStorage.getItem("sidebarPinned") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("sidebarPinned", sidebarPinned ? "1" : "0");
+    } catch {
+      /* storage unavailable - preference just is not remembered */
+    }
+  }, [sidebarPinned]);
 
   const [showAllTx, setShowAllTx] = useState(false);
 
@@ -773,8 +776,21 @@ const Layout = ({ onLogout, user }) => {
   -------------------------------------------------------------------------- */
 
   const filteredTransactions = useMemo(
-    () => filterTransactions(transactions, timeFrame),
-    [transactions, timeFrame],
+    () =>
+      filterTransactions(transactions, timeFrame, {
+        selectedYear: period.selectedYear,
+        selectedMonth: period.selectedMonth,
+        yearMonth: period.yearMonth,
+        customRange: period.customRange,
+      }),
+    [
+      transactions,
+      timeFrame,
+      period.selectedYear,
+      period.selectedMonth,
+      period.yearMonth,
+      period.customRange,
+    ],
   );
 
   /* --------------------------------------------------------------------------
@@ -782,16 +798,50 @@ const Layout = ({ onLogout, user }) => {
   -------------------------------------------------------------------------- */
 
   const stats = useMemo(
-  () => calculateStats(transactions, timeFrame),
-  [transactions, timeFrame],
+    () =>
+      calculateStats(transactions, timeFrame, {
+        selectedYear: period.selectedYear,
+        selectedMonth: period.selectedMonth,
+        yearMonth: period.yearMonth,
+        customRange: period.customRange,
+      }),
+    [
+      transactions,
+      timeFrame,
+      period.selectedYear,
+      period.selectedMonth,
+      period.yearMonth,
+      period.customRange,
+    ],
 );
 
-  const timeframeLabels = {
-    daily: "Today",
-    weekly: "This Week",
-    monthly: "This Month",
-    yearly: "This Year",
-  };
+  const periodLabel = useMemo(() => {
+    if (timeFrame === "daily") return "Today";
+    if (timeFrame === "weekly") return "This Week";
+
+    if (
+      timeFrame === "yearly" &&
+      (period.yearMonth === null || period.yearMonth === undefined)
+    ) {
+      return period.selectedYear === new Date().getFullYear()
+        ? "This Year"
+        : `Year ${period.selectedYear}`;
+    }
+
+    return resolvePeriodRange({
+      timeFrame,
+      selectedYear: period.selectedYear,
+      selectedMonth: period.selectedMonth,
+      yearMonth: period.yearMonth,
+      customRange: period.customRange,
+    }).label;
+  }, [
+    timeFrame,
+    period.selectedYear,
+    period.selectedMonth,
+    period.yearMonth,
+    period.customRange,
+  ]);
 
   /* --------------------------------------------------------------------------
      TOP CATEGORIES
@@ -933,6 +983,7 @@ const Layout = ({ onLogout, user }) => {
 
       timeFrame,
       setTimeFrame,
+      period,
 
       lastUpdated,
     }),
@@ -944,6 +995,7 @@ const Layout = ({ onLogout, user }) => {
       deleteTransaction,
       fetchTransactions,
       timeFrame,
+      period,
       lastUpdated,
     ],
   );
@@ -977,8 +1029,8 @@ const Layout = ({ onLogout, user }) => {
       <Sidebar
         user={user}
         onLogout={onLogout}
-        isCollapsed={sidebarCollapsed}
-        setIsCollapsed={setSidebarCollapsed}
+        pinned={sidebarPinned}
+        setPinned={setSidebarPinned}
       />
 
       {/* =====================================================================
@@ -1007,7 +1059,7 @@ const Layout = ({ onLogout, user }) => {
       ===================================================================== */}
 
       <main
-        className={`app-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+        className={`app-main ${sidebarPinned ? "" : "sidebar-collapsed"}`}
       >
         <div className="dashboard-container">
           {/* ================================================================
@@ -1076,7 +1128,7 @@ const Layout = ({ onLogout, user }) => {
               title="Income"
               value={formatCurrency(stats.thisIncome)}
               badge={percentage(stats.incomeChange)}
-              footer={timeframeLabels[timeFrame]}
+              footer={periodLabel}
               icon={<ArrowUp />}
               accent="green"
               delay={0.1}
@@ -1086,7 +1138,7 @@ const Layout = ({ onLogout, user }) => {
               title="Expenses"
               value={formatCurrency(stats.thisExpenses)}
               badge={percentage(stats.expenseChange)}
-              footer={timeframeLabels[timeFrame]}
+              footer={periodLabel}
               icon={<ArrowDown />}
               accent="red"
               delay={0.15}
@@ -1096,7 +1148,7 @@ const Layout = ({ onLogout, user }) => {
               title="Saved"
               value={formatCurrency(stats.thisSavings)}
               badge={`${stats.savingsRate}% rate`}
-              footer={timeframeLabels[timeFrame]}
+              footer={periodLabel}
               icon={<PiggyBank />}
               accent="blue"
               delay={0.2}
@@ -1115,7 +1167,14 @@ const Layout = ({ onLogout, user }) => {
             <div className="dashboard-left">
               <PanelCard delay={0.25}>
                 <div className="outlet-wrapper mt-5">
-                  <Suspense fallback={<PageSkeleton />}>
+                  {/* first load: coin over the page while the data arrives */}
+                  {!loaded && transactions.length === 0 && (
+                    <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#070a14]/70 backdrop-blur-[2px]">
+                      <CoinLoader size={68} label="Loading your money" />
+                    </div>
+                  )}
+
+                  <Suspense fallback={<CoinLoaderBlock label="Loading" minHeight="60vh" />}>
                     <Outlet context={outletContext} />
                   </Suspense>
                 </div>
@@ -1245,11 +1304,9 @@ const Layout = ({ onLogout, user }) => {
 
                   <div className="transaction-list">
                     {loading && transactions.length === 0 ? (
-                      <>
-                        <TransactionSkeleton />
-                        <TransactionSkeleton />
-                        <TransactionSkeleton />
-                      </>
+                      <div className="flex justify-center py-10">
+                        <CoinLoader size={44} label="Loading transactions" />
+                      </div>
                     ) : displayedTransactions.length === 0 ? (
                       <div className="empty-state">
                         <div className="empty-icon">
