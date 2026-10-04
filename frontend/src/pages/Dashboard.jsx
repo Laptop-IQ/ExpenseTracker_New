@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -48,6 +49,7 @@ import {
   PieChart as PieChartIcon,
   RefreshCw,
   Target,
+  ChevronDown,
   X,
 } from "lucide-react";
 
@@ -268,6 +270,46 @@ function DashboardHeader({
   customRange,
   onCustomRangeChange = () => {},
 }) {
+  const [mobilePeriodOpen, setMobilePeriodOpen] = useState(false);
+  const mobilePeriodButtonRef = useRef(null);
+  const [mobilePeriodMenuStyle, setMobilePeriodMenuStyle] = useState({});
+
+  const updateMobilePeriodMenuPosition = useCallback(() => {
+    const button = mobilePeriodButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const gap = 8;
+    const top = rect.bottom + gap;
+    const maxHeight = Math.max(120, window.innerHeight - top - 12);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8));
+    setMobilePeriodMenuStyle({ top, left, width: rect.width, maxHeight });
+  }, []);
+
+  useEffect(() => {
+    if (!mobilePeriodOpen) return undefined;
+    updateMobilePeriodMenuPosition();
+    const handleViewportChange = () => updateMobilePeriodMenuPosition();
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [mobilePeriodOpen, updateMobilePeriodMenuPosition]);
+
+  useEffect(() => {
+    const close = (event) => {
+      if (!event.target.closest?.("[data-dashboard-period]")) {
+        setMobilePeriodOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+
+  const mobileFrames = TIME_FRAMES.filter((frame) => frame !== "custom");
+  const mobileLabel = TIME_FRAME_LABELS[timeFrame] || "Monthly";
+
   return (
     <section className="relative overflow-hidden rounded-[24px] border border-[#1a2035] bg-[#0E1320] p-5 shadow-[0_8px_40px_rgba(0,0,0,.35)] sm:p-6 lg:p-7">
       <div
@@ -344,21 +386,21 @@ function DashboardHeader({
             Monthly always means the current month, Yearly always means the current year. */}
         <div className="@container min-w-0">
           <div className="flex min-w-0 flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+            {/* Desktop time-frame pills */}
             <div
               role="group"
               aria-label="Time frame"
-              className="flex min-w-0 w-full items-center gap-1 rounded-xl border border-[#1a2035] bg-[#0a0f1e] p-1 @3xl:inline-flex @3xl:w-auto @3xl:shrink-0"
+              className="hidden min-w-0 w-full gap-1 rounded-xl border border-[#1a2035] bg-[#0a0f1e] p-1 @3xl:inline-flex @3xl:w-auto @3xl:shrink-0"
             >
               {TIME_FRAMES.map((frame) => {
                 const active = timeFrame === frame;
-
                 return (
                   <button
                     key={frame}
                     type="button"
                     onClick={() => onTimeFrameChange(frame)}
                     aria-pressed={active}
-                    className={`relative min-h-10 min-w-0 flex-1 whitespace-nowrap rounded-lg px-0 text-[10px] font-semibold transition-all duration-200 active:scale-[.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60 sm:px-2 @3xl:flex-none @3xl:px-4 ${
+                    className={`relative min-h-10 whitespace-nowrap rounded-lg px-3 text-[11px] font-semibold transition-all duration-200 active:scale-[.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed]/60 @3xl:flex-none @3xl:px-4 ${
                       active
                         ? "bg-gradient-to-br from-[#7c3aed] to-[#9333ea] text-white shadow-[0_0_16px_rgba(124,58,237,.30)]"
                         : "text-[#4b5563] hover:bg-[#111827] hover:text-[#9ca3af]"
@@ -370,6 +412,84 @@ function DashboardHeader({
               })}
             </div>
 
+            {/* Mobile: exactly two controls — period dropdown + Custom */}
+            <div
+              className="flex w-full gap-2 @3xl:hidden"
+              data-dashboard-period
+            >
+              <div className="relative min-w-0 flex-1">
+                <button
+                  type="button"
+                  ref={mobilePeriodButtonRef}
+                  onClick={() => {
+                    setMobilePeriodOpen((value) => {
+                      const next = !value;
+                      if (next)
+                        requestAnimationFrame(updateMobilePeriodMenuPosition);
+                      return next;
+                    });
+                  }}
+                  aria-expanded={mobilePeriodOpen}
+                  className="flex min-h-11 w-full items-center justify-between rounded-xl border border-[#27213f] bg-[#0a0f1e] px-3 text-[11px] font-bold text-[#d9def0] shadow-[0_8px_20px_rgba(0,0,0,.18)]"
+                >
+                  <span>
+                    {mobileLabel === "Custom" ? "Monthly" : mobileLabel}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={2.2}
+                    className={`text-[#8b93a7] transition-transform duration-200 ${
+                      mobilePeriodOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                 
+                </button>
+
+                {mobilePeriodOpen &&
+                  createPortal(
+                    <div
+                      data-dashboard-period
+                      className="fixed z-[2147483647] min-w-[150px] overflow-y-auto rounded-xl border border-[#302052] bg-[#080b16]/[.99] p-1.5 shadow-[0_24px_70px_rgba(0,0,0,.7)] backdrop-blur-xl overscroll-contain"
+                      style={mobilePeriodMenuStyle}
+                    >
+                      {mobileFrames.map((frame) => {
+                        const active = timeFrame === frame;
+                        return (
+                          <button
+                            key={frame}
+                            type="button"
+                            onClick={() => {
+                              onTimeFrameChange(frame);
+                              setMobilePeriodOpen(false);
+                            }}
+                            className={`flex min-h-10 w-full items-center rounded-lg px-3 text-left text-[11px] font-bold transition-colors ${
+                              active
+                                ? "bg-gradient-to-r from-[#7c3aed] to-[#9333ea] text-white"
+                                : "text-[#b6bdd0] hover:bg-[#111827]"
+                            }`}
+                          >
+                            {TIME_FRAME_LABELS[frame]}
+                          </button>
+                        );
+                      })}
+                    </div>,
+                    document.body,
+                  )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onTimeFrameChange("custom")}
+                aria-pressed={timeFrame === "custom"}
+                className={`min-h-11 min-w-[88px] rounded-xl px-4 text-[11px] font-bold transition-all active:scale-[.97] ${
+                  timeFrame === "custom"
+                    ? "bg-gradient-to-br from-[#7c3aed] to-[#9333ea] text-white shadow-[0_0_16px_rgba(124,58,237,.30)]"
+                    : "border border-[#27213f] bg-[#0a0f1e] text-[#aab2c7] hover:bg-[#111827]"
+                }`}
+              >
+                Custom
+              </button>
+            </div>
             {timeFrame === "custom" && (
               <div className="min-w-0 @3xl:shrink-0">
                 <CustomRangePicker
@@ -1485,7 +1605,6 @@ const Dashboard = () => {
 
   const fetchDashboardOverview = useCallback(async (signal) => {
     if (!API_BASE) {
-      console.error("VITE_API_BASE is not configured.");
       return;
     }
 

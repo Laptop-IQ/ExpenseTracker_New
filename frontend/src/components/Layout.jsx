@@ -49,7 +49,7 @@ import { getPeriodBounds, resolvePeriodRange } from "../utils/commonHelpers";
 import AddTransactionModal from "../components/Add";
 import "./Layout.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 
 /* ============================================================================
    CATEGORIES
@@ -201,12 +201,13 @@ function useTransactions() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const fetchTransactions = useCallback(async () => {
+    // Keep the UI usable when the frontend is opened without a backend env.
+    // Do not throw here: the initial effect would turn a configuration issue
+    // into an uncaught console error. Mutating actions still validate API_BASE.
     if (!API_BASE) {
       setLoaded(true);
-
-      throw new Error(
-        "VITE_API_BASE is missing. Please configure your environment variable.",
-      );
+      setTransactions([]);
+      return [];
     }
 
     try {

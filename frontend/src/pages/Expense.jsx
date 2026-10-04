@@ -1,4 +1,4 @@
-import ReactDOM from "react-dom";
+import ReactDOM, { createPortal } from "react-dom";
 import { useOutletContext } from "react-router-dom";
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 
@@ -36,19 +36,16 @@ import {
   Shield,
   Milk,
   Wrench,
-  Coins,
   ShoppingBasket,
   Cookie,
   Sparkles,
   CalendarDays,
   WalletCards,
   RotateCcw,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Receipt,
-  MoreHorizontal,
 } from "lucide-react";
+
 import {
   AreaChart,
   Area,
@@ -59,11 +56,13 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+
 import axios from "axios";
+
 import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
-import YearSelector from "../components/common/YearSelector";
-import MonthSelector from "../components/common/MonthSelector";
+
 import CustomRangePicker from "../components/common/CustomRangePicker";
+
 import {
   chartKeyForDate,
   chartKeyForPoint,
@@ -71,16 +70,37 @@ import {
   getTimeFrameRange,
   isDailyGranularity,
 } from "../utils/commonHelpers";
+
 import { usePeriod } from "../utils/usePeriod";
 
+/* -------------------------------------------------------------------------- */
+/*                                  CONFIG                                    */
+/* -------------------------------------------------------------------------- */
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = String(import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
 
 const AI_DEBOUNCE_MS = 400;
 const MAX_VISIBLE_TRANSACTIONS = 10;
 
+const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 /* -------------------------------------------------------------------------- */
-/*                                  CONSTANTS                                 */
+/*                                  COLORS                                    */
 /* -------------------------------------------------------------------------- */
 
 const CATEGORY_COLOR = {
@@ -143,25 +163,8 @@ const EXPENSE_CATEGORIES = [
   "Other",
 ];
 
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
 /* -------------------------------------------------------------------------- */
-/*                                   HELPERS                                  */
+/*                                  HELPERS                                   */
 /* -------------------------------------------------------------------------- */
 
 function getLocalDateInputValue(date = new Date()) {
@@ -172,15 +175,41 @@ function getLocalDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Production-safe date parser.
+ *
+ * Important:
+ * new Date("2026-10-04") is interpreted as UTC in browsers.
+ * For an Indian/local date input this can become Oct 3 in some timezones.
+ * Therefore YYYY-MM-DD is explicitly parsed as local time.
+ */
+function normalizeDate(value) {
+  if (!value) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+
+    const localDate = new Date(year, month - 1, day);
+
+    return Number.isNaN(localDate.getTime()) ? null : localDate;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function toIsoWithClientTime(dateValue) {
-  if (!dateValue) return new Date().toISOString();
+  if (!dateValue) {
+    return new Date().toISOString();
+  }
 
-  if (typeof dateValue === "string" && dateValue.length === 10) {
-    const now = new Date();
+  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    const [year, month, day] = dateValue.split("-").map(Number);
 
-    return new Date(
-      `${dateValue}T${now.toTimeString().slice(0, 8)}`,
-    ).toISOString();
+    const localDate = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+    return localDate.toISOString();
   }
 
   const parsed = new Date(dateValue);
@@ -194,6 +223,7 @@ function toIsoWithClientTime(dateValue) {
 
 function safeNumber(value) {
   const number = Number(value);
+
   return Number.isFinite(number) ? number : 0;
 }
 
@@ -224,11 +254,6 @@ function fmtINRFull(value) {
   })}`;
 }
 
-function normalizeDate(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function formatCategory(category) {
   return String(category || "Other").replace(/_/g, " ");
 }
@@ -238,8 +263,10 @@ function isDateInRange(dateValue, start, end) {
 
   if (!date) return false;
 
-  const startDate = new Date(start);
-  const endDate = new Date(end);
+  const startDate = normalizeDate(start);
+  const endDate = normalizeDate(end);
+
+  if (!startDate || !endDate) return false;
 
   startDate.setHours(0, 0, 0, 0);
   endDate.setHours(23, 59, 59, 999);
@@ -248,10 +275,12 @@ function isDateInRange(dateValue, start, end) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                    TOAST                                   */
+/*                                  TOAST                                     */
 /* -------------------------------------------------------------------------- */
 
 function Toast({ toasts }) {
+  if (!toasts?.length) return null;
+
   return (
     <div
       className="
@@ -268,6 +297,7 @@ function Toast({ toasts }) {
         gap-2
         pointer-events-none
       "
+      aria-live="polite"
     >
       {toasts.map((toast) => (
         <div
@@ -330,7 +360,7 @@ function Toast({ toasts }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  STAT CARD                                 */
+/*                                STAT CARD                                   */
 /* -------------------------------------------------------------------------- */
 
 function StatCard({
@@ -383,7 +413,16 @@ function StatCard({
       <div className="relative">
         <div className="flex items-start justify-between gap-3">
           <div
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center"
+            className="
+              w-10
+              h-10
+              sm:w-11
+              sm:h-11
+              rounded-2xl
+              flex
+              items-center
+              justify-center
+            "
             style={{
               background: `${accent}15`,
               color: accent,
@@ -392,6 +431,7 @@ function StatCard({
             {Icon && <Icon size={19} />}
           </div>
 
+          {/* FIXED: no accidental createPortal here */}
           {trend !== undefined && trend !== null && (
             <div
               className={`
@@ -451,7 +491,9 @@ function StatCard({
 /* -------------------------------------------------------------------------- */
 
 function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload?.length) {
+    return null;
+  }
 
   return (
     <div
@@ -473,7 +515,7 @@ function CustomTooltip({ active, payload, label }) {
       </p>
 
       <p className="mt-1 font-black text-orange-500">
-        {fmtINRFull(payload[0].value)}
+        {fmtINRFull(payload[0]?.value)}
       </p>
     </div>
   );
@@ -508,6 +550,7 @@ function CategoryPill({ cat }) {
         className="w-1.5 h-1.5 rounded-full"
         style={{ background: color }}
       />
+
       {formatCategory(cat)}
     </span>
   );
@@ -518,58 +561,330 @@ function CategoryPill({ cat }) {
 /* -------------------------------------------------------------------------- */
 
 function TimeFrameSelector({ timeFrame, setTimeFrame }) {
-  return (
-    <div
-      role="group"
-      aria-label="Time frame"
-      className="
-        flex
-        w-full
-        gap-1
-        bg-slate-100/80
-        dark:bg-slate-800/80
-        p-1
-        rounded-2xl
-        border
-        border-slate-200/60
-        dark:border-slate-700/60
-        @3xl:inline-flex
-        @3xl:w-auto
-        @3xl:shrink-0
-      "
-    >
-      {TIME_FRAMES.map((frame) => {
-        const active = timeFrame === frame;
+  const [open, setOpen] = useState(false);
 
-        return (
+  const periodButtonRef = useRef(null);
+
+  const [menuStyle, setMenuStyle] = useState({});
+
+  const updateMenuPosition = useCallback(() => {
+    const button = periodButtonRef.current;
+
+    if (!button || typeof window === "undefined") {
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+
+    const gap = 8;
+
+    const top = rect.bottom + gap;
+
+    const maxHeight = Math.max(120, window.innerHeight - top - 12);
+
+    const left = Math.max(
+      8,
+      Math.min(rect.left, window.innerWidth - rect.width - 8),
+    );
+
+    setMenuStyle({
+      top,
+      left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  const mobileFrames = TIME_FRAMES.filter((frame) => frame !== "custom");
+
+  const currentLabel =
+    String(timeFrame || "monthly")
+      .charAt(0)
+      .toUpperCase() + String(timeFrame || "monthly").slice(1);
+
+  /* ---------------------------------------------------------------------- */
+  /* Position dropdown                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    updateMenuPosition();
+
+    const handleViewportChange = () => {
+      updateMenuPosition();
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+
+    window.addEventListener("scroll", handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Outside click                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      const target = event.target;
+
+      if (
+        target instanceof Element &&
+        target.closest("[data-mobile-timeframe]")
+      ) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [open]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Escape                                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        periodButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="w-full @3xl:w-auto @3xl:shrink-0">
+      {/* Desktop */}
+      <div
+        role="group"
+        aria-label="Time frame"
+        className="
+          hidden
+          w-full
+          gap-1
+          rounded-2xl
+          border
+          border-slate-200/60
+          bg-slate-100/80
+          p-1
+          dark:border-slate-700/60
+          dark:bg-slate-800/80
+          @3xl:inline-flex
+          @3xl:w-auto
+        "
+      >
+        {TIME_FRAMES.map((frame) => {
+          const active = timeFrame === frame;
+
+          return (
+            <button
+              key={frame}
+              type="button"
+              onClick={() => {
+                setTimeFrame(frame);
+                setOpen(false);
+              }}
+              aria-pressed={active}
+              className={`
+               flex
+                min-h-10
+                flex-1
+                items-center
+                justify-center
+                whitespace-nowrap
+                rounded-xl
+                px-1
+                text-[11px]
+                font-bold
+                transition-all
+                active:scale-[.97]
+                sm:px-4
+                @3xl:flex-none
+                ${
+                  active
+                    ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
+                    : "text-slate-500 hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                }
+              `}
+            >
+              {frame.charAt(0).toUpperCase() + frame.slice(1)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Mobile */}
+      <div className="flex w-full gap-2 @3xl:hidden" data-mobile-timeframe>
+        <div className="relative min-w-0 flex-1">
           <button
-            key={frame}
             type="button"
-            onClick={() => setTimeFrame(frame)}
-            aria-pressed={active}
-            className={`
-              flex-1
-              whitespace-nowrap
-              px-1
-              sm:px-4
-              @3xl:flex-none
-              min-h-10
+            ref={periodButtonRef}
+            onClick={() => {
+              setOpen((previous) => {
+                const next = !previous;
+
+                if (next) {
+                  requestAnimationFrame(() => {
+                    updateMenuPosition();
+                  });
+                }
+
+                return next;
+              });
+            }}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            className="
+              flex
+              min-h-11
+              w-full
+              items-center
+              justify-between
+              rounded-xl
+              border
+              border-slate-700/70
+              bg-slate-900/90
+              px-3
               text-[11px]
               font-bold
-              rounded-xl
-              transition-all
-              active:scale-[.97]
-              ${
-                active
-                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
-              }
-            `}
+              text-slate-200
+              shadow-sm
+              outline-none
+              focus:border-orange-500
+              focus:ring-2
+              focus:ring-orange-500/20
+            "
           >
-            {frame.charAt(0).toUpperCase() + frame.slice(1)}
+            <span>{currentLabel === "Custom" ? "Monthly" : currentLabel}</span>
+
+            {/* FIXED: open instead of undefined mobilePeriodOpen */}
+            <ChevronDown
+              aria-hidden="true"
+              size={16}
+              strokeWidth={2.2}
+              className={`
+                text-[#8b93a7]
+                transition-transform
+                duration-200
+                ${open ? "rotate-180" : ""}
+              `}
+            />
           </button>
-        );
-      })}
+
+          {open &&
+            createPortal(
+              <div
+                data-mobile-timeframe
+                role="listbox"
+                aria-label="Select time frame"
+                className="
+                  fixed
+                  z-[2147483647]
+                  min-w-[150px]
+                  overflow-y-auto
+                  rounded-xl
+                  border
+                  border-slate-700/80
+                  bg-slate-950/[.99]
+                  p-1.5
+                  shadow-[0_24px_70px_rgba(0,0,0,.7)]
+                  backdrop-blur-xl
+                  overscroll-contain
+                "
+                style={menuStyle}
+              >
+                {mobileFrames.map((frame) => {
+                  const active = timeFrame === frame;
+
+                  return (
+                    <button
+                      key={frame}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        setTimeFrame(frame);
+                        setOpen(false);
+                      }}
+                      className={`
+                        flex
+                        min-h-10
+                        w-full
+                        items-center
+                        rounded-lg
+                        px-3
+                        text-left
+                        text-[11px]
+                        font-bold
+                        transition-colors
+                        ${
+                          active
+                            ? "bg-orange-500 text-white"
+                            : "text-slate-300 hover:bg-slate-800"
+                        }
+                      `}
+                    >
+                      {frame.charAt(0).toUpperCase() + frame.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setTimeFrame("custom");
+            setOpen(false);
+          }}
+          aria-pressed={timeFrame === "custom"}
+          className={`
+            min-h-11
+            min-w-[88px]
+            rounded-xl
+            px-4
+            text-[11px]
+            font-bold
+            transition-all
+            active:scale-[.97]
+            ${
+              timeFrame === "custom"
+                ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20"
+                : "border border-slate-700/70 bg-slate-900/90 text-slate-300 hover:bg-slate-800"
+            }
+          `}
+        >
+          Custom
+        </button>
+      </div>
     </div>
   );
 }
@@ -580,6 +895,7 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
 
 function FilterDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false);
+
   const ref = useRef(null);
 
   const options = useMemo(
@@ -588,14 +904,7 @@ function FilterDropdown({ value, onChange }) {
         value: "all",
         label: "All Transactions",
       },
-      {
-        value: "month",
-        label: "Selected Month",
-      },
-      {
-        value: "year",
-        label: "Selected Year",
-      },
+
       ...EXPENSE_CATEGORIES.map((category) => ({
         value: category,
         label: formatCategory(category),
@@ -608,6 +917,8 @@ function FilterDropdown({ value, onChange }) {
     options.find((option) => option.value === value)?.label || "Filter";
 
   useEffect(() => {
+    if (!open) return undefined;
+
     const handleOutside = (event) => {
       if (ref.current && !ref.current.contains(event.target)) {
         setOpen(false);
@@ -616,14 +927,32 @@ function FilterDropdown({ value, onChange }) {
 
     document.addEventListener("mousedown", handleOutside);
 
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => setOpen((previous) => !previous)}
         className="
           flex
           items-center
@@ -640,20 +969,51 @@ function FilterDropdown({ value, onChange }) {
           dark:hover:bg-slate-800
           transition
           shadow-sm
+          outline-none
+          focus:ring-2
+          focus:ring-orange-500/20
         "
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <div className="w-7 h-7 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+        <div
+          className="
+          w-7
+          h-7
+          rounded-xl
+          bg-orange-50
+          dark:bg-orange-500/10
+          flex
+          items-center
+          justify-center
+        "
+        >
           <SlidersHorizontal size={13} className="text-orange-500" />
         </div>
 
         <div className="hidden sm:flex flex-col items-start min-w-0">
-          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
+          <span
+            className="
+            text-[9px]
+            uppercase
+            tracking-wider
+            text-slate-400
+            font-bold
+          "
+          >
             Filter
           </span>
 
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
+          <span
+            className="
+            text-xs
+            font-bold
+            text-slate-700
+            dark:text-slate-200
+            max-w-[120px]
+            truncate
+          "
+          >
             {label}
           </span>
         </div>
@@ -688,7 +1048,13 @@ function FilterDropdown({ value, onChange }) {
             overflow-hidden
           "
         >
-          <div className="max-h-72 overflow-y-auto p-1.5">
+          <div
+            className="
+            max-h-72
+            overflow-y-auto
+            p-1.5
+          "
+          >
             {options.map((option) => {
               const active = option.value === value;
 
@@ -696,6 +1062,8 @@ function FilterDropdown({ value, onChange }) {
                 <button
                   key={option.value}
                   type="button"
+                  role="option"
+                  aria-selected={active}
                   onClick={() => {
                     onChange(option.value);
                     setOpen(false);
@@ -718,17 +1086,30 @@ function FilterDropdown({ value, onChange }) {
                     }
                   `}
                 >
-                  {option.value !== "all" &&
-                  option.value !== "month" &&
-                  option.value !== "year" ? (
+                  {option.value !== "all" ? (
                     <span
-                      className="w-2 h-2 rounded-full shrink-0"
+                      className="
+                        w-2
+                        h-2
+                        rounded-full
+                        shrink-0
+                      "
                       style={{
-                        background: CATEGORY_COLOR[option.value] || "#94a3b8",
+                        background:
+                          CATEGORY_COLOR[option.value] || CATEGORY_COLOR.Other,
                       }}
                     />
                   ) : (
-                    <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+                    <span
+                      className="
+                      w-2
+                      h-2
+                      rounded-full
+                      bg-slate-300
+                      dark:bg-slate-600
+                      shrink-0
+                    "
+                    />
                   )}
 
                   {option.label}
@@ -745,14 +1126,14 @@ function FilterDropdown({ value, onChange }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                          SPENDING BREAKDOWN                                */
+/*                         SPENDING BREAKDOWN                                 */
 /* -------------------------------------------------------------------------- */
 
 function SpendingBreakdown({ transactions }) {
   const breakdown = useMemo(() => {
     const map = {};
 
-    for (const transaction of transactions) {
+    for (const transaction of transactions || []) {
       const category = transaction.category || "Other";
 
       map[category] = (map[category] || 0) + safeNumber(transaction.amount);
@@ -774,26 +1155,45 @@ function SpendingBreakdown({ transactions }) {
     return (
       <div
         className="
-          min-h-[260px]
-          rounded-3xl
-          border
-          border-slate-100
-          dark:border-slate-700
-          bg-white
-          dark:bg-slate-900
-          p-5
+        min-h-[260px]
+        rounded-3xl
+        border
+        border-slate-100
+        dark:border-slate-700
+        bg-white
+        dark:bg-slate-900
+        p-5
+        flex
+        flex-col
+        items-center
+        justify-center
+        text-center
+      "
+      >
+        <div
+          className="
+          w-14
+          h-14
+          rounded-2xl
+          bg-orange-50
+          dark:bg-orange-500/10
           flex
-          flex-col
           items-center
           justify-center
-          text-center
         "
-      >
-        <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+        >
           <Flame size={23} className="text-orange-300" />
         </div>
 
-        <p className="mt-3 text-sm font-bold text-slate-700 dark:text-slate-200">
+        <p
+          className="
+          mt-3
+          text-sm
+          font-bold
+          text-slate-700
+          dark:text-slate-200
+        "
+        >
           No spending data
         </p>
 
@@ -807,27 +1207,63 @@ function SpendingBreakdown({ transactions }) {
   return (
     <div
       className="
-        rounded-3xl
-        border
-        border-slate-100
-        dark:border-slate-700
-        bg-white
-        dark:bg-slate-900
-        p-4
-        sm:p-5
-        shadow-[0_12px_40px_rgba(15,23,42,0.05)]
-        dark:shadow-black/20
-      "
+      rounded-3xl
+      border
+      border-slate-100
+      dark:border-slate-700
+      bg-white
+      dark:bg-slate-900
+      p-4
+      sm:p-5
+      shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+      dark:shadow-black/20
+    "
     >
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
-          <span className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+      <div
+        className="
+        flex
+        items-center
+        justify-between
+        mb-5
+      "
+      >
+        <h3
+          className="
+          text-sm
+          font-black
+          text-slate-800
+          dark:text-white
+          flex
+          items-center
+          gap-2
+        "
+        >
+          <span
+            className="
+            w-8
+            h-8
+            rounded-xl
+            bg-orange-50
+            dark:bg-orange-500/10
+            flex
+            items-center
+            justify-center
+          "
+          >
             <Flame size={14} className="text-orange-500" />
           </span>
           Top categories
         </h3>
 
-        <span className="text-[10px] font-bold text-slate-400">TOP 6</span>
+        <span
+          className="
+          text-[10px]
+          font-bold
+          text-slate-400
+        "
+        >
+          TOP 6
+        </span>
       </div>
 
       <div className="space-y-4">
@@ -836,10 +1272,33 @@ function SpendingBreakdown({ transactions }) {
 
           return (
             <div key={category}>
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-between
+                  gap-3
+                  mb-2
+                "
+              >
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    min-w-0
+                  "
+                >
                   <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                    className="
+                        w-8
+                        h-8
+                        rounded-xl
+                        flex
+                        items-center
+                        justify-center
+                        shrink-0
+                      "
                     style={{
                       background: `${color}15`,
                       color,
@@ -848,28 +1307,69 @@ function SpendingBreakdown({ transactions }) {
                     {CATEGORY_ICONS[category] || <IndianRupee size={14} />}
                   </div>
 
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">
+                  <span
+                    className="
+                      text-xs
+                      font-bold
+                      text-slate-600
+                      dark:text-slate-300
+                      truncate
+                    "
+                  >
                     {formatCategory(category)}
                   </span>
                 </div>
 
-                <span className="text-xs font-black text-slate-800 dark:text-white shrink-0">
+                <span
+                  className="
+                    text-xs
+                    font-black
+                    text-slate-800
+                    dark:text-white
+                    shrink-0
+                  "
+                >
                   {fmtINR(amount)}
                 </span>
               </div>
 
-              <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="
+                  h-2
+                  bg-slate-100
+                  dark:bg-slate-800
+                  rounded-full
+                  overflow-hidden
+                "
+              >
                 <div
-                  className="h-full rounded-full transition-all duration-700"
+                  className="
+                      h-full
+                      rounded-full
+                      transition-all
+                      duration-700
+                    "
                   style={{
-                    width: `${percentage}%`,
+                    width: `${Math.min(100, percentage)}%`,
                     background: color,
                   }}
                 />
               </div>
 
-              <div className="mt-1 flex justify-end">
-                <span className="text-[9px] font-bold text-slate-400">
+              <div
+                className="
+                  mt-1
+                  flex
+                  justify-end
+                "
+              >
+                <span
+                  className="
+                    text-[9px]
+                    font-bold
+                    text-slate-400
+                  "
+                >
                   {percentage.toFixed(1)}%
                 </span>
               </div>
@@ -882,7 +1382,7 @@ function SpendingBreakdown({ transactions }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             AI BADGE                                       */
+/*                              AI BADGE                                      */
 /* -------------------------------------------------------------------------- */
 
 function AiAutoDetectBadge({ detection, onDismiss }) {
@@ -908,7 +1408,15 @@ function AiAutoDetectBadge({ detection, onDismiss }) {
       }}
     >
       <div
-        className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+        className="
+          w-6
+          h-6
+          rounded-lg
+          flex
+          items-center
+          justify-center
+          shrink-0
+        "
         style={{
           background: `${color}15`,
         }}
@@ -916,7 +1424,14 @@ function AiAutoDetectBadge({ detection, onDismiss }) {
         <Sparkles size={11} style={{ color }} />
       </div>
 
-      <span className="text-[11px] text-slate-500 dark:text-slate-400 flex-1">
+      <span
+        className="
+        text-[11px]
+        text-slate-500
+        dark:text-slate-400
+        flex-1
+      "
+      >
         AI suggested{" "}
         <strong style={{ color }}>{formatCategory(detection.category)}</strong>
         <span className="ml-1 text-slate-400">
@@ -929,7 +1444,17 @@ function AiAutoDetectBadge({ detection, onDismiss }) {
       <button
         type="button"
         onClick={onDismiss}
-        className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+        className="
+          w-6
+          h-6
+          rounded-lg
+          flex
+          items-center
+          justify-center
+          text-slate-400
+          hover:bg-slate-100
+          dark:hover:bg-slate-800
+        "
         aria-label="Dismiss AI suggestion"
       >
         <X size={11} />
@@ -939,7 +1464,7 @@ function AiAutoDetectBadge({ detection, onDismiss }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                         TRANSACTION ITEM                                   */
+/*                         TRANSACTION ITEM                                  */
 /* -------------------------------------------------------------------------- */
 
 function TransactionItem({
@@ -970,7 +1495,9 @@ function TransactionItem({
   const date = normalizeDate(transaction.date);
 
   useEffect(() => {
-    return () => clearTimeout(editDebounceRef.current);
+    return () => {
+      clearTimeout(editDebounceRef.current);
+    };
   }, []);
 
   const handleEditDescChange = (value) => {
@@ -1037,16 +1564,33 @@ function TransactionItem({
     return (
       <div
         className="
-          p-4
-          bg-orange-50/60
-          dark:bg-orange-500/5
-          border-l-2
-          border-orange-500
-        "
+        p-4
+        bg-orange-50/60
+        dark:bg-orange-500/5
+        border-l-2
+        border-orange-500
+      "
       >
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_180px_180px_auto] gap-3">
+        <div
+          className="
+          grid
+          grid-cols-1
+          lg:grid-cols-[1fr_180px_180px_auto]
+          gap-3
+        "
+        >
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label
+              className="
+              block
+              text-[10px]
+              font-bold
+              uppercase
+              tracking-wider
+              text-slate-400
+              mb-1.5
+            "
+            >
               Description
             </label>
 
@@ -1076,7 +1620,13 @@ function TransactionItem({
             />
 
             {errors.description && (
-              <p className="mt-1 text-[10px] text-red-500">
+              <p
+                className="
+                mt-1
+                text-[10px]
+                text-red-500
+              "
+              >
                 {errors.description}
               </p>
             )}
@@ -1088,7 +1638,17 @@ function TransactionItem({
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label
+              className="
+              block
+              text-[10px]
+              font-bold
+              uppercase
+              tracking-wider
+              text-slate-400
+              mb-1.5
+            "
+            >
               Amount
             </label>
 
@@ -1124,12 +1684,30 @@ function TransactionItem({
             />
 
             {errors.amount && (
-              <p className="mt-1 text-[10px] text-red-500">{errors.amount}</p>
+              <p
+                className="
+                mt-1
+                text-[10px]
+                text-red-500
+              "
+              >
+                {errors.amount}
+              </p>
             )}
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <label
+              className="
+              block
+              text-[10px]
+              font-bold
+              uppercase
+              tracking-wider
+              text-slate-400
+              mb-1.5
+            "
+            >
               Category
             </label>
 
@@ -1173,7 +1751,13 @@ function TransactionItem({
             </select>
           </div>
 
-          <div className="flex items-end gap-2">
+          <div
+            className="
+            flex
+            items-end
+            gap-2
+          "
+          >
             <button
               type="button"
               onClick={handleSave}
@@ -1207,7 +1791,9 @@ function TransactionItem({
                   description: "",
                   amount: "",
                 });
+
                 setEditDetection(null);
+
                 onCancel();
               }}
               className="
@@ -1242,19 +1828,25 @@ function TransactionItem({
       {/* Desktop */}
       <div
         className="
-          hidden
-          md:grid
-          grid-cols-[110px_150px_1fr_150px_100px]
-          items-center
-          gap-3
-          px-5
-          py-3.5
-          hover:bg-slate-50/70
-          dark:hover:bg-slate-800/50
-          transition
-        "
+        hidden
+        md:grid
+        grid-cols-[110px_150px_1fr_150px_100px]
+        items-center
+        gap-3
+        px-5
+        py-3.5
+        hover:bg-slate-50/70
+        dark:hover:bg-slate-800/50
+        transition
+      "
       >
-        <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div
+          className="
+          text-xs
+          text-slate-500
+          dark:text-slate-400
+        "
+        >
           {date
             ? date.toLocaleDateString("en-IN", {
                 day: "2-digit",
@@ -1264,13 +1856,35 @@ function TransactionItem({
             : "—"}
         </div>
 
-        <div className="font-black text-sm text-red-500 dark:text-red-400">
+        <div
+          className="
+          font-black
+          text-sm
+          text-red-500
+          dark:text-red-400
+        "
+        >
           −{fmtINRFull(transaction.amount)}
         </div>
 
-        <div className="flex items-center gap-3 min-w-0">
+        <div
+          className="
+          flex
+          items-center
+          gap-3
+          min-w-0
+        "
+        >
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            className="
+              w-9
+              h-9
+              rounded-xl
+              flex
+              items-center
+              justify-center
+              shrink-0
+            "
             style={{
               background: `${color}15`,
               color,
@@ -1280,7 +1894,15 @@ function TransactionItem({
           </div>
 
           <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+            <p
+              className="
+              text-sm
+              font-bold
+              text-slate-700
+              dark:text-slate-200
+              truncate
+            "
+            >
               {transaction.description}
             </p>
           </div>
@@ -1288,7 +1910,14 @@ function TransactionItem({
 
         <CategoryPill cat={transaction.category} />
 
-        <div className="flex items-center justify-end gap-1">
+        <div
+          className="
+          flex
+          items-center
+          justify-end
+          gap-1
+        "
+        >
           <button
             type="button"
             onClick={() => {
@@ -1343,15 +1972,29 @@ function TransactionItem({
       {/* Mobile */}
       <div
         className="
-          md:hidden
-          p-4
-          active:bg-slate-50
-          dark:active:bg-slate-800/50
-        "
+        md:hidden
+        p-4
+        active:bg-slate-50
+        dark:active:bg-slate-800/50
+      "
       >
-        <div className="flex items-start gap-3">
+        <div
+          className="
+          flex
+          items-start
+          gap-3
+        "
+        >
           <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+            className="
+              w-11
+              h-11
+              rounded-2xl
+              flex
+              items-center
+              justify-center
+              shrink-0
+            "
             style={{
               background: `${color}15`,
               color,
@@ -1360,14 +2003,40 @@ function TransactionItem({
             {icon}
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
+          <div
+            className="
+            flex-1
+            min-w-0
+          "
+          >
+            <div
+              className="
+              flex
+              items-start
+              justify-between
+              gap-3
+            "
+            >
               <div className="min-w-0">
-                <p className="text-sm font-black text-slate-800 dark:text-slate-100 truncate">
+                <p
+                  className="
+                  text-sm
+                  font-black
+                  text-slate-800
+                  dark:text-slate-100
+                  truncate
+                "
+                >
                   {transaction.description}
                 </p>
 
-                <p className="mt-1 text-[10px] text-slate-400">
+                <p
+                  className="
+                  mt-1
+                  text-[10px]
+                  text-slate-400
+                "
+                >
                   {date
                     ? date.toLocaleDateString("en-IN", {
                         day: "numeric",
@@ -1378,15 +2047,36 @@ function TransactionItem({
                 </p>
               </div>
 
-              <p className="text-sm font-black text-red-500 shrink-0">
+              <p
+                className="
+                text-sm
+                font-black
+                text-red-500
+                shrink-0
+              "
+              >
                 −{fmtINRFull(transaction.amount)}
               </p>
             </div>
 
-            <div className="mt-3 flex items-center justify-between gap-2">
+            <div
+              className="
+              mt-3
+              flex
+              items-center
+              justify-between
+              gap-2
+            "
+            >
               <CategoryPill cat={transaction.category} />
 
-              <div className="flex items-center gap-1">
+              <div
+                className="
+                flex
+                items-center
+                gap-1
+              "
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -1456,7 +2146,9 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
 
     document.addEventListener("keydown", handleKey);
 
-    return () => document.removeEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -1484,12 +2176,19 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
       "
       role="dialog"
       aria-modal="true"
+      aria-labelledby="delete-expense-title"
     >
       <button
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm cursor-default"
+        className="
+          absolute
+          inset-0
+          bg-slate-950/45
+          backdrop-blur-sm
+          cursor-default
+        "
       />
 
       <div
@@ -1511,39 +2210,93 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
           animate-[slideUp_.25s_ease-out]
         "
       >
-        <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700 mx-auto mb-5 sm:hidden" />
+        <div
+          className="
+          w-10
+          h-1
+          rounded-full
+          bg-slate-200
+          dark:bg-slate-700
+          mx-auto
+          mb-5
+          sm:hidden
+        "
+        />
 
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-3xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
+          <div
+            className="
+            w-16
+            h-16
+            rounded-3xl
+            bg-red-50
+            dark:bg-red-500/10
+            flex
+            items-center
+            justify-center
+          "
+          >
             <Trash2 size={25} className="text-red-500" />
           </div>
         </div>
 
-        <h2 className="mt-5 text-center text-lg font-black text-slate-900 dark:text-white">
+        <h2
+          id="delete-expense-title"
+          className="
+            mt-5
+            text-center
+            text-lg
+            font-black
+            text-slate-900
+            dark:text-white
+          "
+        >
           Delete this expense?
         </h2>
 
-        <p className="mt-1 text-center text-xs text-slate-400">
+        <p
+          className="
+          mt-1
+          text-center
+          text-xs
+          text-slate-400
+        "
+        >
           This action cannot be undone.
         </p>
 
         {transaction && (
           <div
             className="
-              mt-5
-              rounded-2xl
-              border
-              border-slate-100
-              dark:border-slate-700
-              bg-slate-50
-              dark:bg-slate-950/50
-              p-4
-            "
+            mt-5
+            rounded-2xl
+            border
+            border-slate-100
+            dark:border-slate-700
+            bg-slate-50
+            dark:bg-slate-950/50
+            p-4
+          "
           >
-            <div className="flex items-center justify-between gap-3">
+            <div
+              className="
+              flex
+              items-center
+              justify-between
+              gap-3
+            "
+            >
               <div className="min-w-0">
-                <p className="text-sm font-black text-slate-800 dark:text-slate-200 truncate">
-                  {transaction.description}
+                <p
+                  className="
+                  text-sm
+                  font-black
+                  text-slate-800
+                  dark:text-slate-200
+                  truncate
+                "
+                >
+                  {transaction.description || "Expense"}
                 </p>
 
                 <div className="mt-1">
@@ -1551,14 +2304,28 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
                 </div>
               </div>
 
-              <p className="text-sm font-black text-red-500 shrink-0">
+              <p
+                className="
+                text-sm
+                font-black
+                text-red-500
+                shrink-0
+              "
+              >
                 {fmtINRFull(transaction.amount)}
               </p>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 mt-5">
+        <div
+          className="
+          grid
+          grid-cols-2
+          gap-3
+          mt-5
+        "
+        >
           <button
             type="button"
             onClick={onClose}
@@ -1574,6 +2341,7 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
               font-bold
               active:scale-95
               transition
+              disabled:opacity-50
             "
           >
             Cancel
@@ -1597,10 +2365,18 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
               active:scale-95
               transition
               disabled:opacity-60
+              disabled:cursor-not-allowed
             "
           >
             {loading ? (
-              <span className="flex items-center justify-center gap-2">
+              <span
+                className="
+                flex
+                items-center
+                justify-center
+                gap-2
+              "
+              >
                 <Loader2 size={15} className="animate-spin" />
                 Deleting
               </span>
@@ -1639,22 +2415,28 @@ function AddTransactionModal({
   useEffect(() => {
     if (!showModal) {
       clearTimeout(debounceRef.current);
-      return;
+      return undefined;
     }
 
     const handleKey = (event) => {
       if (event.key === "Escape") {
-        setShowModal(false);
+        if (!loading) {
+          setShowModal(false);
+        }
       }
     };
 
     document.addEventListener("keydown", handleKey);
 
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [showModal, setShowModal]);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [showModal, setShowModal, loading]);
 
   useEffect(() => {
-    if (!showModal) return;
+    if (!showModal) {
+      return undefined;
+    }
 
     const previous = document.body.style.overflow;
 
@@ -1666,7 +2448,9 @@ function AddTransactionModal({
   }, [showModal]);
 
   useEffect(() => {
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      clearTimeout(debounceRef.current);
+    };
   }, []);
 
   const handleDescriptionChange = (value) => {
@@ -1746,7 +2530,9 @@ function AddTransactionModal({
     handleAddTransaction();
   };
 
-  if (!showModal) return null;
+  if (!showModal) {
+    return null;
+  }
 
   return ReactDOM.createPortal(
     <div
@@ -1762,7 +2548,7 @@ function AddTransactionModal({
         backdrop-blur-sm
       "
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !loading) {
           setShowModal(false);
         }
       }}
@@ -1792,36 +2578,88 @@ function AddTransactionModal({
         {/* Header */}
         <div
           className="
-            sticky
-            top-0
-            z-20
-            px-5
-            sm:px-6
-            pt-4
-            pb-4
-            bg-white/95
-            dark:bg-slate-900/95
-            backdrop-blur-xl
-            border-b
-            border-slate-100
-            dark:border-slate-800
-          "
+          sticky
+          top-0
+          z-20
+          px-5
+          sm:px-6
+          pt-4
+          pb-4
+          bg-white/95
+          dark:bg-slate-900/95
+          backdrop-blur-xl
+          border-b
+          border-slate-100
+          dark:border-slate-800
+        "
         >
-          <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700 mx-auto mb-4 sm:hidden" />
+          <div
+            className="
+            w-10
+            h-1
+            rounded-full
+            bg-slate-200
+            dark:bg-slate-700
+            mx-auto
+            mb-4
+            sm:hidden
+          "
+          />
 
-          <div className="flex items-center justify-between">
+          <div
+            className="
+            flex
+            items-center
+            justify-between
+          "
+          >
             <div>
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <div
+                className="
+                flex
+                items-center
+                gap-2
+              "
+              >
+                <div
+                  className="
+                  w-9
+                  h-9
+                  rounded-xl
+                  bg-gradient-to-br
+                  from-orange-500
+                  to-amber-500
+                  flex
+                  items-center
+                  justify-center
+                  shadow-lg
+                  shadow-orange-500/20
+                "
+                >
                   <Receipt size={16} className="text-white" />
                 </div>
 
                 <div>
-                  <p className="text-[9px] uppercase tracking-widest font-black text-orange-500">
+                  <p
+                    className="
+                    text-[9px]
+                    uppercase
+                    tracking-widest
+                    font-black
+                    text-orange-500
+                  "
+                  >
                     New transaction
                   </p>
 
-                  <h2 className="text-base font-black text-slate-900 dark:text-white">
+                  <h2
+                    className="
+                    text-base
+                    font-black
+                    text-slate-900
+                    dark:text-white
+                  "
+                  >
                     Add expense
                   </h2>
                 </div>
@@ -1831,6 +2669,7 @@ function AddTransactionModal({
             <button
               type="button"
               onClick={() => setShowModal(false)}
+              disabled={loading}
               className="
                 w-9
                 h-9
@@ -1842,6 +2681,7 @@ function AddTransactionModal({
                 justify-center
                 text-slate-500
                 dark:text-slate-300
+                disabled:opacity-50
               "
               aria-label="Close"
             >
@@ -1851,10 +2691,26 @@ function AddTransactionModal({
         </div>
 
         {/* Body */}
-        <div className="p-5 sm:p-6 space-y-5">
+        <div
+          className="
+          p-5
+          sm:p-6
+          space-y-5
+        "
+        >
           {/* Description */}
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+            <label
+              className="
+              block
+              text-[10px]
+              font-black
+              uppercase
+              tracking-wider
+              text-slate-400
+              mb-2
+            "
+            >
               Description
             </label>
 
@@ -1887,7 +2743,13 @@ function AddTransactionModal({
             />
 
             {errors.description && (
-              <p className="mt-1.5 text-[10px] text-red-500">
+              <p
+                className="
+                mt-1.5
+                text-[10px]
+                text-red-500
+              "
+              >
                 {errors.description}
               </p>
             )}
@@ -1898,15 +2760,40 @@ function AddTransactionModal({
             />
           </div>
 
-          {/* Amount + date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Amount + Date */}
+          <div
+            className="
+            grid
+            grid-cols-1
+            sm:grid-cols-2
+            gap-3
+          "
+          >
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+              <label
+                className="
+                block
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wider
+                text-slate-400
+                mb-2
+              "
+              >
                 Amount
               </label>
 
               <div className="relative">
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-orange-500">
+                <div
+                  className="
+                  absolute
+                  left-3.5
+                  top-1/2
+                  -translate-y-1/2
+                  text-orange-500
+                "
+                >
                   <IndianRupee size={15} />
                 </div>
 
@@ -1947,14 +2834,30 @@ function AddTransactionModal({
               </div>
 
               {errors.amount && (
-                <p className="mt-1.5 text-[10px] text-red-500">
+                <p
+                  className="
+                  mt-1.5
+                  text-[10px]
+                  text-red-500
+                "
+                >
                   {errors.amount}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+              <label
+                className="
+                block
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wider
+                text-slate-400
+                mb-2
+              "
+              >
                 Date
               </label>
 
@@ -1993,17 +2896,45 @@ function AddTransactionModal({
 
           {/* Category */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+            <div
+              className="
+              flex
+              items-center
+              justify-between
+              mb-2
+            "
+            >
+              <label
+                className="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wider
+                text-slate-400
+              "
+              >
                 Category
               </label>
 
-              <span className="text-[9px] font-bold text-slate-400">
+              <span
+                className="
+                text-[9px]
+                font-bold
+                text-slate-400
+              "
+              >
                 AI assisted
               </span>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            <div
+              className="
+              grid
+              grid-cols-3
+              sm:grid-cols-4
+              gap-2
+            "
+            >
               {EXPENSE_CATEGORIES.map((category) => {
                 const color = CATEGORY_COLOR[category] || CATEGORY_COLOR.Other;
 
@@ -2042,7 +2973,7 @@ function AddTransactionModal({
                             borderColor: color,
                             boxShadow: `0 8px 20px ${color}25`,
                           }
-                        : {}
+                        : undefined
                     }
                   >
                     <span
@@ -2053,7 +2984,12 @@ function AddTransactionModal({
                       {CATEGORY_ICONS[category] || <IndianRupee size={14} />}
                     </span>
 
-                    <span className="truncate max-w-full">
+                    <span
+                      className="
+                        truncate
+                        max-w-full
+                      "
+                    >
                       {formatCategory(category)}
                     </span>
                   </button>
@@ -2066,21 +3002,21 @@ function AddTransactionModal({
         {/* Footer */}
         <div
           className="
-            sticky
-            bottom-0
-            z-20
-            px-5
-            sm:px-6
-            py-4
-            bg-white/95
-            dark:bg-slate-900/95
-            backdrop-blur-xl
-            border-t
-            border-slate-100
-            dark:border-slate-800
-            flex
-            gap-3
-          "
+          sticky
+          bottom-0
+          z-20
+          px-5
+          sm:px-6
+          py-4
+          bg-white/95
+          dark:bg-slate-900/95
+          backdrop-blur-xl
+          border-t
+          border-slate-100
+          dark:border-slate-800
+          flex
+          gap-3
+        "
         >
           <button
             type="button"
@@ -2097,6 +3033,7 @@ function AddTransactionModal({
               text-xs
               font-black
               active:scale-95
+              disabled:opacity-50
             "
           >
             Cancel
@@ -2121,15 +3058,30 @@ function AddTransactionModal({
               shadow-orange-500/20
               active:scale-[.98]
               disabled:opacity-60
+              disabled:cursor-not-allowed
             "
           >
             {loading ? (
-              <span className="flex items-center justify-center gap-2">
+              <span
+                className="
+                flex
+                items-center
+                justify-center
+                gap-2
+              "
+              >
                 <Loader2 size={15} className="animate-spin" />
                 Saving…
               </span>
             ) : (
-              <span className="flex items-center justify-center gap-2">
+              <span
+                className="
+                flex
+                items-center
+                justify-center
+                gap-2
+              "
+              >
                 <Plus size={15} />
                 Add Expense
               </span>
@@ -2143,14 +3095,10 @@ function AddTransactionModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                          YEAR COMPARISON                                   */
+/*                           YEAR COMPARISON                                  */
 /* -------------------------------------------------------------------------- */
 
-function YearComparisonCard({
-  selectedYear,
-  currentTotal,
-  previousTotal,
-}) {
+function YearComparisonCard({ selectedYear, currentTotal, previousTotal }) {
   const difference = currentTotal - previousTotal;
 
   const percentage = previousTotal > 0 ? (difference / previousTotal) * 100 : 0;
@@ -2160,77 +3108,190 @@ function YearComparisonCard({
   return (
     <div
       className="
-        rounded-3xl
-        border
-        border-slate-100
-        dark:border-slate-700
-        bg-gradient-to-br
-        from-slate-900
-        via-slate-900
-        to-violet-950
-        text-white
-        p-5
-        shadow-2xl
-        shadow-violet-900/10
-        overflow-hidden
-        relative
-      "
+      rounded-3xl
+      border
+      border-slate-100
+      dark:border-slate-700
+      bg-gradient-to-br
+      from-slate-900
+      via-slate-900
+      to-violet-950
+      text-white
+      p-5
+      shadow-2xl
+      shadow-violet-900/10
+      overflow-hidden
+      relative
+    "
     >
-      <div className="absolute -right-12 -top-12 w-36 h-36 rounded-full bg-violet-500/20 blur-3xl" />
-      <div className="absolute -left-10 -bottom-10 w-28 h-28 rounded-full bg-orange-500/20 blur-3xl" />
+      <div
+        className="
+        absolute
+        -right-12
+        -top-12
+        w-36
+        h-36
+        rounded-full
+        bg-violet-500/20
+        blur-3xl
+      "
+      />
+
+      <div
+        className="
+        absolute
+        -left-10
+        -bottom-10
+        w-28
+        h-28
+        rounded-full
+        bg-orange-500/20
+        blur-3xl
+      "
+      />
 
       <div className="relative">
-        <div className="flex items-center justify-between">
+        <div
+          className="
+          flex
+          items-center
+          justify-between
+        "
+        >
           <div>
-            <p className="text-[9px] uppercase tracking-widest text-white/50 font-black">
+            <p
+              className="
+              text-[9px]
+              uppercase
+              tracking-widest
+              text-white/50
+              font-black
+            "
+            >
               Year comparison
             </p>
 
-            <h3 className="mt-1 text-sm font-black">
+            <h3
+              className="
+              mt-1
+              text-sm
+              font-black
+            "
+            >
               {selectedYear} vs {selectedYear - 1}
             </h3>
           </div>
 
-          <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+          <div
+            className="
+            w-9
+            h-9
+            rounded-xl
+            bg-white/10
+            flex
+            items-center
+            justify-center
+          "
+          >
             {isHigher ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mt-5">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-            <p className="text-[9px] text-white/40 font-bold uppercase">
+        <div
+          className="
+          grid
+          grid-cols-2
+          gap-3
+          mt-5
+        "
+        >
+          <div
+            className="
+            rounded-2xl
+            bg-white/5
+            border
+            border-white/10
+            p-3
+          "
+          >
+            <p
+              className="
+              text-[9px]
+              text-white/40
+              font-bold
+              uppercase
+            "
+            >
               {selectedYear}
             </p>
 
-            <p className="mt-1 text-lg font-black">{fmtINR(currentTotal)}</p>
+            <p
+              className="
+              mt-1
+              text-lg
+              font-black
+            "
+            >
+              {fmtINR(currentTotal)}
+            </p>
           </div>
 
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-            <p className="text-[9px] text-white/40 font-bold uppercase">
+          <div
+            className="
+            rounded-2xl
+            bg-white/5
+            border
+            border-white/10
+            p-3
+          "
+          >
+            <p
+              className="
+              text-[9px]
+              text-white/40
+              font-bold
+              uppercase
+            "
+            >
               {selectedYear - 1}
             </p>
 
-            <p className="mt-1 text-lg font-black">{fmtINR(previousTotal)}</p>
+            <p
+              className="
+              mt-1
+              text-lg
+              font-black
+            "
+            >
+              {fmtINR(previousTotal)}
+            </p>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div
+          className="
+          mt-4
+          flex
+          items-center
+          gap-2
+        "
+        >
           <span
             className={`
-              inline-flex
-              items-center
-              gap-1
-              px-2.5
-              py-1
-              rounded-full
-              text-[10px]
-              font-black
-              ${
-                isHigher
-                  ? "bg-red-400/15 text-red-300"
-                  : "bg-emerald-400/15 text-emerald-300"
-              }
-            `}
+            inline-flex
+            items-center
+            gap-1
+            px-2.5
+            py-1
+            rounded-full
+            text-[10px]
+            font-black
+            ${
+              isHigher
+                ? "bg-red-400/15 text-red-300"
+                : "bg-emerald-400/15 text-emerald-300"
+            }
+          `}
           >
             {isHigher ? (
               <ArrowUpRight size={11} />
@@ -2240,7 +3301,12 @@ function YearComparisonCard({
             {Math.abs(percentage).toFixed(1)}%
           </span>
 
-          <span className="text-[10px] text-white/45">
+          <span
+            className="
+            text-[10px]
+            text-white/45
+          "
+          >
             {isHigher ? "higher spending" : "lower spending"}
           </span>
         </div>
@@ -2250,15 +3316,13 @@ function YearComparisonCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                             MAIN PAGE                                      */
+/*                              MAIN PAGE                                     */
 /* -------------------------------------------------------------------------- */
 
 const ExpensePage = () => {
-  const outletContext = useOutletContext();
+  const outletContext = useOutletContext() || {};
 
   const {
-    // The layout pre-filters `transactions` for its own cards; the page needs
-    // everything so it can show any year / month / custom range.
     allTransactions,
     transactions: layoutTransactions = [],
     timeFrame = "monthly",
@@ -2268,20 +3332,24 @@ const ExpensePage = () => {
 
   const outletTransactions = allTransactions ?? layoutTransactions;
 
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
+  const currentDate = useMemo(() => new Date(), []);
 
-  // year / month / custom range - shared with the layout stat cards
-  const {
-    selectedYear,
-    setSelectedYear,
-    selectedMonth,
-    setSelectedMonth,
-    yearMonth, // Yearly view only: null = "All months"
-    setYearMonth,
-    customRange,
-    setCustomRange,
-  } = usePeriod(outletContext);
+  const currentYear = currentDate.getFullYear();
+
+  const currentMonth = currentDate.getMonth();
+
+  /*
+   * Monthly / yearly remain based on current
+   * period.
+   *
+   * Custom uses customRange.
+   */
+  const { customRange, setCustomRange } = usePeriod(outletContext);
+
+  const selectedYear = currentYear;
+  const selectedMonth = currentMonth;
+
+  const yearMonth = null;
 
   const [showModal, setShowModal] = useState(false);
 
@@ -2318,6 +3386,8 @@ const ExpensePage = () => {
   /*                               TOAST                                    */
   /* ---------------------------------------------------------------------- */
 
+  const toastTimersRef = useRef(new Set());
+
   const addToast = useCallback((message, type = "info") => {
     const id = Date.now() + Math.random();
 
@@ -2330,9 +3400,23 @@ const ExpensePage = () => {
       },
     ]);
 
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setToasts((previous) => previous.filter((toast) => toast.id !== id));
+
+      toastTimersRef.current.delete(timer);
     }, 3500);
+
+    toastTimersRef.current.add(timer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach((timer) => {
+        clearTimeout(timer);
+      });
+
+      toastTimersRef.current.clear();
+    };
   }, []);
 
   /* ---------------------------------------------------------------------- */
@@ -2350,7 +3434,7 @@ const ExpensePage = () => {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /*                         TIME RANGE                                     */
+  /*                           TIME RANGE                                   */
   /* ---------------------------------------------------------------------- */
 
   const timeFrameRange = useMemo(
@@ -2362,7 +3446,7 @@ const ExpensePage = () => {
   const rangeLabel =
     timeFrame === "yearly" && yearMonth !== null
       ? `${MONTH_NAMES[yearMonth]} ${selectedYear}`
-      : timeFrameRange.label;
+      : timeFrameRange?.label || "Current period";
 
   const chartPoints = useMemo(
     () =>
@@ -2376,12 +3460,16 @@ const ExpensePage = () => {
 
   const expenseTransactions = useMemo(() => {
     return (outletTransactions || [])
-      .filter((transaction) => transaction.type === "expense")
-      .filter((transaction) => normalizeDate(transaction.date))
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
+      .filter((transaction) => transaction?.type === "expense")
+      .filter((transaction) => normalizeDate(transaction?.date))
+      .sort((a, b) => normalizeDate(b.date) - normalizeDate(a.date));
   }, [outletTransactions]);
 
   const timeFrameTransactions = useMemo(() => {
+    if (!timeFrameRange?.start || !timeFrameRange?.end) {
+      return [];
+    }
+
     return expenseTransactions.filter((transaction) =>
       isDateInRange(transaction.date, timeFrameRange.start, timeFrameRange.end),
     );
@@ -2429,28 +3517,10 @@ const ExpensePage = () => {
   /*                             FILTERING                                  */
   /* ---------------------------------------------------------------------- */
 
-  // category / search / "month" dropdown filters (used by the chart too, so the
-  // yearly chart keeps showing the full-year trend)
   const baseFilteredTransactions = useMemo(() => {
     let list = timeFrameTransactions;
 
-    if (filter === "month") {
-      list = list.filter((transaction) => {
-        const date = normalizeDate(transaction.date);
-
-        return (
-          date &&
-          date.getFullYear() === selectedYear &&
-          date.getMonth() === selectedMonth
-        );
-      });
-    } else if (filter === "year") {
-      list = list.filter((transaction) => {
-        const date = normalizeDate(transaction.date);
-
-        return date && date.getFullYear() === selectedYear;
-      });
-    } else if (filter !== "all") {
+    if (filter !== "all") {
       list = list.filter(
         (transaction) =>
           String(transaction.category || "Other").toLowerCase() ===
@@ -2473,9 +3543,8 @@ const ExpensePage = () => {
     }
 
     return list;
-  }, [timeFrameTransactions, filter, search, selectedYear, selectedMonth]);
+  }, [timeFrameTransactions, filter, search]);
 
-  // Yearly view + a specific month chosen -> narrow stats/list to that month
   const filteredTransactions = useMemo(() => {
     if (timeFrame !== "yearly" || yearMonth === null) {
       return baseFilteredTransactions;
@@ -2548,7 +3617,7 @@ const ExpensePage = () => {
       map.set(key, (map.get(key) || 0) + safeNumber(transaction.amount));
     }
 
-    return chartPoints.map((point) => ({
+    return (chartPoints || []).map((point) => ({
       ...point,
       expense: map.get(chartKeyForPoint(timeFrame, point, customRange)) || 0,
     }));
@@ -2560,6 +3629,11 @@ const ExpensePage = () => {
 
   const handleAddTransaction = useCallback(async () => {
     if (loading) return;
+
+    if (!API_BASE) {
+      addToast("API base URL is not configured.", "error");
+      return;
+    }
 
     const description = newTransaction.description?.trim();
 
@@ -2618,6 +3692,11 @@ const ExpensePage = () => {
       return;
     }
 
+    if (!API_BASE) {
+      addToast("API base URL is not configured.", "error");
+      return;
+    }
+
     const description = editForm.description?.trim();
 
     const amount = Number(editForm.amount);
@@ -2667,7 +3746,12 @@ const ExpensePage = () => {
   /* ---------------------------------------------------------------------- */
 
   const confirmDelete = useCallback(async () => {
-    if (loading || !deleteTarget) {
+    if (loading || !deleteTarget?.id) {
+      return;
+    }
+
+    if (!API_BASE) {
+      addToast("API base URL is not configured.", "error");
       return;
     }
 
@@ -2695,6 +3779,15 @@ const ExpensePage = () => {
   /* ---------------------------------------------------------------------- */
 
   const handleExport = useCallback(async () => {
+    if (loading) return;
+
+    if (!API_BASE) {
+      addToast("API base URL is not configured.", "error");
+      return;
+    }
+
+    let objectUrl = null;
+
     try {
       setLoading(true);
 
@@ -2715,33 +3808,42 @@ const ExpensePage = () => {
       let filename = `expense_details_${selectedYear}.xlsx`;
 
       if (disposition) {
-        const match = disposition.match(/filename="?([^"]+)"?/i);
+        const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^"]+)"?/i);
 
         if (match?.[1]) {
-          filename = match[1];
+          filename = decodeURIComponent(match[1]).replace(/^["']|["']$/g, "");
         }
       }
 
-      const url = URL.createObjectURL(blob);
+      objectUrl = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
 
-      link.href = url;
+      link.href = objectUrl;
       link.download = filename;
+      link.style.display = "none";
 
       document.body.appendChild(link);
+
       link.click();
       link.remove();
 
-      URL.revokeObjectURL(url);
-
       addToast("Expense export is ready.", "success");
-    } catch {
-      addToast("Export failed. Please try again.", "error");
+    } catch (error) {
+      addToast(
+        error?.response?.data?.message || "Export failed. Please try again.",
+        "error",
+      );
     } finally {
+      if (objectUrl) {
+        window.setTimeout(() => {
+          URL.revokeObjectURL(objectUrl);
+        }, 1000);
+      }
+
       setLoading(false);
     }
-  }, [getAuthHeaders, selectedYear, addToast]);
+  }, [loading, getAuthHeaders, selectedYear, addToast]);
 
   /* ---------------------------------------------------------------------- */
   /*                           UI HELPERS                                   */
@@ -2752,42 +3854,6 @@ const ExpensePage = () => {
     setFilter("all");
     setShowAll(false);
   }, []);
-
-  const handleYearChange = useCallback(
-    (year) => {
-      setSelectedYear(year);
-
-      // future months are not selectable in the current year
-      if (year === currentYear) {
-        setSelectedMonth((month) => Math.min(month, currentMonth));
-      }
-
-      // a month that does not exist yet in the new year -> back to all months
-      if (year === currentYear) {
-        setYearMonth((month) =>
-          month !== null && month > currentMonth ? null : month,
-        );
-      }
-
-      setShowAll(false);
-      setFilter("all");
-    },
-    [currentYear, currentMonth, setSelectedYear, setSelectedMonth, setYearMonth],
-  );
-
-  const handleYearMonthChange = useCallback((month) => {
-    setYearMonth(month);
-    setShowAll(false);
-  }, [setYearMonth]);
-
-  const handleMonthChange = useCallback(
-    (month) => {
-      setSelectedMonth(month);
-      setShowAll(false);
-      setFilter("all");
-    },
-    [setSelectedMonth],
-  );
 
   const handleCustomRangeChange = useCallback(
     (range) => {
@@ -2814,7 +3880,7 @@ const ExpensePage = () => {
   const hasActiveFilters = filter !== "all" || Boolean(search.trim());
 
   /* ---------------------------------------------------------------------- */
-  /*                               RENDER                                   */
+  /*                              RENDER                                    */
   /* ---------------------------------------------------------------------- */
 
   return (
@@ -2825,6 +3891,7 @@ const ExpensePage = () => {
             transform: translateY(40px);
             opacity: 0;
           }
+
           to {
             transform: translateY(0);
             opacity: 1;
@@ -2836,6 +3903,7 @@ const ExpensePage = () => {
             transform: translateX(24px);
             opacity: 0;
           }
+
           to {
             transform: translateX(0);
             opacity: 1;
@@ -2866,103 +3934,187 @@ const ExpensePage = () => {
 
       <Toast toasts={toasts} />
 
-      <div className="min-h-screen pb-24 space-y-4 sm:space-y-5">
-        {/* ---------------------------------------------------------------- */}
-        {/* HEADER                                                           */}
-        {/* ---------------------------------------------------------------- */}
+      <div
+        className="
+        min-h-screen
+        pb-24
+        space-y-4
+        sm:space-y-5
+      "
+      >
+        {/* ================================================================= */}
+        {/* HEADER                                                            */}
+        {/* ================================================================= */}
 
         <section
           className="
-            relative
-            overflow-hidden
-            rounded-[0.25rem]
-            sm:rounded-[2rem]
-            border
-            border-white/70
-            dark:border-slate-700
-            bg-gradient-to-br
-            from-white
-            via-orange-50/50
-            to-violet-50/70
-            dark:from-slate-900
-            dark:via-slate-900
-            dark:to-violet-950/30
-            p-4
-            sm:p-6
-            shadow-[0_20px_60px_rgba(249,115,22,0.08)]
-          "
+          relative
+          overflow-hidden
+          rounded-[0.25rem]
+          sm:rounded-[2rem]
+          border
+          border-white/70
+          dark:border-slate-700
+          bg-gradient-to-br
+          from-white
+          via-orange-50/50
+          to-violet-50/70
+          dark:from-slate-900
+          dark:via-slate-900
+          dark:to-violet-950/30
+          p-4
+          sm:p-6
+          shadow-[0_20px_60px_rgba(249,115,22,0.08)]
+        "
         >
-          <div className="absolute -right-20 -top-20 w-52 h-52 rounded-full bg-orange-400/10 blur-3xl" />
-          <div className="absolute -left-20 -bottom-20 w-52 h-52 rounded-full bg-violet-500/10 blur-3xl" />
+          <div
+            className="
+            absolute
+            -right-20
+            -top-20
+            w-52
+            h-52
+            rounded-full
+            bg-orange-400/10
+            blur-3xl
+          "
+          />
+
+          <div
+            className="
+            absolute
+            -left-20
+            -bottom-20
+            w-52
+            h-52
+            rounded-full
+            bg-violet-500/10
+            blur-3xl
+          "
+          />
 
           <div className="relative">
-            {/* ============================================================ */}
-            {/* HEADER                                                       */}
-            {/* ============================================================ */}
-
             <div
               className="
-      flex flex-col gap-5
-      rounded-2xl
-      border border-slate-200/70
-      bg-white/80
-      p-4
-      shadow-sm
-      backdrop-blur-xl
-      dark:border-slate-800/80
-      dark:bg-slate-950/70
-      sm:p-5
-      lg:p-6
-    "
+              flex
+              flex-col
+              gap-5
+              rounded-2xl
+              border
+              border-slate-200/70
+              bg-white/80
+              p-4
+              shadow-sm
+              backdrop-blur-xl
+              dark:border-slate-800/80
+              dark:bg-slate-950/70
+              sm:p-5
+              lg:p-6
+            "
             >
               {/* Top row */}
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                {/* Title block */}
+              <div
+                className="
+                flex
+                flex-col
+                gap-5
+                lg:flex-row
+                lg:items-start
+                lg:justify-between
+              "
+              >
+                {/* Title */}
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2 shrink-0">
+                  <div
+                    className="
+                    flex
+                    items-center
+                    gap-2
+                  "
+                  >
+                    <span
+                      className="
+                      relative
+                      flex
+                      h-2
+                      w-2
+                      shrink-0
+                    "
+                    >
                       <span
                         className="
-                absolute inset-0
-                animate-ping
-                rounded-full
-                bg-orange-400/60
-              "
+                        absolute
+                        inset-0
+                        animate-ping
+                        rounded-full
+                        bg-orange-400/60
+                      "
                       />
-                      <span className="relative h-2 w-2 rounded-full bg-orange-500" />
+
+                      <span
+                        className="
+                        relative
+                        h-2
+                        w-2
+                        rounded-full
+                        bg-orange-500
+                      "
+                      />
                     </span>
 
                     <span
                       className="
-              text-[9px]
-              font-black
-              uppercase
-              tracking-[0.2em]
-              text-orange-500
-            "
+                      text-[9px]
+                      font-black
+                      uppercase
+                      tracking-[0.2em]
+                      text-orange-500
+                    "
                     >
                       Personal finance
                     </span>
                   </div>
 
-                  <div className="mt-2 flex flex-col gap-1">
+                  <div
+                    className="
+                    mt-2
+                    flex
+                    flex-col
+                    gap-1
+                  "
+                  >
                     <h1
                       className="
-              text-2xl
-              font-black
-              tracking-[-0.03em]
-              text-slate-900
-              dark:text-white
-              sm:text-3xl
-              lg:text-[32px]
-            "
+                      text-2xl
+                      font-black
+                      tracking-[-0.03em]
+                      text-slate-900
+                      dark:text-white
+                      sm:text-3xl
+                      lg:text-[32px]
+                    "
                     >
                       Expense Tracker
                     </h1>
 
-                    <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
+                    <p
+                      className="
+                      max-w-xl
+                      text-xs
+                      leading-5
+                      text-slate-500
+                      dark:text-slate-400
+                      sm:text-sm
+                    "
+                    >
                       Smart spending insights for{" "}
-                      <span className="font-bold text-slate-700 dark:text-slate-200">
+                      <span
+                        className="
+                        font-bold
+                        text-slate-700
+                        dark:text-slate-200
+                      "
+                      >
                         {rangeLabel}
                       </span>
                     </p>
@@ -2972,53 +4124,53 @@ const ExpensePage = () => {
                 {/* Actions */}
                 <div
                   className="
-          flex w-full items-center gap-2
-          lg:w-auto
-          lg:shrink-0
-        "
+                  flex
+                  w-full
+                  items-center
+                  gap-2
+                  lg:w-auto
+                  lg:shrink-0
+                "
                 >
-                  {/* Year */}
-
-                  {/* Export */}
                   <button
                     type="button"
                     onClick={handleExport}
                     disabled={loading}
                     aria-label="Export expenses"
                     className="
-            inline-flex
-            h-10
-            shrink-0
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            border
-            border-slate-200
-            bg-white
-            px-3
-            text-xs
-            font-bold
-            text-slate-600
-            shadow-sm
-            transition-all
-            hover:border-slate-300
-            hover:bg-slate-50
-            hover:text-slate-900
-            active:scale-[.97]
-            disabled:cursor-not-allowed
-            disabled:opacity-50
-            dark:border-slate-700
-            dark:bg-slate-900
-            dark:text-slate-300
-            dark:hover:border-slate-600
-            dark:hover:bg-slate-800
-            dark:hover:text-white
-            focus:outline-none
-            focus:ring-2
-            focus:ring-orange-500/20
-            sm:px-3.5
-          "
+                      inline-flex
+                      h-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      px-3
+                      text-xs
+                      font-bold
+                      text-slate-600
+                      shadow-sm
+                      transition-all
+                      hover:border-slate-300
+                      hover:bg-slate-50
+                      hover:text-slate-900
+                      active:scale-[.97]
+                      disabled:cursor-not-allowed
+                      disabled:opacity-50
+                      dark:border-slate-700
+                      dark:bg-slate-900
+                      dark:text-slate-300
+                      dark:hover:border-slate-600
+                      dark:hover:bg-slate-800
+                      dark:hover:text-white
+                      focus:outline-none
+                      focus:ring-2
+                      focus:ring-orange-500/20
+                      sm:px-3.5
+                    "
                   >
                     {loading ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -3031,43 +4183,46 @@ const ExpensePage = () => {
                     </span>
                   </button>
 
-                  {/* Primary CTA */}
                   <button
                     type="button"
                     onClick={() => setShowModal(true)}
                     className="
-            group
-            inline-flex
-            h-10
-            shrink-0
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            bg-gradient-to-r
-            from-orange-500
-            to-amber-500
-            px-3.5
-            text-xs
-            font-black
-            text-white
-            shadow-lg
-            shadow-orange-500/20
-            transition-all
-            hover:-translate-y-0.5
-            hover:shadow-xl
-            hover:shadow-orange-500/30
-            active:scale-[.97]
-            focus:outline-none
-            focus:ring-2
-            focus:ring-orange-500/30
-            sm:px-4
-          "
+                      group
+                      inline-flex
+                      h-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      bg-gradient-to-r
+                      from-orange-500
+                      to-amber-500
+                      px-3.5
+                      text-xs
+                      font-black
+                      text-white
+                      shadow-lg
+                      shadow-orange-500/20
+                      transition-all
+                      hover:-translate-y-0.5
+                      hover:shadow-xl
+                      hover:shadow-orange-500/30
+                      active:scale-[.97]
+                      focus:outline-none
+                      focus:ring-2
+                      focus:ring-orange-500/30
+                      sm:px-4
+                    "
                   >
                     <Plus
                       size={15}
                       strokeWidth={2.5}
-                      className="transition-transform duration-200 group-hover:rotate-90"
+                      className="
+                        transition-transform
+                        duration-200
+                        group-hover:rotate-90
+                      "
                     />
 
                     <span>Add Expense</span>
@@ -3076,13 +4231,26 @@ const ExpensePage = () => {
               </div>
 
               {/* Divider */}
-              <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
+              <div
+                className="
+                h-px
+                bg-slate-100
+                dark:bg-slate-800/80
+              "
+              />
 
-              {/* Filters row — container query: side by side only when the card
-                  is wide enough, so the pills never get squeezed (sidebar open
-                  or collapsed makes no difference) */}
+              {/* Timeframe */}
               <div className="@container">
-                <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+                <div
+                  className="
+                  flex
+                  flex-col
+                  gap-3
+                  @3xl:flex-row
+                  @3xl:items-center
+                  @3xl:justify-between
+                "
+                >
                   <TimeFrameSelector
                     timeFrame={timeFrame}
                     setTimeFrame={(value) => {
@@ -3092,80 +4260,37 @@ const ExpensePage = () => {
                     }}
                   />
 
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 @3xl:flex @3xl:flex-none @3xl:items-center">
-                    {timeFrame === "custom" ? (
+                  {timeFrame === "custom" && (
+                    <div
+                      className="
+                      min-w-0
+                      @3xl:shrink-0
+                    "
+                    >
                       <CustomRangePicker
                         customRange={customRange}
                         setCustomRange={handleCustomRangeChange}
                       />
-                    ) : (
-                      <YearSelector
-                        selectedYear={selectedYear}
-                        setSelectedYear={handleYearChange}
-                        currentYear={currentYear}
-                      />
-                    )}
-
-                    {timeFrame === "monthly" && (
-                      <MonthSelector
-                        selectedMonth={selectedMonth}
-                        setSelectedMonth={handleMonthChange}
-                        selectedYear={selectedYear}
-                        currentYear={currentYear}
-                        currentMonth={currentMonth}
-                      />
-                    )}
-
-                    {timeFrame === "yearly" && (
-                      <MonthSelector
-                        allowAll
-                        selectedMonth={yearMonth}
-                        setSelectedMonth={handleYearMonthChange}
-                        selectedYear={selectedYear}
-                        currentYear={currentYear}
-                        currentMonth={currentMonth}
-                      />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              {/* Selected year indicator */}
-              {selectedYear !== currentYear && (
-                <div
-                  className="
-            inline-flex
-            w-fit
-            shrink-0
-            items-center
-            gap-2
-            rounded-xl
-            border
-            border-violet-200
-            bg-violet-50
-            px-3
-            py-2
-            text-[10px]
-            font-black
-            text-violet-600
-            dark:border-violet-500/20
-            dark:bg-violet-500/10
-            dark:text-violet-400
-          "
-                >
-                  <RotateCcw size={12} />
-
-                  <span>Viewing {selectedYear}</span>
-                </div>
-              )}
             </div>
           </div>
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* STAT CARDS                                                       */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ================================================================= */}
+        {/* STAT CARDS                                                        */}
+        {/* ================================================================= */}
 
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <section
+          className="
+          grid
+          grid-cols-2
+          lg:grid-cols-4
+          gap-3
+        "
+        >
           <StatCard
             label="Total expenses"
             value={fmtINR(totalExpense)}
@@ -3201,9 +4326,9 @@ const ExpensePage = () => {
           />
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* YEAR COMPARISON                                                  */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ================================================================= */}
+        {/* YEAR COMPARISON                                                   */}
+        {/* ================================================================= */}
 
         {timeFrame === "yearly" && (
           <YearComparisonCard
@@ -3213,50 +4338,123 @@ const ExpensePage = () => {
           />
         )}
 
-        {/* ---------------------------------------------------------------- */}
-        {/* CHART + BREAKDOWN                                                */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ================================================================= */}
+        {/* CHART + BREAKDOWN                                                 */}
+        {/* ================================================================= */}
 
-        <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <section
+          className="
+          grid
+          grid-cols-1
+          xl:grid-cols-3
+          gap-4
+        "
+        >
           <div
             className="
-              xl:col-span-2
-              rounded-3xl
-              border
-              border-slate-100
-              dark:border-slate-700
-              bg-white
-              dark:bg-slate-900
-              p-4
-              sm:p-5
-              shadow-[0_12px_40px_rgba(15,23,42,0.05)]
-              dark:shadow-black/20
-            "
+            xl:col-span-2
+            rounded-3xl
+            border
+            border-slate-100
+            dark:border-slate-700
+            bg-white
+            dark:bg-slate-900
+            p-4
+            sm:p-5
+            shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+            dark:shadow-black/20
+          "
           >
-            <div className="flex items-start justify-between gap-3 mb-5">
+            <div
+              className="
+              flex
+              items-start
+              justify-between
+              gap-3
+              mb-5
+            "
+            >
               <div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+                <div
+                  className="
+                  flex
+                  items-center
+                  gap-2
+                "
+                >
+                  <div
+                    className="
+                    w-8
+                    h-8
+                    rounded-xl
+                    bg-orange-50
+                    dark:bg-orange-500/10
+                    flex
+                    items-center
+                    justify-center
+                  "
+                  >
                     <BarChart2 size={14} className="text-orange-500" />
                   </div>
 
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white">
+                  <h3
+                    className="
+                    text-sm
+                    font-black
+                    text-slate-800
+                    dark:text-white
+                  "
+                  >
                     {chartLabel}
                   </h3>
                 </div>
 
-                <p className="mt-1 ml-10 text-[10px] text-slate-400">
+                <p
+                  className="
+                  mt-1
+                  ml-10
+                  text-[10px]
+                  text-slate-400
+                "
+                >
                   {rangeLabel}
                 </p>
               </div>
 
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-500/10 text-orange-500 text-[9px] font-black">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+              <div
+                className="
+                hidden
+                sm:flex
+                items-center
+                gap-1.5
+                px-2.5
+                py-1.5
+                rounded-xl
+                bg-orange-50
+                dark:bg-orange-500/10
+                text-orange-500
+                text-[9px]
+                font-black
+              "
+              >
+                <span
+                  className="
+                  w-1.5
+                  h-1.5
+                  rounded-full
+                  bg-orange-500
+                "
+                />
                 LIVE
               </div>
             </div>
 
-            <div className="h-56 sm:h-64">
+            <div
+              className="
+              h-56
+              sm:h-64
+            "
+            >
               {chartData.some((item) => item.expense > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
@@ -3344,7 +4542,7 @@ const ExpensePage = () => {
                     {chartData.map((point, index) =>
                       point.isCurrent ? (
                         <ReferenceLine
-                          key={index}
+                          key={`${point.label}-${index}`}
                           x={point.label}
                           stroke="#f97316"
                           strokeWidth={1.5}
@@ -3356,19 +4554,55 @@ const ExpensePage = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+                <div
+                  className="
+                  h-full
+                  flex
+                  flex-col
+                  items-center
+                  justify-center
+                "
+                >
+                  <div
+                    className="
+                    w-14
+                    h-14
+                    rounded-2xl
+                    bg-slate-50
+                    dark:bg-slate-800
+                    flex
+                    items-center
+                    justify-center
+                  "
+                  >
                     <BarChart2
                       size={22}
-                      className="text-slate-300 dark:text-slate-600"
+                      className="
+                        text-slate-300
+                        dark:text-slate-600
+                      "
                     />
                   </div>
 
-                  <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+                  <p
+                    className="
+                    mt-3
+                    text-xs
+                    font-bold
+                    text-slate-500
+                    dark:text-slate-400
+                  "
+                  >
                     No chart data
                   </p>
 
-                  <p className="mt-1 text-[10px] text-slate-400">
+                  <p
+                    className="
+                    mt-1
+                    text-[10px]
+                    text-slate-400
+                  "
+                  >
                     Expenses will appear here.
                   </p>
                 </div>
@@ -3379,50 +4613,126 @@ const ExpensePage = () => {
           <SpendingBreakdown transactions={filteredTransactions} />
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* TRANSACTIONS                                                     */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ================================================================= */}
+        {/* TRANSACTIONS                                                      */}
+        {/* ================================================================= */}
 
         <section
           className="
-            rounded-3xl
-            border
-            border-slate-100
-            dark:border-slate-700
-            bg-white
-            dark:bg-slate-900
-            overflow-hidden
-            shadow-[0_12px_40px_rgba(15,23,42,0.05)]
-            dark:shadow-black/20
-          "
+          rounded-3xl
+          border
+          border-slate-100
+          dark:border-slate-700
+          bg-white
+          dark:bg-slate-900
+          overflow-hidden
+          shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+          dark:shadow-black/20
+        "
         >
           {/* Toolbar */}
-          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+          <div
+            className="
+            p-4
+            sm:p-5
+            border-b
+            border-slate-100
+            dark:border-slate-800
+          "
+          >
+            <div
+              className="
+              flex
+              flex-col
+              lg:flex-row
+              lg:items-center
+              justify-between
+              gap-4
+            "
+            >
+              <div
+                className="
+                flex
+                items-center
+                gap-3
+              "
+              >
+                <div
+                  className="
+                  w-10
+                  h-10
+                  rounded-2xl
+                  bg-orange-50
+                  dark:bg-orange-500/10
+                  flex
+                  items-center
+                  justify-center
+                "
+                >
                   <Receipt size={17} className="text-orange-500" />
                 </div>
 
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-black text-slate-800 dark:text-white">
+                  <div
+                    className="
+                    flex
+                    items-center
+                    gap-2
+                  "
+                  >
+                    <h3
+                      className="
+                      text-sm
+                      font-black
+                      text-slate-800
+                      dark:text-white
+                    "
+                    >
                       Transactions
                     </h3>
 
-                    <span className="px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-500/10 text-orange-500 text-[9px] font-black">
+                    <span
+                      className="
+                      px-2
+                      py-0.5
+                      rounded-full
+                      bg-orange-50
+                      dark:bg-orange-500/10
+                      text-orange-500
+                      text-[9px]
+                      font-black
+                    "
+                    >
                       {filteredTransactions.length}
                     </span>
                   </div>
 
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p
+                    className="
+                    mt-0.5
+                    text-[10px]
+                    text-slate-400
+                  "
+                  >
                     {rangeLabel}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:flex-none">
+              <div
+                className="
+                flex
+                items-center
+                gap-2
+              "
+              >
+                <div
+                  className="
+                  relative
+                  flex-1
+                  sm:flex-none
+                "
+                >
                   <Search
                     size={13}
                     className="
@@ -3499,23 +4809,57 @@ const ExpensePage = () => {
             </div>
 
             {hasActiveFilters && (
-              <div className="mt-3 flex items-center gap-2">
-                <span className="text-[10px] text-slate-400">
+              <div
+                className="
+                mt-3
+                flex
+                items-center
+                gap-2
+              "
+              >
+                <span
+                  className="
+                  text-[10px]
+                  text-slate-400
+                "
+                >
                   Active filters:
                 </span>
 
                 {filter !== "all" && (
-                  <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
-                    {filter === "year"
-                      ? selectedYear
-                      : filter === "month"
-                        ? `${MONTH_NAMES[selectedMonth]} ${selectedYear}`
-                        : formatCategory(filter)}
+                  <span
+                    className="
+                    px-2
+                    py-1
+                    rounded-lg
+                    bg-slate-100
+                    dark:bg-slate-800
+                    text-[9px]
+                    font-bold
+                    text-slate-500
+                    dark:text-slate-300
+                  "
+                  >
+                    {formatCategory(filter)}
                   </span>
                 )}
 
                 {search && (
-                  <span className="max-w-[150px] truncate px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-300">
+                  <span
+                    className="
+                    max-w-[150px]
+                    truncate
+                    px-2
+                    py-1
+                    rounded-lg
+                    bg-slate-100
+                    dark:bg-slate-800
+                    text-[9px]
+                    font-bold
+                    text-slate-500
+                    dark:text-slate-300
+                  "
+                  >
                     “{search}”
                   </span>
                 )}
@@ -3523,7 +4867,15 @@ const ExpensePage = () => {
                 <button
                   type="button"
                   onClick={resetFilters}
-                  className="ml-auto flex items-center gap-1 text-[9px] font-black text-orange-500"
+                  className="
+                    ml-auto
+                    flex
+                    items-center
+                    gap-1
+                    text-[9px]
+                    font-black
+                    text-orange-500
+                  "
                 >
                   <RotateCcw size={10} />
                   Clear
@@ -3532,27 +4884,33 @@ const ExpensePage = () => {
             )}
           </div>
 
-          {/* Desktop column header */}
+          {/* Desktop header */}
           <div
             className="
-              hidden
-              md:grid
-              grid-cols-[110px_150px_1fr_150px_100px]
-              gap-3
-              px-5
-              py-2.5
-              bg-slate-50/70
-              dark:bg-slate-950/40
-              border-b
-              border-slate-100
-              dark:border-slate-800
-            "
+            hidden
+            md:grid
+            grid-cols-[110px_150px_1fr_150px_100px]
+            gap-3
+            px-5
+            py-2.5
+            bg-slate-50/70
+            dark:bg-slate-950/40
+            border-b
+            border-slate-100
+            dark:border-slate-800
+          "
           >
             {["Date", "Amount", "Description", "Category", "Actions"].map(
               (heading) => (
                 <span
                   key={heading}
-                  className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400"
+                  className="
+                  text-[9px]
+                  font-black
+                  uppercase
+                  tracking-[0.14em]
+                  text-slate-400
+                "
                 >
                   {heading}
                 </span>
@@ -3561,7 +4919,13 @@ const ExpensePage = () => {
           </div>
 
           {/* List */}
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div
+            className="
+            divide-y
+            divide-slate-100
+            dark:divide-slate-800
+          "
+          >
             {visibleTransactions.length > 0 ? (
               visibleTransactions.map((transaction) => (
                 <TransactionItem
@@ -3573,12 +4937,12 @@ const ExpensePage = () => {
                   onSave={handleEditTransaction}
                   onCancel={() => setEditingId(null)}
                   onDelete={(id) => {
-                    const transaction = filteredTransactions.find(
+                    const target = filteredTransactions.find(
                       (item) => item.id === id,
                     );
 
                     setDeleteTarget(
-                      transaction || {
+                      target || {
                         id,
                       },
                     );
@@ -3587,24 +4951,64 @@ const ExpensePage = () => {
                 />
               ))
             ) : (
-              <div className="py-16 px-5 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-orange-50 to-violet-50 dark:from-orange-500/10 dark:to-violet-500/10 flex items-center justify-center">
+              <div
+                className="
+                py-16
+                px-5
+                flex
+                flex-col
+                items-center
+                justify-center
+                text-center
+              "
+              >
+                <div
+                  className="
+                  w-16
+                  h-16
+                  rounded-3xl
+                  bg-gradient-to-br
+                  from-orange-50
+                  to-violet-50
+                  dark:from-orange-500/10
+                  dark:to-violet-500/10
+                  flex
+                  items-center
+                  justify-center
+                "
+                >
                   <Receipt
                     size={24}
-                    className="text-orange-300 dark:text-orange-400"
+                    className="
+                      text-orange-300
+                      dark:text-orange-400
+                    "
                   />
                 </div>
 
-                <h4 className="mt-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                <h4
+                  className="
+                  mt-4
+                  text-sm
+                  font-black
+                  text-slate-700
+                  dark:text-slate-200
+                "
+                >
                   No expenses found
                 </h4>
 
-                <p className="mt-1 max-w-xs text-xs text-slate-400">
+                <p
+                  className="
+                  mt-1
+                  max-w-xs
+                  text-xs
+                  text-slate-400
+                "
+                >
                   {hasActiveFilters
                     ? "Try changing your search or filters."
-                    : selectedYear !== currentYear
-                      ? `No expenses recorded for ${selectedYear}.`
-                      : "You haven't recorded any expenses yet."}
+                    : "You haven't recorded any expenses yet."}
                 </p>
 
                 {hasActiveFilters ? (
@@ -3660,9 +5064,15 @@ const ExpensePage = () => {
             )}
           </div>
 
-          {/* Pagination-ish */}
+          {/* View all */}
           {filteredTransactions.length > MAX_VISIBLE_TRANSACTIONS && (
-            <div className="border-t border-slate-100 dark:border-slate-800">
+            <div
+              className="
+              border-t
+              border-slate-100
+              dark:border-slate-800
+            "
+            >
               {!showAll ? (
                 <button
                   type="button"
@@ -3712,9 +5122,9 @@ const ExpensePage = () => {
           )}
         </section>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* MOBILE QUICK ADD                                                 */}
-        {/* ---------------------------------------------------------------- */}
+        {/* ================================================================= */}
+        {/* MOBILE QUICK ADD                                                  */}
+        {/* ================================================================= */}
 
         <button
           type="button"
@@ -3746,11 +5156,10 @@ const ExpensePage = () => {
         </button>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* MODALS                                                             */}
-      {/* ------------------------------------------------------------------ */}
+      {/* =================================================================== */}
+      {/* MODALS                                                              */}
+      {/* =================================================================== */}
 
-      {/* mounted only while open, so its local state resets on every open */}
       {showModal && (
         <AddTransactionModal
           showModal={showModal}

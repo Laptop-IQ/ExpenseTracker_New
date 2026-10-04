@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   useState,
   useMemo,
@@ -7,6 +8,7 @@ import {
 } from "react";
 import { useOutletContext } from "react-router-dom";
 import axios from "axios";
+
 import {
   Plus,
   Download,
@@ -54,6 +56,7 @@ import { learnCategory } from "../utils/smartCategoryAI";
 import AddTransactionModal from "../components/Add";
 import CustomRangePicker from "../components/common/CustomRangePicker";
 import { usePeriod } from "../utils/usePeriod";
+
 import {
   fmtINR,
   formatFullINR,
@@ -71,11 +74,16 @@ import {
   toIsoWithClientTime,
   getAuthHeaders,
 } from "../utils/commonHelpers";
-import YearSelector from "../components/common/YearSelector";
-import MonthSelector from "../components/common/MonthSelector";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-const TIME_FRAMES = ["daily", "weekly", "monthly", "yearly", "custom"];
+
+const TIME_FRAMES = [
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+  "custom",
+];
 
 const MONTH_NAMES = [
   "January",
@@ -93,7 +101,7 @@ const MONTH_NAMES = [
 ];
 
 /* =========================================================
-   THEME CONSTANTS
+   THEME
 ========================================================= */
 
 const COLORS = {
@@ -158,36 +166,449 @@ const CATEGORY_FILTERS = [
   { value: "Investment", label: "Investment" },
 ];
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const safeDateInput = () => {
+  const date = new Date();
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().split("T")[0];
+};
+
+const getFrameLabel = (frame) => {
+  const value = String(frame || "monthly");
+
+  return (
+    value.charAt(0).toUpperCase() +
+    value.slice(1)
+  );
+};
 
 /* =========================================================
    TIME FRAME SELECTOR
 ========================================================= */
 
-function TimeFrameSelector({ timeFrame, setTimeFrame }) {
+function TimeFrameSelector({
+  timeFrame = "monthly",
+  setTimeFrame = () => {},
+}) {
+  const [open, setOpen] = useState(false);
+
+  const periodButtonRef = useRef(null);
+
+  const [menuStyle, setMenuStyle] = useState({});
+
+  const mobileFrames = useMemo(
+    () => TIME_FRAMES.filter((frame) => frame !== "custom"),
+    [],
+  );
+
+  const currentLabel = getFrameLabel(timeFrame);
+
+  const updateMenuPosition = useCallback(() => {
+    const button = periodButtonRef.current;
+
+    if (!button || typeof window === "undefined") {
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+
+    const gap = 8;
+
+    const viewportPadding = 8;
+
+    const width = Math.max(
+      rect.width,
+      150,
+    );
+
+    const left = Math.max(
+      viewportPadding,
+      Math.min(
+        rect.left,
+        window.innerWidth - width - viewportPadding,
+      ),
+    );
+
+    const top = rect.bottom + gap;
+
+    const maxHeight = Math.max(
+      120,
+      window.innerHeight - top - 12,
+    );
+
+    setMenuStyle({
+      top,
+      left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  /* -----------------------------------------
+     UPDATE POSITION
+  ----------------------------------------- */
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    updateMenuPosition();
+
+    const handleViewportChange = () => {
+      updateMenuPosition();
+    };
+
+    window.addEventListener(
+      "resize",
+      handleViewportChange,
+    );
+
+    window.addEventListener(
+      "scroll",
+      handleViewportChange,
+      true,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "resize",
+        handleViewportChange,
+      );
+
+      window.removeEventListener(
+        "scroll",
+        handleViewportChange,
+        true,
+      );
+    };
+  }, [open, updateMenuPosition]);
+
+  /* -----------------------------------------
+     OUTSIDE CLICK + ESC
+  ----------------------------------------- */
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      const target = event.target;
+
+      if (
+        target?.closest?.(
+          "[data-mobile-timeframe]",
+        )
+      ) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        periodButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener(
+      "pointerdown",
+      handlePointerDown,
+    );
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handlePointerDown,
+      );
+
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [open]);
+
+  /* -----------------------------------------
+     CLOSE WHEN SWITCHING TO CUSTOM
+  ----------------------------------------- */
+
+  useEffect(() => {
+    if (timeFrame === "custom") {
+      setOpen(false);
+    }
+  }, [timeFrame]);
+
   return (
-    <div
-      role="group"
-      aria-label="Time frame"
-      className="flex w-full gap-1 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 @3xl:inline-flex @3xl:w-auto @3xl:shrink-0"
-    >
-      {TIME_FRAMES.map((frame) => {
-        const active = timeFrame === frame;
-        return (
+    <div className="w-full @3xl:w-auto @3xl:shrink-0">
+      {/* =================================================
+          DESKTOP
+      ================================================= */}
+
+      <div
+        role="group"
+        aria-label="Time frame"
+        className="
+          hidden
+          w-full
+          gap-1
+          rounded-2xl
+          border
+          border-slate-200/60
+          bg-slate-100/80
+          p-1
+          dark:border-slate-700/60
+          dark:bg-slate-800/80
+          @3xl:inline-flex
+          @3xl:w-auto
+        "
+      >
+        {TIME_FRAMES.map((frame) => {
+          const active =
+            timeFrame === frame;
+
+          return (
+            <button
+              key={frame}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setTimeFrame(frame);
+              }}
+              aria-pressed={active}
+              className={`
+                flex
+                min-h-10
+                flex-1
+                items-center
+                justify-center
+                whitespace-nowrap
+                rounded-xl
+                px-1
+                text-[11px]
+                font-bold
+                transition-all
+                active:scale-[.97]
+                sm:px-4
+                @3xl:flex-none
+                ${
+                  active
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                    : "text-slate-500 hover:bg-white hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                }
+              `}
+            >
+              {getFrameLabel(frame)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* =================================================
+          MOBILE
+      ================================================= */}
+
+      <div
+        className="
+          flex
+          w-full
+          gap-2
+          @3xl:hidden
+        "
+        data-mobile-timeframe
+      >
+        <div
+          className="relative min-w-0 flex-1"
+          data-mobile-timeframe
+        >
           <button
-            key={frame}
             type="button"
-            onClick={() => setTimeFrame(frame)}
-            aria-pressed={active}
-            className={`flex-1 whitespace-nowrap px-1 sm:px-4 @3xl:flex-none min-h-10 text-[11px] font-bold rounded-xl transition-all active:scale-[.97] ${
-              active
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
-                : "text-slate-500 hover:text-slate-800 hover:bg-white dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
-            }`}
+            ref={periodButtonRef}
+            onClick={() => {
+              setOpen((previous) => {
+                const next = !previous;
+
+                if (next) {
+                  requestAnimationFrame(
+                    updateMenuPosition,
+                  );
+                }
+
+                return next;
+              });
+            }}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+            className="
+              flex
+              min-h-11
+              w-full
+              items-center
+              justify-between
+              gap-2
+              rounded-xl
+              border
+              border-slate-700/70
+              bg-slate-900/90
+              px-3
+              text-[11px]
+              font-bold
+              text-slate-200
+              shadow-sm
+              transition-all
+              active:scale-[.98]
+              focus:outline-none
+              focus:ring-2
+              focus:ring-emerald-500/20
+            "
           >
-            {frame.charAt(0).toUpperCase() + frame.slice(1)}
+            <span className="truncate">
+              {currentLabel === "Custom"
+                ? "Monthly"
+                : currentLabel}
+            </span>
+
+            <ChevronDown
+              size={16}
+              strokeWidth={2.2}
+              aria-hidden="true"
+              className={`
+                shrink-0
+                text-[#8b93a7]
+                transition-transform
+                duration-200
+                ${
+                  open
+                    ? "rotate-180"
+                    : "rotate-0"
+                }
+              `}
+            />
           </button>
-        );
-      })}
+
+          {/* =================================================
+              PORTAL DROPDOWN
+          ================================================= */}
+
+          {open &&
+            createPortal(
+              <div
+                data-mobile-timeframe
+                role="listbox"
+                aria-label="Select time frame"
+                className="
+                  fixed
+                  z-[2147483647]
+                  min-w-[150px]
+                  overflow-y-auto
+                  rounded-xl
+                  border
+                  border-slate-700/80
+                  bg-slate-950/[.99]
+                  p-1.5
+                  shadow-[0_24px_70px_rgba(0,0,0,.7)]
+                  backdrop-blur-xl
+                  overscroll-contain
+                  scrollbar-none
+                "
+                style={menuStyle}
+              >
+                {mobileFrames.map((frame) => {
+                  const active =
+                    timeFrame === frame;
+
+                  return (
+                    <button
+                      key={frame}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        setTimeFrame(frame);
+                        setOpen(false);
+                      }}
+                      className={`
+                        flex
+                        min-h-10
+                        w-full
+                        items-center
+                        rounded-lg
+                        px-3
+                        text-left
+                        text-[11px]
+                        font-bold
+                        transition-colors
+                        ${
+                          active
+                            ? "bg-emerald-500 text-white"
+                            : "text-slate-300 hover:bg-slate-800 active:bg-slate-700"
+                        }
+                      `}
+                    >
+                      {getFrameLabel(frame)}
+
+                      {active && (
+                        <Check
+                          size={13}
+                          className="ml-auto"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )}
+        </div>
+
+        {/* =================================================
+            CUSTOM
+        ================================================= */}
+
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setTimeFrame("custom");
+          }}
+          aria-pressed={timeFrame === "custom"}
+          className={`
+            min-h-11
+            min-w-[88px]
+            rounded-xl
+            px-4
+            text-[11px]
+            font-bold
+            transition-all
+            active:scale-[.97]
+            focus:outline-none
+            focus:ring-2
+            focus:ring-emerald-500/20
+            ${
+              timeFrame === "custom"
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                : "border border-slate-700/70 bg-slate-900/90 text-slate-300 hover:bg-slate-800"
+            }
+          `}
+        >
+          Custom
+        </button>
+      </div>
     </div>
   );
 }
@@ -196,13 +617,40 @@ function TimeFrameSelector({ timeFrame, setTimeFrame }) {
    TOAST
 ========================================================= */
 
-function Toast({ toasts }) {
+function Toast({ toasts = [] }) {
   return (
-    <div className="fixed top-4 right-3 sm:right-5 z-[9999] flex flex-col gap-2 pointer-events-none w-[calc(100%-24px)] max-w-sm">
+    <div
+      className="
+        fixed
+        top-4
+        right-3
+        z-[9999]
+        flex
+        w-[calc(100%-24px)]
+        max-w-sm
+        pointer-events-none
+        flex-col
+        gap-2
+        sm:right-5
+      "
+      aria-live="polite"
+      aria-atomic="true"
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-2xl border backdrop-blur-xl"
+          className="
+            pointer-events-auto
+            flex
+            items-center
+            gap-3
+            rounded-2xl
+            border
+            px-4
+            py-3.5
+            shadow-2xl
+            backdrop-blur-xl
+          "
           style={{
             background:
               toast.type === "success"
@@ -222,7 +670,8 @@ function Toast({ toasts }) {
                 : toast.type === "error"
                   ? COLORS.red
                   : COLORS.text,
-            animation: "incomeSlideIn .25s ease-out",
+            animation:
+              "incomeSlideIn .25s ease-out",
           }}
         >
           {toast.type === "success" ? (
@@ -232,7 +681,8 @@ function Toast({ toasts }) {
           ) : (
             <Zap size={16} />
           )}
-          <span className="text-xs sm:text-sm font-semibold">
+
+          <span className="text-xs font-semibold sm:text-sm">
             {toast.message}
           </span>
         </div>
@@ -245,42 +695,98 @@ function Toast({ toasts }) {
    STAT CARD
 ========================================================= */
 
-function StatCard({ label, value, sub, accent, icon: Icon, trend }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+  icon: Icon,
+  trend,
+}) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl sm:rounded-3xl border p-4 sm:p-5 group"
+      className="
+        group
+        relative
+        overflow-hidden
+        rounded-2xl
+        border
+        p-4
+        sm:rounded-3xl
+        sm:p-5
+      "
       style={{
-        background: "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
+        background:
+          "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
         borderColor: COLORS.border,
       }}
     >
       <div
-        className="absolute -right-8 -top-8 h-24 w-24 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity"
-        style={{ background: accent }}
+        className="
+          absolute
+          -right-8
+          -top-8
+          h-24
+          w-24
+          rounded-full
+          blur-3xl
+          opacity-10
+          transition-opacity
+          group-hover:opacity-20
+        "
+        style={{
+          background: accent,
+        }}
       />
 
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p
-            className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.16em]"
-            style={{ color: COLORS.textDim }}
+            className="
+              text-[9px]
+              font-bold
+              uppercase
+              tracking-[0.16em]
+              sm:text-[10px]
+            "
+            style={{
+              color: COLORS.textDim,
+            }}
           >
             {label}
           </p>
 
           <p
-            className="mt-2 text-xl sm:text-2xl font-black tracking-tight truncate"
-            style={{ color: COLORS.text }}
+            className="
+              mt-2
+              truncate
+              text-xl
+              font-black
+              tracking-tight
+              sm:text-2xl
+            "
+            style={{
+              color: COLORS.text,
+            }}
           >
             {value}
           </p>
 
-          <div className="flex items-center gap-1.5 mt-1.5">
+          <div className="mt-1.5 flex items-center gap-1.5">
             {trend !== undefined && (
               <span
-                className="flex items-center gap-0.5 text-[10px] font-bold"
+                className="
+                  flex
+                  items-center
+                  gap-0.5
+                  text-[10px]
+                  font-bold
+                "
                 style={{
-                  color: trend >= 0 ? COLORS.green : COLORS.red,
+                  color:
+                    trend >= 0
+                      ? COLORS.green
+                      : COLORS.red,
                 }}
               >
                 {trend >= 0 ? (
@@ -288,13 +794,20 @@ function StatCard({ label, value, sub, accent, icon: Icon, trend }) {
                 ) : (
                   <ArrowDownRight size={11} />
                 )}
+
                 {Math.abs(trend).toFixed(0)}%
               </span>
             )}
 
             <span
-              className="text-[10px] sm:text-xs truncate"
-              style={{ color: COLORS.textMuted }}
+              className="
+                truncate
+                text-[10px]
+                sm:text-xs
+              "
+              style={{
+                color: COLORS.textMuted,
+              }}
             >
               {sub}
             </span>
@@ -302,7 +815,18 @@ function StatCard({ label, value, sub, accent, icon: Icon, trend }) {
         </div>
 
         <div
-          className="shrink-0 h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl flex items-center justify-center"
+          className="
+            flex
+            h-9
+            w-9
+            shrink-0
+            items-center
+            justify-center
+            rounded-xl
+            sm:h-10
+            sm:w-10
+            sm:rounded-2xl
+          "
           style={{
             color: accent,
             background: `${accent}12`,
@@ -321,11 +845,24 @@ function StatCard({ label, value, sub, accent, icon: Icon, trend }) {
 ========================================================= */
 
 function CategoryPill({ cat }) {
-  const color = CATEGORY_COLOR[cat] || COLORS.textMuted;
+  const color =
+    CATEGORY_COLOR[cat] ||
+    COLORS.textMuted;
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] sm:text-[10px] font-bold whitespace-nowrap"
+      className="
+        inline-flex
+        items-center
+        gap-1
+        whitespace-nowrap
+        rounded-full
+        px-2
+        py-1
+        text-[9px]
+        font-bold
+        sm:text-[10px]
+      "
       style={{
         color,
         background: `${color}12`,
@@ -341,31 +878,72 @@ function CategoryPill({ cat }) {
    CATEGORY FILTER
 ========================================================= */
 
-function CategoryFilter({ value, onChange }) {
+function CategoryFilter({
+  value,
+  onChange,
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
     const handler = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) {
+      if (
+        ref.current &&
+        !ref.current.contains(event.target)
+      ) {
         setOpen(false);
       }
     };
 
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    document.addEventListener(
+      "pointerdown",
+      handler,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handler,
+      );
+    };
+  }, [open]);
 
   const current =
-    CATEGORY_FILTERS.find((item) => item.value === value) ||
-    CATEGORY_FILTERS[0];
+    CATEGORY_FILTERS.find(
+      (item) => item.value === value,
+    ) || CATEGORY_FILTERS[0];
 
   return (
-    <div ref={ref} className="relative">
+    <div
+      ref={ref}
+      className="relative shrink-0"
+    >
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="h-10 flex items-center gap-2 rounded-xl px-3 text-xs font-bold transition-all active:scale-[.98]"
+        onClick={() =>
+          setOpen((previous) => !previous)
+        }
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="
+          flex
+          h-10
+          items-center
+          gap-2
+          rounded-xl
+          px-3
+          text-xs
+          font-bold
+          transition-all
+          active:scale-[.98]
+          focus:outline-none
+          focus:ring-2
+          focus:ring-emerald-500/20
+        "
         style={{
           background: "#141923",
           border: `1px solid ${COLORS.border}`,
@@ -373,16 +951,34 @@ function CategoryFilter({ value, onChange }) {
         }}
       >
         <SlidersHorizontal size={13} />
-        <span className="max-w-[100px] truncate">{current.label}</span>
+
+        <span className="max-w-[100px] truncate">
+          {current.label}
+        </span>
+
         <ChevronDown
           size={12}
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
+          className={`
+            transition-transform
+            duration-200
+            ${open ? "rotate-180" : ""}
+          `}
         />
       </button>
 
       {open && (
         <div
-          className="absolute right-0 top-[calc(100%+8px)] z-50 w-56 rounded-2xl border shadow-2xl overflow-hidden"
+          className="
+            absolute
+            right-0
+            top-[calc(100%+8px)]
+            z-50
+            w-56
+            overflow-hidden
+            rounded-2xl
+            border
+            shadow-2xl
+          "
           style={{
             background: "#131821",
             borderColor: COLORS.border,
@@ -390,8 +986,12 @@ function CategoryFilter({ value, onChange }) {
         >
           <div className="p-1.5">
             {CATEGORY_FILTERS.map((item) => {
-              const active = value === item.value;
-              const color = CATEGORY_COLOR[item.value] || COLORS.green;
+              const active =
+                value === item.value;
+
+              const color =
+                CATEGORY_COLOR[item.value] ||
+                COLORS.green;
 
               return (
                 <button
@@ -401,7 +1001,20 @@ function CategoryFilter({ value, onChange }) {
                     onChange(item.value);
                     setOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all"
+                  className="
+                    flex
+                    min-h-10
+                    w-full
+                    items-center
+                    gap-2.5
+                    rounded-xl
+                    px-3
+                    py-2.5
+                    text-left
+                    text-xs
+                    font-semibold
+                    transition-all
+                  "
                   style={
                     active
                       ? {
@@ -414,13 +1027,28 @@ function CategoryFilter({ value, onChange }) {
                   }
                 >
                   <span
-                    className="h-2 w-2 rounded-full"
+                    className="
+                      h-2
+                      w-2
+                      shrink-0
+                      rounded-full
+                    "
                     style={{
-                      background: item.value === "all" ? COLORS.textDim : color,
+                      background:
+                        item.value === "all"
+                          ? COLORS.textDim
+                          : color,
                     }}
                   />
+
                   {item.label}
-                  {active && <Check size={13} className="ml-auto" />}
+
+                  {active && (
+                    <Check
+                      size={13}
+                      className="ml-auto"
+                    />
+                  )}
                 </button>
               );
             })}
@@ -435,46 +1063,91 @@ function CategoryFilter({ value, onChange }) {
    INCOME BREAKDOWN
 ========================================================= */
 
-function IncomeBreakdown({ transactions }) {
+function IncomeBreakdown({
+  transactions = [],
+}) {
   const breakdown = useMemo(() => {
     const map = {};
 
-    transactions.forEach((transaction) => {
-      const category = transaction.category || "Other";
-      map[category] = (map[category] || 0) + Number(transaction.amount || 0);
-    });
+    transactions.forEach(
+      (transaction) => {
+        const category =
+          transaction.category ||
+          "Other";
 
-    const total = Object.values(map).reduce((sum, value) => sum + value, 0);
+        map[category] =
+          (map[category] || 0) +
+          Number(transaction.amount || 0);
+      },
+    );
+
+    const total = Object.values(
+      map,
+    ).reduce(
+      (sum, value) => sum + value,
+      0,
+    );
 
     return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: total ? (amount / total) * 100 : 0,
-      }));
+      .sort(
+        (a, b) => b[1] - a[1],
+      )
+      .map(
+        ([category, amount]) => ({
+          category,
+          amount,
+          percentage: total
+            ? (amount / total) * 100
+            : 0,
+        }),
+      );
   }, [transactions]);
 
   return (
     <div
-      className="rounded-2xl sm:rounded-3xl border p-4 sm:p-5"
+      className="
+        rounded-2xl
+        border
+        p-4
+        sm:rounded-3xl
+        sm:p-5
+      "
       style={{
-        background: "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
+        background:
+          "linear-gradient(145deg, #11161f 0%, #0e1219 100%)",
         borderColor: COLORS.border,
       }}
     >
-      <div className="flex items-center justify-between mb-5">
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold" style={{ color: COLORS.text }}>
+          <h3
+            className="text-sm font-bold"
+            style={{
+              color: COLORS.text,
+            }}
+          >
             Income sources
           </h3>
-          <p className="text-[10px] mt-1" style={{ color: COLORS.textDim }}>
+
+          <p
+            className="mt-1 text-[10px]"
+            style={{
+              color: COLORS.textDim,
+            }}
+          >
             Where your money is coming from
           </p>
         </div>
 
         <div
-          className="h-8 w-8 rounded-xl flex items-center justify-center"
+          className="
+            flex
+            h-8
+            w-8
+            items-center
+            justify-center
+            rounded-xl
+          "
           style={{
             background: `${COLORS.green}10`,
             color: COLORS.green,
@@ -486,75 +1159,157 @@ function IncomeBreakdown({ transactions }) {
 
       {breakdown.length === 0 ? (
         <div
-          className="min-h-[180px] flex flex-col items-center justify-center text-center rounded-2xl"
-          style={{ background: "#0b0f15" }}
+          className="
+            flex
+            min-h-[180px]
+            flex-col
+            items-center
+            justify-center
+            rounded-2xl
+            text-center
+          "
+          style={{
+            background: "#0b0f15",
+          }}
         >
-          <Sparkles size={20} style={{ color: COLORS.textDim }} />
+          <Sparkles
+            size={20}
+            style={{
+              color: COLORS.textDim,
+            }}
+          />
+
           <p
-            className="text-xs font-semibold mt-3"
-            style={{ color: COLORS.textMuted }}
+            className="mt-3 text-xs font-semibold"
+            style={{
+              color: COLORS.textMuted,
+            }}
           >
             No income sources
           </p>
+
           <p
-            className="text-[10px] mt-1 max-w-[180px]"
-            style={{ color: COLORS.textDim }}
+            className="
+              mt-1
+              max-w-[180px]
+              text-[10px]
+            "
+            style={{
+              color: COLORS.textDim,
+            }}
           >
-            Add income transactions to see your breakdown.
+            Add income transactions to
+            see your breakdown.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {breakdown.map(({ category, amount, percentage }) => {
-            const color = CATEGORY_COLOR[category] || COLORS.textMuted;
+          {breakdown.map(
+            ({
+              category,
+              amount,
+              percentage,
+            }) => {
+              const color =
+                CATEGORY_COLOR[
+                  category
+                ] ||
+                COLORS.textMuted;
 
-            return (
-              <div key={category}>
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
+              return (
+                <div key={category}>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="
+                          h-2
+                          w-2
+                          shrink-0
+                          rounded-full
+                        "
+                        style={{
+                          background: color,
+                        }}
+                      />
+
+                      <span
+                        className="
+                          truncate
+                          text-xs
+                          font-semibold
+                        "
+                        style={{
+                          color: COLORS.text,
+                        }}
+                      >
+                        {category.replace(
+                          /_/g,
+                          " ",
+                        )}
+                      </span>
+                    </div>
+
                     <span
-                      className="h-2 w-2 rounded-full shrink-0"
-                      style={{ background: color }}
-                    />
-                    <span
-                      className="text-xs font-semibold truncate"
-                      style={{ color: COLORS.text }}
+                      className="
+                        shrink-0
+                        text-xs
+                        font-bold
+                      "
+                      style={{
+                        color,
+                      }}
                     >
-                      {category.replace(/_/g, " ")}
+                      {fmtINR(amount)}
                     </span>
                   </div>
-                  <span
-                    className="text-xs font-bold shrink-0"
-                    style={{ color }}
-                  >
-                    {fmtINR(amount)}
-                  </span>
-                </div>
 
-                <div
-                  className="h-1.5 rounded-full overflow-hidden"
-                  style={{
-                    background: "#1a202b",
-                  }}
-                >
                   <div
-                    className="h-full rounded-full"
+                    className="
+                      h-1.5
+                      overflow-hidden
+                      rounded-full
+                    "
                     style={{
-                      width: `${percentage}%`,
-                      background: `linear-gradient(90deg, ${color}, ${color}88)`,
+                      background: "#1a202b",
                     }}
-                  />
-                </div>
+                  >
+                    <div
+                      className="
+                        h-full
+                        rounded-full
+                      "
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            percentage,
+                          ),
+                        )}%`,
+                        background:
+                          `linear-gradient(90deg, ${color}, ${color}88)`,
+                      }}
+                    />
+                  </div>
 
-                <p
-                  className="text-[9px] mt-1"
-                  style={{ color: COLORS.textDim }}
-                >
-                  {percentage.toFixed(1)}% of selected income
-                </p>
-              </div>
-            );
-          })}
+                  <p
+                    className="
+                      mt-1
+                      text-[9px]
+                    "
+                    style={{
+                      color:
+                        COLORS.textDim,
+                    }}
+                  >
+                    {percentage.toFixed(1)}%
+                    {" "}
+                    of selected income
+                  </p>
+                </div>
+              );
+            },
+          )}
         </div>
       )}
     </div>
@@ -565,24 +1320,50 @@ function IncomeBreakdown({ transactions }) {
    CUSTOM TOOLTIP
 ========================================================= */
 
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) {
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}) {
+  if (
+    !active ||
+    !payload?.length
+  ) {
     return null;
   }
 
   return (
     <div
-      className="rounded-xl border px-3 py-2.5 shadow-2xl"
+      className="
+        rounded-xl
+        border
+        px-3
+        py-2.5
+        shadow-2xl
+      "
       style={{
         background: "#151a23",
         borderColor: COLORS.border,
       }}
     >
-      <p className="text-[10px] mb-1" style={{ color: COLORS.textDim }}>
+      <p
+        className="mb-1 text-[10px]"
+        style={{
+          color: COLORS.textDim,
+        }}
+      >
         {label}
       </p>
-      <p className="text-sm font-black" style={{ color: COLORS.green }}>
-        {formatFullINR(payload[0].value)}
+
+      <p
+        className="text-sm font-black"
+        style={{
+          color: COLORS.green,
+        }}
+      >
+        {formatFullINR(
+          payload[0].value,
+        )}
       </p>
     </div>
   );
@@ -602,14 +1383,45 @@ function TransactionItem({
   onDelete,
   setEditingId,
 }) {
-  const [errors, setErrors] = useState({
-    description: "",
-    amount: "",
-  });
+  const [errors, setErrors] =
+    useState({
+      description: "",
+      amount: "",
+    });
 
-  const category = transaction.category || "Extra_Income";
-  const color = CATEGORY_COLOR[category] || COLORS.textMuted;
-  const icon = CATEGORY_ICONS[category] || <IndianRupee size={16} />;
+  const category =
+    transaction.category ||
+    "Extra_Income";
+
+  const color =
+    CATEGORY_COLOR[category] ||
+    COLORS.textMuted;
+
+  const icon =
+    CATEGORY_ICONS[category] ||
+    <IndianRupee size={16} />;
+
+  const startEdit = () => {
+    setEditForm({
+      description:
+        transaction.description ||
+        "",
+      amount:
+        transaction.amount ||
+        "",
+      category,
+      date: getDateInputValue(
+        transaction.date,
+      ),
+    });
+
+    setErrors({
+      description: "",
+      amount: "",
+    });
+
+    setEditingId(transaction.id);
+  };
 
   const validate = () => {
     const nextErrors = {
@@ -617,34 +1429,70 @@ function TransactionItem({
       amount: "",
     };
 
-    if (!String(editForm.description || "").trim()) {
-      nextErrors.description = "Description is required";
+    if (
+      !String(
+        editForm.description || "",
+      ).trim()
+    ) {
+      nextErrors.description =
+        "Description is required";
     }
 
-    if (!String(editForm.amount || "").trim()) {
-      nextErrors.amount = "Amount is required";
+    if (
+      !String(
+        editForm.amount || "",
+      ).trim()
+    ) {
+      nextErrors.amount =
+        "Amount is required";
     } else if (
-      !Number.isFinite(Number(editForm.amount)) ||
+      !Number.isFinite(
+        Number(editForm.amount),
+      ) ||
       Number(editForm.amount) <= 0
     ) {
-      nextErrors.amount = "Enter a valid amount";
+      nextErrors.amount =
+        "Enter a valid amount";
     }
 
     setErrors(nextErrors);
-    return !nextErrors.description && !nextErrors.amount;
+
+    return (
+      !nextErrors.description &&
+      !nextErrors.amount
+    );
   };
 
   return (
     <div
-      className="px-3 sm:px-4 py-3.5 sm:py-4 transition-all"
+      className="
+        px-3
+        py-3.5
+        transition-all
+        sm:px-4
+        sm:py-4
+      "
       style={{
-        background: isEditing ? "#151b25" : "transparent",
+        background: isEditing
+          ? "#151b25"
+          : "transparent",
       }}
     >
       {!isEditing ? (
         <div className="flex items-center gap-3">
           <div
-            className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl shrink-0 flex items-center justify-center"
+            className="
+              flex
+              h-10
+              w-10
+              shrink-0
+              items-center
+              justify-center
+              rounded-xl
+              sm:h-11
+              sm:w-11
+              sm:rounded-2xl
+            "
             style={{
               background: `${color}12`,
               color,
@@ -654,114 +1502,189 @@ function TransactionItem({
             {icon}
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p
-                className="text-xs sm:text-sm font-bold truncate"
-                style={{ color: COLORS.text }}
-              >
-                {transaction.description}
-              </p>
-            </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="
+                truncate
+                text-xs
+                font-bold
+                sm:text-sm
+              "
+              style={{
+                color: COLORS.text,
+              }}
+            >
+              {transaction.description ||
+                "Untitled income"}
+            </p>
 
-            <div className="flex items-center gap-2 mt-1.5 min-w-0">
+            <div className="mt-1.5 flex min-w-0 items-center gap-2">
               <span
-                className="text-[9px] sm:text-[10px] shrink-0"
-                style={{ color: COLORS.textDim }}
+                className="
+                  shrink-0
+                  text-[9px]
+                  sm:text-[10px]
+                "
+                style={{
+                  color: COLORS.textDim,
+                }}
               >
                 <span className="sm:hidden">
-                  {formatTransactionDateMobile(transaction.date)}
+                  {formatTransactionDateMobile(
+                    transaction.date,
+                  )}
                 </span>
+
                 <span className="hidden sm:inline">
-                  {formatTransactionDate(transaction.date)}
+                  {formatTransactionDate(
+                    transaction.date,
+                  )}
                 </span>
               </span>
 
-              <span className="text-[8px]" style={{ color: COLORS.border }}>
+              <span
+                className="text-[8px]"
+                style={{
+                  color: COLORS.border,
+                }}
+              >
                 •
               </span>
 
-              <CategoryPill cat={category} />
+              <CategoryPill
+                cat={category}
+              />
             </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <span
-              className="text-xs sm:text-sm font-black"
-              style={{ color: COLORS.green }}
+              className="
+                text-xs
+                font-black
+                sm:text-sm
+              "
+              style={{
+                color: COLORS.green,
+              }}
             >
-              +{formatFullINR(transaction.amount)}
+              +
+              {formatFullINR(
+                transaction.amount,
+              )}
             </span>
 
+            {/* Desktop actions */}
             <button
               type="button"
-              onClick={() => {
-                setEditForm({
-                  description: transaction.description || "",
-                  amount: transaction.amount || "",
-                  category,
-                  date: getDateInputValue(transaction.date),
-                });
-                setErrors({ description: "", amount: "" });
-                setEditingId(transaction.id);
+              onClick={startEdit}
+              className="
+                hidden
+                h-8
+                w-8
+                items-center
+                justify-center
+                rounded-lg
+                transition-all
+                sm:flex
+              "
+              style={{
+                color: COLORS.textDim,
               }}
-              className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-              style={{ color: COLORS.textDim }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = COLORS.green;
-                e.currentTarget.style.background = `${COLORS.green}10`;
+              onMouseEnter={(event) => {
+                event.currentTarget.style.color =
+                  COLORS.green;
+                event.currentTarget.style.background =
+                  `${COLORS.green}10`;
               }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = COLORS.textDim;
-                e.currentTarget.style.background = "transparent";
+              onMouseLeave={(event) => {
+                event.currentTarget.style.color =
+                  COLORS.textDim;
+                event.currentTarget.style.background =
+                  "transparent";
               }}
               title="Edit income"
+              aria-label="Edit income"
             >
               <Edit2 size={13} />
             </button>
 
             <button
               type="button"
-              onClick={() => onDelete(transaction.id)}
-              className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg transition-all"
-              style={{ color: COLORS.textDim }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = COLORS.red;
-                e.currentTarget.style.background = `${COLORS.red}10`;
+              onClick={() =>
+                onDelete(transaction.id)
+              }
+              className="
+                hidden
+                h-8
+                w-8
+                items-center
+                justify-center
+                rounded-lg
+                transition-all
+                sm:flex
+              "
+              style={{
+                color: COLORS.textDim,
               }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = COLORS.textDim;
-                e.currentTarget.style.background = "transparent";
+              onMouseEnter={(event) => {
+                event.currentTarget.style.color =
+                  COLORS.red;
+                event.currentTarget.style.background =
+                  `${COLORS.red}10`;
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.color =
+                  COLORS.textDim;
+                event.currentTarget.style.background =
+                  "transparent";
               }}
               title="Delete income"
+              aria-label="Delete income"
             >
               <Trash2 size={13} />
             </button>
 
-            <div className="flex sm:hidden gap-1">
+            {/* Mobile actions */}
+            <div className="flex gap-1 sm:hidden">
               <button
                 type="button"
-                onClick={() => {
-                  setEditForm({
-                    description: transaction.description || "",
-                    amount: transaction.amount || "",
-                    category,
-                    date: getDateInputValue(transaction.date),
-                  });
-                  setErrors({ description: "", amount: "" });
-                  setEditingId(transaction.id);
+                onClick={startEdit}
+                className="
+                  flex
+                  h-7
+                  w-7
+                  items-center
+                  justify-center
+                  rounded-lg
+                "
+                style={{
+                  color: COLORS.textDim,
+                  background: "#141923",
                 }}
-                className="h-7 w-7 flex items-center justify-center rounded-lg"
-                style={{ color: COLORS.textDim, background: "#141923" }}
+                aria-label="Edit income"
               >
                 <Edit2 size={12} />
               </button>
 
               <button
                 type="button"
-                onClick={() => onDelete(transaction.id)}
-                className="h-7 w-7 flex items-center justify-center rounded-lg"
-                style={{ color: COLORS.red, background: `${COLORS.red}08` }}
+                onClick={() =>
+                  onDelete(transaction.id)
+                }
+                className="
+                  flex
+                  h-7
+                  w-7
+                  items-center
+                  justify-center
+                  rounded-lg
+                "
+                style={{
+                  color: COLORS.red,
+                  background: `${COLORS.red}08`,
+                }}
+                aria-label="Delete income"
               >
                 <Trash2 size={12} />
               </button>
@@ -777,69 +1700,129 @@ function TransactionItem({
           }}
         >
           <div className="space-y-3">
+            {/* Description */}
             <div>
               <label
-                className="text-[9px] font-bold uppercase tracking-wider"
-                style={{ color: COLORS.textDim }}
+                className="
+                  text-[9px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                "
+                style={{
+                  color: COLORS.textDim,
+                }}
               >
                 Description
               </label>
+
               <input
-                value={editForm.description}
-                onChange={(e) =>
-                  setEditForm((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }))
+                value={
+                  editForm.description
                 }
-                className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                onChange={(event) =>
+                  setEditForm(
+                    (previous) => ({
+                      ...previous,
+                      description:
+                        event.target.value,
+                    }),
+                  )
+                }
+                className="
+                  mt-1.5
+                  h-10
+                  w-full
+                  rounded-xl
+                  px-3
+                  text-xs
+                  outline-none
+                "
                 style={{
                   background: "#141923",
                   color: COLORS.text,
                   border: `1px solid ${
-                    errors.description ? COLORS.red : COLORS.border
+                    errors.description
+                      ? COLORS.red
+                      : COLORS.border
                   }`,
                 }}
                 placeholder="Income description"
               />
+
               {errors.description && (
-                <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
+                <p
+                  className="mt-1 text-[9px]"
+                  style={{
+                    color: COLORS.red,
+                  }}
+                >
                   {errors.description}
                 </p>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* Amount / Category / Date */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div>
                 <label
-                  className="text-[9px] font-bold uppercase tracking-wider"
-                  style={{ color: COLORS.textDim }}
+                  className="
+                    text-[9px]
+                    font-bold
+                    uppercase
+                    tracking-wider
+                  "
+                  style={{
+                    color: COLORS.textDim,
+                  }}
                 >
                   Amount
                 </label>
+
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  value={editForm.amount}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      amount: e.target.value,
-                    }))
+                  value={
+                    editForm.amount
                   }
-                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                  onChange={(event) =>
+                    setEditForm(
+                      (previous) => ({
+                        ...previous,
+                        amount:
+                          event.target.value,
+                      }),
+                    )
+                  }
+                  className="
+                    mt-1.5
+                    h-10
+                    w-full
+                    rounded-xl
+                    px-3
+                    text-xs
+                    outline-none
+                  "
                   style={{
                     background: "#141923",
                     color: COLORS.text,
                     border: `1px solid ${
-                      errors.amount ? COLORS.red : COLORS.border
+                      errors.amount
+                        ? COLORS.red
+                        : COLORS.border
                     }`,
                   }}
                   placeholder="Amount"
                 />
+
                 {errors.amount && (
-                  <p className="text-[9px] mt-1" style={{ color: COLORS.red }}>
+                  <p
+                    className="mt-1 text-[9px]"
+                    style={{
+                      color: COLORS.red,
+                    }}
+                  >
                     {errors.amount}
                   </p>
                 )}
@@ -847,51 +1830,99 @@ function TransactionItem({
 
               <div>
                 <label
-                  className="text-[9px] font-bold uppercase tracking-wider"
-                  style={{ color: COLORS.textDim }}
+                  className="
+                    text-[9px]
+                    font-bold
+                    uppercase
+                    tracking-wider
+                  "
+                  style={{
+                    color: COLORS.textDim,
+                  }}
                 >
                   Category
                 </label>
+
                 <select
-                  value={editForm.category}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      category: e.target.value,
-                    }))
+                  value={
+                    editForm.category
                   }
-                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                  onChange={(event) =>
+                    setEditForm(
+                      (previous) => ({
+                        ...previous,
+                        category:
+                          event.target.value,
+                      }),
+                    )
+                  }
+                  className="
+                    mt-1.5
+                    h-10
+                    w-full
+                    rounded-xl
+                    px-3
+                    text-xs
+                    outline-none
+                  "
                   style={{
                     background: "#141923",
                     color: COLORS.text,
                     border: `1px solid ${COLORS.border}`,
                   }}
                 >
-                  {INCOME_CATEGORIES.map((item) => (
-                    <option key={item} value={item}>
-                      {item.replace(/_/g, " ")}
-                    </option>
-                  ))}
+                  {INCOME_CATEGORIES.map(
+                    (item) => (
+                      <option
+                        key={item}
+                        value={item}
+                      >
+                        {item.replace(
+                          /_/g,
+                          " ",
+                        )}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
 
               <div>
                 <label
-                  className="text-[9px] font-bold uppercase tracking-wider"
-                  style={{ color: COLORS.textDim }}
+                  className="
+                    text-[9px]
+                    font-bold
+                    uppercase
+                    tracking-wider
+                  "
+                  style={{
+                    color: COLORS.textDim,
+                  }}
                 >
                   Date
                 </label>
+
                 <input
                   type="date"
                   value={editForm.date}
-                  onChange={(e) =>
-                    setEditForm((prev) => ({
-                      ...prev,
-                      date: e.target.value,
-                    }))
+                  onChange={(event) =>
+                    setEditForm(
+                      (previous) => ({
+                        ...previous,
+                        date:
+                          event.target.value,
+                      }),
+                    )
                   }
-                  className="w-full mt-1.5 h-10 rounded-xl px-3 text-xs outline-none"
+                  className="
+                    mt-1.5
+                    h-10
+                    w-full
+                    rounded-xl
+                    px-3
+                    text-xs
+                    outline-none
+                  "
                   style={{
                     background: "#141923",
                     color: COLORS.text,
@@ -902,6 +1933,7 @@ function TransactionItem({
               </div>
             </div>
 
+            {/* Actions */}
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
@@ -910,7 +1942,21 @@ function TransactionItem({
                     onSave();
                   }
                 }}
-                className="flex-1 sm:flex-none h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+                className="
+                  flex
+                  h-10
+                  flex-1
+                  items-center
+                  justify-center
+                  gap-1.5
+                  rounded-xl
+                  px-4
+                  text-xs
+                  font-bold
+                  transition
+                  active:scale-[.98]
+                  sm:flex-none
+                "
                 style={{
                   background: COLORS.green,
                   color: "#06110d",
@@ -923,10 +1969,26 @@ function TransactionItem({
               <button
                 type="button"
                 onClick={() => {
-                  setErrors({ description: "", amount: "" });
+                  setErrors({
+                    description: "",
+                    amount: "",
+                  });
+
                   onCancel();
                 }}
-                className="h-10 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5"
+                className="
+                  flex
+                  h-10
+                  items-center
+                  justify-center
+                  gap-1.5
+                  rounded-xl
+                  px-4
+                  text-xs
+                  font-bold
+                  transition
+                  active:scale-[.98]
+                "
                 style={{
                   background: "#141923",
                   color: COLORS.textMuted,
@@ -948,32 +2010,99 @@ function TransactionItem({
    DELETE MODAL
 ========================================================= */
 
-function DeleteModal({ transaction, loading, onConfirm, onClose }) {
+function DeleteModal({
+  transaction,
+  loading,
+  onConfirm,
+  onClose,
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+    <div
+      className="
+        fixed
+        inset-0
+        z-[100]
+        flex
+        items-end
+        justify-center
+        sm:items-center
+      "
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-income-title"
+    >
       <div
         className="absolute inset-0 backdrop-blur-md"
-        style={{ background: "#05070bcc" }}
+        style={{
+          background: "#05070bcc",
+        }}
         onClick={onClose}
       />
 
       <div
-        className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-5 sm:p-6"
+        className="
+          relative
+          w-full
+          rounded-t-3xl
+          p-5
+          sm:max-w-sm
+          sm:rounded-3xl
+          sm:p-6
+        "
         style={{
-          background: "linear-gradient(145deg, #131821, #0e1219)",
+          background:
+            "linear-gradient(145deg, #131821, #0e1219)",
           border: `1px solid ${COLORS.border}`,
-          boxShadow: "0 -20px 80px rgba(0,0,0,.4)",
-          animation: "incomeSlideUp .25s ease-out",
+          boxShadow:
+            "0 -20px 80px rgba(0,0,0,.4)",
+          animation:
+            "incomeSlideUp .25s ease-out",
         }}
       >
         <div
-          className="sm:hidden w-10 h-1 rounded-full mx-auto mb-5"
-          style={{ background: COLORS.border }}
+          className="
+            mx-auto
+            mb-5
+            h-1
+            w-10
+            rounded-full
+            sm:hidden
+          "
+          style={{
+            background: COLORS.border,
+          }}
         />
 
         <div className="flex justify-center">
           <div
-            className="h-14 w-14 rounded-2xl flex items-center justify-center"
+            className="
+              flex
+              h-14
+              w-14
+              items-center
+              justify-center
+              rounded-2xl
+            "
             style={{
               background: `${COLORS.red}10`,
               color: COLORS.red,
@@ -985,22 +2114,36 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
         </div>
 
         <h2
-          className="text-center text-base font-black mt-4"
-          style={{ color: COLORS.text }}
+          id="delete-income-title"
+          className="
+            mt-4
+            text-center
+            text-base
+            font-black
+          "
+          style={{
+            color: COLORS.text,
+          }}
         >
           Delete this income?
         </h2>
 
         <p
-          className="text-center text-xs mt-1"
-          style={{ color: COLORS.textMuted }}
+          className="
+            mt-1
+            text-center
+            text-xs
+          "
+          style={{
+            color: COLORS.textMuted,
+          }}
         >
           This action cannot be undone.
         </p>
 
         {transaction && (
           <div
-            className="rounded-2xl p-3.5 mt-5"
+            className="mt-5 rounded-2xl p-3.5"
             style={{
               background: "#0b0f15",
               border: `1px solid ${COLORS.border}`,
@@ -1009,32 +2152,60 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p
-                  className="text-xs font-bold truncate"
-                  style={{ color: COLORS.text }}
+                  className="
+                    truncate
+                    text-xs
+                    font-bold
+                  "
+                  style={{
+                    color: COLORS.text,
+                  }}
                 >
                   {transaction.description}
                 </p>
 
                 <div className="mt-2">
-                  <CategoryPill cat={transaction.category} />
+                  <CategoryPill
+                    cat={
+                      transaction.category
+                    }
+                  />
                 </div>
               </div>
 
               <p
-                className="text-sm font-black shrink-0"
-                style={{ color: COLORS.green }}
+                className="
+                  shrink-0
+                  text-sm
+                  font-black
+                "
+                style={{
+                  color: COLORS.green,
+                }}
               >
-                {formatFullINR(transaction.amount)}
+                {formatFullINR(
+                  transaction.amount,
+                )}
               </p>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2.5 mt-5">
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="h-11 rounded-xl text-xs font-bold"
+            disabled={loading}
+            className="
+              h-11
+              rounded-xl
+              text-xs
+              font-bold
+              transition
+              active:scale-[.98]
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+            "
             style={{
               background: "#141923",
               color: COLORS.textMuted,
@@ -1048,14 +2219,36 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="h-11 rounded-xl text-xs font-bold disabled:opacity-50"
+            className="
+              flex
+              h-11
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              text-xs
+              font-bold
+              transition
+              active:scale-[.98]
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+            "
             style={{
               background: `${COLORS.red}12`,
               color: COLORS.red,
               border: `1px solid ${COLORS.red}25`,
             }}
           >
-            {loading ? "Deleting..." : "Delete"}
+            {loading && (
+              <Loader2
+                size={13}
+                className="animate-spin"
+              />
+            )}
+
+            {loading
+              ? "Deleting..."
+              : "Delete"}
           </button>
         </div>
       </div>
@@ -1068,549 +2261,1018 @@ function DeleteModal({ transaction, loading, onConfirm, onClose }) {
 ========================================================= */
 
 const Income = () => {
-  const outletContext = useOutletContext() || {};
+  const outletContext =
+    useOutletContext() || {};
 
   const {
-    // The layout pre-filters `transactions` for its own cards; the page needs
-    // everything so it can show any year / month / custom range.
     allTransactions,
-    transactions: layoutTransactions = [],
-    refreshTransactions = () => {},
-    timeFrame,
-    setTimeFrame,
+    transactions:
+      layoutTransactions = [],
+    refreshTransactions =
+      () => {},
+    timeFrame = "monthly",
+    setTimeFrame =
+      () => {},
   } = outletContext;
 
-  const outletTransactions = allTransactions ?? layoutTransactions;
+  const outletTransactions =
+    allTransactions ??
+    layoutTransactions;
 
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [toasts, setToasts] = useState([]);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [showAll, setShowAll] = useState(false);
+  const [showModal, setShowModal] =
+    useState(false);
 
-  const currentYear = getCurrentYear();
-  const currentMonth = new Date().getMonth();
+  const [editingId, setEditingId] =
+    useState(null);
 
-  // year / month / custom range - shared with the layout stat cards
+  const [deleteTarget, setDeleteTarget] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [toasts, setToasts] =
+    useState([]);
+
+  const [search, setSearch] =
+    useState("");
+
+  const [
+    categoryFilter,
+    setCategoryFilter,
+  ] = useState("all");
+
+  const [showAll, setShowAll] =
+    useState(false);
+
+  const currentYear =
+    getCurrentYear();
+
+  const currentMonth =
+    new Date().getMonth();
+
   const {
-    selectedYear,
-    setSelectedYear,
-    selectedMonth,
-    setSelectedMonth,
-    yearMonth, // Yearly view only: null = "All months"
-    setYearMonth,
     customRange,
     setCustomRange,
   } = usePeriod(outletContext);
 
-  const [editForm, setEditForm] = useState({
-    description: "",
-    amount: "",
-    category: "Salary",
-    date: new Date().toISOString().split("T")[0],
-  });
+  const selectedYear =
+    currentYear;
 
-  const [newTransaction, setNewTransaction] = useState({
-    date: new Date().toISOString().split("T")[0],
-    description: "",
-    amount: "",
-    type: "income",
-    category: "Salary",
-  });
+  const selectedMonth =
+    currentMonth;
 
-  /* -----------------------------------------
+  const yearMonth = null;
+
+  const [editForm, setEditForm] =
+    useState({
+      description: "",
+      amount: "",
+      category: "Salary",
+      date: safeDateInput(),
+    });
+
+  const [newTransaction, setNewTransaction] =
+    useState({
+      date: safeDateInput(),
+      description: "",
+      amount: "",
+      type: "income",
+      category: "Salary",
+    });
+
+  /* =========================================================
      TOAST
-  ----------------------------------------- */
+  ========================================================= */
 
-  const addToast = useCallback((message, type = "info") => {
-    const id = Date.now() + Math.random();
+  const toastTimersRef =
+    useRef(new Map());
 
-    setToasts((previous) => [
-      ...previous,
-      {
+  const addToast = useCallback(
+    (message, type = "info") => {
+      const id =
+        Date.now() +
+        Math.random();
+
+      setToasts(
+        (previous) => [
+          ...previous,
+          {
+            id,
+            message,
+            type,
+          },
+        ],
+      );
+
+      const timer =
+        window.setTimeout(() => {
+          setToasts(
+            (previous) =>
+              previous.filter(
+                (toast) =>
+                  toast.id !== id,
+              ),
+          );
+
+          toastTimersRef.current.delete(
+            id,
+          );
+        }, 3500);
+
+      toastTimersRef.current.set(
         id,
-        message,
-        type,
-      },
-    ]);
+        timer,
+      );
+    },
+    [],
+  );
 
-    window.setTimeout(() => {
-      setToasts((previous) => previous.filter((toast) => toast.id !== id));
-    }, 3500);
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach(
+        (timer) => {
+          window.clearTimeout(timer);
+        },
+      );
+
+      toastTimersRef.current.clear();
+    };
   }, []);
 
-  /* -----------------------------------------
+  /* =========================================================
      INCOME TRANSACTIONS
-  ----------------------------------------- */
+  ========================================================= */
 
-  const incomeTransactions = useMemo(() => {
-    return (outletTransactions || [])
-      .filter((transaction) => transaction.type === "income")
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [outletTransactions]);
+  const incomeTransactions =
+    useMemo(() => {
+      return [...(outletTransactions || [])]
+        .filter(
+          (transaction) =>
+            transaction?.type ===
+            "income",
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.date) -
+            new Date(a.date),
+        );
+    }, [outletTransactions]);
 
-  /* -----------------------------------------
-     TIMEFRAME RANGE & TRANSACTIONS
-  ----------------------------------------- */
+  /* =========================================================
+     TIMEFRAME
+  ========================================================= */
 
-  const timeFrameRange = useMemo(
-    () =>
-      getTimeFrameRange(timeFrame, selectedYear, selectedMonth, customRange),
-    [timeFrame, selectedYear, selectedMonth, customRange],
-  );
-
-  const rangeLabel =
-    timeFrame === "yearly" && yearMonth !== null
-      ? `${MONTH_NAMES[yearMonth]} ${selectedYear}`
-      : timeFrameRange.label;
-
-  const timeFrameTransactions = useMemo(() => {
-    return incomeTransactions.filter((transaction) =>
-      isDateInRange(transaction.date, timeFrameRange.start, timeFrameRange.end),
-    );
-  }, [incomeTransactions, timeFrameRange]);
-
-  /* -----------------------------------------
-     FILTERED TRANSACTIONS
-  ----------------------------------------- */
-
-  const filteredTransactions = useMemo(() => {
-    let list = [...timeFrameTransactions];
-
-    // Yearly view + a specific month chosen -> narrow to that month
-    if (timeFrame === "yearly" && yearMonth !== null) {
-      list = list.filter(
-        (transaction) => new Date(transaction.date).getMonth() === yearMonth,
-      );
-    }
-
-    if (categoryFilter !== "all") {
-      list = list.filter(
-        (transaction) =>
-          String(transaction.category || "Other").toLowerCase() ===
-          categoryFilter.toLowerCase(),
-      );
-    }
-
-    const query = search.trim().toLowerCase();
-
-    if (query) {
-      list = list.filter((transaction) => {
-        const description = String(transaction.description || "").toLowerCase();
-        const category = String(transaction.category || "").toLowerCase();
-
-        return description.includes(query) || category.includes(query);
-      });
-    }
-
-    return list.sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [timeFrameTransactions, categoryFilter, search, timeFrame, yearMonth]);
-
-  /* -----------------------------------------
-     KPI
-  ----------------------------------------- */
-
-  const totalIncome = useMemo(
-    () =>
-      filteredTransactions.reduce(
-        (sum, transaction) => sum + Number(transaction.amount || 0),
-        0,
-      ),
-    [filteredTransactions],
-  );
-
-  const averageIncome = useMemo(
-    () =>
-      filteredTransactions.length
-        ? totalIncome / filteredTransactions.length
-        : 0,
-    [totalIncome, filteredTransactions.length],
-  );
-
-  const highestIncome = useMemo(
-    () =>
-      filteredTransactions.reduce(
-        (highest, transaction) =>
-          Math.max(highest, Number(transaction.amount || 0)),
-        0,
-      ),
-    [filteredTransactions],
-  );
-
-  /* -----------------------------------------
-     CHART
-  ----------------------------------------- */
-
-  const chartPoints = useMemo(() => {
-    if (timeFrame === "custom") {
-      return generateChartPoints(
+  const timeFrameRange =
+    useMemo(
+      () =>
+        getTimeFrameRange(
+          timeFrame,
+          selectedYear,
+          selectedMonth,
+          customRange,
+        ),
+      [
         timeFrame,
         selectedYear,
         selectedMonth,
         customRange,
-      );
-    }
-
-    return buildChartPoints(
-      timeFrame === "daily" || timeFrame === "weekly" || timeFrame === "monthly"
-        ? "month"
-        : timeFrame,
-      timeFrame === "monthly"
-        ? `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`
-        : timeFrame === "daily" || timeFrame === "weekly"
-          ? new Date().toISOString().split("T")[0].slice(0, 7)
-          : String(selectedYear),
+      ],
     );
-  }, [timeFrame, selectedYear, selectedMonth, customRange]);
 
-  const chartData = useMemo(() => {
-    // custom range: bars are days (one month) or months (several months)
-    if (timeFrame === "custom") {
-      const totals = new Map();
+  const rangeLabel =
+    timeFrame === "yearly" &&
+    yearMonth !== null
+      ? `${MONTH_NAMES[yearMonth]} ${selectedYear}`
+      : timeFrameRange.label;
 
-      for (const transaction of timeFrameTransactions) {
-        const key = chartKeyForDate(
-          timeFrame,
-          new Date(transaction.date),
-          customRange,
+  const timeFrameTransactions =
+    useMemo(() => {
+      return incomeTransactions.filter(
+        (transaction) =>
+          isDateInRange(
+            transaction.date,
+            timeFrameRange.start,
+            timeFrameRange.end,
+          ),
+      );
+    }, [
+      incomeTransactions,
+      timeFrameRange,
+    ]);
+
+  /* =========================================================
+     FILTERS
+  ========================================================= */
+
+  const filteredTransactions =
+    useMemo(() => {
+      let list = [
+        ...timeFrameTransactions,
+      ];
+
+      if (
+        timeFrame === "yearly" &&
+        yearMonth !== null
+      ) {
+        list = list.filter(
+          (transaction) =>
+            new Date(
+              transaction.date,
+            ).getMonth() ===
+            yearMonth,
         );
-
-        totals.set(key, (totals.get(key) || 0) + Number(transaction.amount || 0));
       }
 
-      return chartPoints.map((point) => ({
-        ...point,
-        income:
-          totals.get(chartKeyForPoint(timeFrame, point, customRange)) || 0,
-      }));
-    }
+      if (
+        categoryFilter !== "all"
+      ) {
+        list = list.filter(
+          (transaction) =>
+            String(
+              transaction.category ||
+                "Other",
+            ).toLowerCase() ===
+            categoryFilter.toLowerCase(),
+        );
+      }
 
-    return chartPoints.map((point) => {
-      const income = timeFrameTransactions
-        .filter((transaction) => {
-          const d = new Date(transaction.date);
+      const query =
+        search.trim().toLowerCase();
 
-          if (
-            timeFrame === "daily" ||
-            timeFrame === "weekly" ||
-            timeFrame === "monthly"
-          ) {
-            return d.getDate() === point.day;
-          }
+      if (query) {
+        list = list.filter(
+          (transaction) => {
+            const description =
+              String(
+                transaction.description ||
+                  "",
+              ).toLowerCase();
 
-          return d.getMonth() === point.month;
-        })
-        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+            const category =
+              String(
+                transaction.category ||
+                  "",
+              ).toLowerCase();
 
-      return {
-        ...point,
-        income,
-      };
-    });
-  }, [chartPoints, timeFrameTransactions, timeFrame, customRange]);
+            return (
+              description.includes(
+                query,
+              ) ||
+              category.includes(
+                query,
+              )
+            );
+          },
+        );
+      }
 
-  // bars are days of one month (monthly / single-month custom) or months
-  const dailyBars = isDailyGranularity(timeFrame, customRange);
+      return list.sort(
+        (a, b) =>
+          new Date(b.date) -
+          new Date(a.date),
+      );
+    }, [
+      timeFrameTransactions,
+      categoryFilter,
+      search,
+      timeFrame,
+      yearMonth,
+    ]);
+
+  /* =========================================================
+     KPI
+  ========================================================= */
+
+  const totalIncome =
+    useMemo(
+      () =>
+        filteredTransactions.reduce(
+          (sum, transaction) =>
+            sum +
+            Number(
+              transaction.amount ||
+                0,
+            ),
+          0,
+        ),
+      [filteredTransactions],
+    );
+
+  const averageIncome =
+    useMemo(
+      () =>
+        filteredTransactions.length
+          ? totalIncome /
+            filteredTransactions.length
+          : 0,
+      [
+        totalIncome,
+        filteredTransactions.length,
+      ],
+    );
+
+  const highestIncome =
+    useMemo(
+      () =>
+        filteredTransactions.reduce(
+          (
+            highest,
+            transaction,
+          ) =>
+            Math.max(
+              highest,
+              Number(
+                transaction.amount ||
+                  0,
+              ),
+            ),
+          0,
+        ),
+      [filteredTransactions],
+    );
+
+  /* =========================================================
+     CHART
+  ========================================================= */
+
+  const chartPoints =
+    useMemo(() => {
+      if (timeFrame === "custom") {
+        return generateChartPoints(
+          timeFrame,
+          selectedYear,
+          selectedMonth,
+          customRange,
+        );
+      }
+
+      return buildChartPoints(
+        timeFrame ===
+          "daily" ||
+        timeFrame ===
+          "weekly" ||
+        timeFrame ===
+          "monthly"
+          ? "month"
+          : timeFrame,
+        timeFrame ===
+          "monthly"
+          ? `${selectedYear}-${String(
+              selectedMonth + 1,
+            ).padStart(2, "0")}`
+          : timeFrame ===
+                "daily" ||
+              timeFrame ===
+                "weekly"
+            ? new Date()
+                .toISOString()
+                .split("T")[0]
+                .slice(0, 7)
+            : String(
+                selectedYear,
+              ),
+      );
+    }, [
+      timeFrame,
+      selectedYear,
+      selectedMonth,
+      customRange,
+    ]);
+
+  const chartData =
+    useMemo(() => {
+      if (timeFrame === "custom") {
+        const totals = new Map();
+
+        for (const transaction of timeFrameTransactions) {
+          const key =
+            chartKeyForDate(
+              timeFrame,
+              new Date(
+                transaction.date,
+              ),
+              customRange,
+            );
+
+          totals.set(
+            key,
+            (totals.get(key) || 0) +
+              Number(
+                transaction.amount ||
+                  0,
+              ),
+          );
+        }
+
+        return chartPoints.map(
+          (point) => ({
+            ...point,
+            income:
+              totals.get(
+                chartKeyForPoint(
+                  timeFrame,
+                  point,
+                  customRange,
+                ),
+              ) || 0,
+          }),
+        );
+      }
+
+      return chartPoints.map(
+        (point) => {
+          const income =
+            timeFrameTransactions
+              .filter(
+                (transaction) => {
+                  const d =
+                    new Date(
+                      transaction.date,
+                    );
+
+                  if (
+                    timeFrame ===
+                      "daily" ||
+                    timeFrame ===
+                      "weekly" ||
+                    timeFrame ===
+                      "monthly"
+                  ) {
+                    return (
+                      d.getDate() ===
+                      point.day
+                    );
+                  }
+
+                  return (
+                    d.getMonth() ===
+                    point.month
+                  );
+                },
+              )
+              .reduce(
+                (
+                  sum,
+                  transaction,
+                ) =>
+                  sum +
+                  Number(
+                    transaction.amount ||
+                      0,
+                  ),
+                0,
+              );
+
+          return {
+            ...point,
+            income,
+          };
+        },
+      );
+    }, [
+      chartPoints,
+      timeFrameTransactions,
+      timeFrame,
+      customRange,
+    ]);
+
+  const dailyBars =
+    isDailyGranularity(
+      timeFrame,
+      customRange,
+    );
 
   const chartLabel =
     timeFrame === "daily" ||
     timeFrame === "weekly" ||
-    isDailyGranularity(timeFrame, customRange)
+    dailyBars
       ? "Daily income"
       : timeFrame === "custom"
         ? "Monthly income"
         : "Yearly income";
 
-  /* -----------------------------------------
+  /* =========================================================
      VISIBLE TRANSACTIONS
-  ----------------------------------------- */
+  ========================================================= */
 
-  const visibleTransactions = showAll
-    ? filteredTransactions
-    : filteredTransactions.slice(0, 10);
+  const visibleTransactions =
+    showAll
+      ? filteredTransactions
+      : filteredTransactions.slice(
+          0,
+          10,
+        );
 
-  /* -----------------------------------------
-     RESET
-  ----------------------------------------- */
+  /* =========================================================
+     RESET FILTERS
+  ========================================================= */
 
-  const resetFilters = useCallback(() => {
-    setSearch("");
-    setCategoryFilter("all");
-    setShowAll(false);
-  }, []);
+  const resetFilters =
+    useCallback(() => {
+      setSearch("");
+      setCategoryFilter("all");
+      setShowAll(false);
+    }, []);
 
-  /* -----------------------------------------
+  /* =========================================================
      ADD
-  ----------------------------------------- */
+  ========================================================= */
 
-  const handleAddTransaction = useCallback(async () => {
-    const description = String(newTransaction.description || "").trim();
-    const amount = Number(newTransaction.amount);
+  const handleAddTransaction =
+    useCallback(async () => {
+      if (loading) return;
 
-    if (!description) {
-      addToast("Please enter a description.", "error");
-      return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      addToast("Please enter a valid amount.", "error");
-      return;
-    }
-
-    const payload = {
-      description,
-      amount,
-      category: newTransaction.category || "Salary",
-      date: toIsoWithClientTime(newTransaction.date),
-    };
-
-    try {
-      setLoading(true);
-
-      await axios.post(`${API_BASE}/income/add`, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      });
-
-      learnCategory(payload.description, payload.category);
-
-      setShowModal(false);
-
-      setNewTransaction({
-        date: new Date().toISOString().split("T")[0],
-        description: "",
-        amount: "",
-        type: "income",
-        category: "Salary",
-      });
-
-      addToast("Income added successfully.", "success");
-
-      refreshTransactions();
-    } catch (error) {
-      addToast(
-        error?.response?.data?.message || "Failed to save income.",
-        "error",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [newTransaction, refreshTransactions, addToast]);
-
-  /* -----------------------------------------
-     EDIT
-  ----------------------------------------- */
-
-  const handleEditTransaction = useCallback(async () => {
-    if (!editingId) return;
-
-    const description = String(editForm.description || "").trim();
-    const amount = Number(editForm.amount);
-
-    if (!description) {
-      addToast("Description is required.", "error");
-      return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-      addToast("Enter a valid amount.", "error");
-      return;
-    }
-
-    const payload = {
-      description,
-      amount,
-      category: editForm.category || "Salary",
-      date: toIsoWithClientTime(editForm.date),
-    };
-
-    try {
-      setLoading(true);
-
-      await axios.put(`${API_BASE}/income/update/${editingId}`, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      });
-
-      learnCategory(payload.description, payload.category);
-
-      setEditingId(null);
-
-      addToast("Income updated successfully.", "success");
-
-      refreshTransactions();
-    } catch (error) {
-      addToast(error?.response?.data?.message || "Update failed.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [editingId, editForm, refreshTransactions, addToast]);
-
-  /* -----------------------------------------
-     DELETE
-  ----------------------------------------- */
-
-  const confirmDelete = useCallback(async () => {
-    if (!deleteTarget?.id) return;
-
-    try {
-      setLoading(true);
-
-      await axios.delete(`${API_BASE}/income/delete/${deleteTarget.id}`, {
-        headers: getAuthHeaders(),
-      });
-
-      setDeleteTarget(null);
-
-      addToast("Income deleted successfully.", "success");
-
-      refreshTransactions();
-    } catch (error) {
-      addToast(error?.response?.data?.message || "Delete failed.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [deleteTarget, refreshTransactions, addToast]);
-
-  /* -----------------------------------------
-     EXPORT
-  ----------------------------------------- */
-
-  const handleExport = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const response = await axios.get(`${API_BASE}/income/downloadexcel`, {
-        headers: getAuthHeaders(),
-        responseType: "blob",
-      });
-
-      const blob = new Blob([response.data], {
-        type: response.headers["content-type"] || "application/octet-stream",
-      });
-
-      const disposition = response.headers["content-disposition"];
-
-      let filename = "income_details.xlsx";
-
-      if (disposition) {
-        const match = disposition.match(/filename="?([^"]+)"?/i);
-
-        if (match?.[1]) {
-          filename = match[1];
-        }
+      if (!API_BASE) {
+        addToast(
+          "API base URL is not configured.",
+          "error",
+        );
+        return;
       }
 
-      const url = URL.createObjectURL(blob);
+      const description =
+        String(
+          newTransaction.description ||
+            "",
+        ).trim();
 
-      const link = document.createElement("a");
+      const amount = Number(
+        newTransaction.amount,
+      );
 
-      link.href = url;
-      link.download = filename;
+      if (!description) {
+        addToast(
+          "Please enter a description.",
+          "error",
+        );
+        return;
+      }
 
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        addToast(
+          "Please enter a valid amount.",
+          "error",
+        );
+        return;
+      }
 
-      URL.revokeObjectURL(url);
+      const payload = {
+        description,
+        amount,
+        category:
+          newTransaction.category ||
+          "Salary",
+        date: toIsoWithClientTime(
+          newTransaction.date,
+        ),
+      };
 
-      addToast("Export ready.", "success");
-    } catch {
-      addToast("Export failed.", "error");
-    } finally {
-      setLoading(false);
+      try {
+        setLoading(true);
+
+        await axios.post(
+          `${API_BASE}/income/add`,
+          payload,
+          {
+            headers: {
+              "Content-Type":
+                "application/json",
+              ...getAuthHeaders(),
+            },
+          },
+        );
+
+        learnCategory(
+          payload.description,
+          payload.category,
+        );
+
+        setShowModal(false);
+
+        setNewTransaction({
+          date: safeDateInput(),
+          description: "",
+          amount: "",
+          type: "income",
+          category: "Salary",
+        });
+
+        addToast(
+          "Income added successfully.",
+          "success",
+        );
+
+        await Promise.resolve(
+          refreshTransactions(),
+        );
+      } catch (error) {
+        addToast(
+          error?.response?.data
+            ?.message ||
+            "Failed to save income.",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      loading,
+      newTransaction,
+      refreshTransactions,
+      addToast,
+    ]);
+
+  /* =========================================================
+     EDIT
+  ========================================================= */
+
+  const handleEditTransaction =
+    useCallback(async () => {
+      if (!editingId || loading) {
+        return;
+      }
+
+      if (!API_BASE) {
+        addToast(
+          "API base URL is not configured.",
+          "error",
+        );
+        return;
+      }
+
+      const description =
+        String(
+          editForm.description ||
+            "",
+        ).trim();
+
+      const amount = Number(
+        editForm.amount,
+      );
+
+      if (!description) {
+        addToast(
+          "Description is required.",
+          "error",
+        );
+        return;
+      }
+
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        addToast(
+          "Enter a valid amount.",
+          "error",
+        );
+        return;
+      }
+
+      const payload = {
+        description,
+        amount,
+        category:
+          editForm.category ||
+          "Salary",
+        date: toIsoWithClientTime(
+          editForm.date,
+        ),
+      };
+
+      try {
+        setLoading(true);
+
+        await axios.put(
+          `${API_BASE}/income/update/${editingId}`,
+          payload,
+          {
+            headers: {
+              "Content-Type":
+                "application/json",
+              ...getAuthHeaders(),
+            },
+          },
+        );
+
+        learnCategory(
+          payload.description,
+          payload.category,
+        );
+
+        setEditingId(null);
+
+        addToast(
+          "Income updated successfully.",
+          "success",
+        );
+
+        await Promise.resolve(
+          refreshTransactions(),
+        );
+      } catch (error) {
+        addToast(
+          error?.response?.data
+            ?.message ||
+            "Update failed.",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      editingId,
+      editForm,
+      loading,
+      refreshTransactions,
+      addToast,
+    ]);
+
+  /* =========================================================
+     DELETE
+  ========================================================= */
+
+  const confirmDelete =
+    useCallback(async () => {
+      if (
+        !deleteTarget?.id ||
+        loading
+      ) {
+        return;
+      }
+
+      if (!API_BASE) {
+        addToast(
+          "API base URL is not configured.",
+          "error",
+        );
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        await axios.delete(
+          `${API_BASE}/income/delete/${deleteTarget.id}`,
+          {
+            headers:
+              getAuthHeaders(),
+          },
+        );
+
+        setDeleteTarget(null);
+
+        addToast(
+          "Income deleted successfully.",
+          "success",
+        );
+
+        await Promise.resolve(
+          refreshTransactions(),
+        );
+      } catch (error) {
+        addToast(
+          error?.response?.data
+            ?.message ||
+            "Delete failed.",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      deleteTarget,
+      loading,
+      refreshTransactions,
+      addToast,
+    ]);
+
+  /* =========================================================
+     EXPORT
+  ========================================================= */
+
+  const handleExport =
+    useCallback(async () => {
+      if (loading) return;
+
+      if (!API_BASE) {
+        addToast(
+          "API base URL is not configured.",
+          "error",
+        );
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const response =
+          await axios.get(
+            `${API_BASE}/income/downloadexcel`,
+            {
+              headers:
+                getAuthHeaders(),
+              responseType: "blob",
+            },
+          );
+
+        const blob = new Blob(
+          [response.data],
+          {
+            type:
+              response.headers[
+                "content-type"
+              ] ||
+              "application/octet-stream",
+          },
+        );
+
+        const disposition =
+          response.headers[
+            "content-disposition"
+          ];
+
+        let filename =
+          "income_details.xlsx";
+
+        if (disposition) {
+          const utfMatch =
+            disposition.match(
+              /filename\*=UTF-8''([^;]+)/i,
+            );
+
+          const normalMatch =
+            disposition.match(
+              /filename="?([^"]+)"?/i,
+            );
+
+          const rawName =
+            utfMatch?.[1] ||
+            normalMatch?.[1];
+
+          if (rawName) {
+            try {
+              filename =
+                decodeURIComponent(
+                  rawName,
+                );
+            } catch {
+              filename =
+                rawName;
+            }
+          }
+        }
+
+        const url =
+          URL.createObjectURL(
+            blob,
+          );
+
+        const link =
+          document.createElement(
+            "a",
+          );
+
+        link.href = url;
+        link.download =
+          filename;
+
+        document.body.appendChild(
+          link,
+        );
+
+        link.click();
+        link.remove();
+
+        window.setTimeout(
+          () =>
+            URL.revokeObjectURL(
+              url,
+            ),
+          1000,
+        );
+
+        addToast(
+          "Export ready.",
+          "success",
+        );
+      } catch (error) {
+        addToast(
+          error?.response?.data
+            ?.message ||
+            "Export failed.",
+          "error",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [loading, addToast]);
+
+  /* =========================================================
+     CLOSE EDIT ON DELETE
+  ========================================================= */
+
+  useEffect(() => {
+    if (deleteTarget) {
+      setEditingId(null);
     }
-  }, [addToast]);
+  }, [deleteTarget]);
 
-  /* -----------------------------------------
+  /* =========================================================
      UI
-  ----------------------------------------- */
+  ========================================================= */
 
   return (
     <>
       <style>{`
-    @keyframes incomeSlideUp {
-      from {
-        transform: translateY(40px);
-        opacity: 0;
-      }
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
-    }
+        @keyframes incomeSlideUp {
+          from {
+            transform: translateY(40px);
+            opacity: 0;
+          }
 
-    @keyframes incomeSlideIn {
-      from {
-        transform: translateX(24px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
 
-    .scrollbar-none::-webkit-scrollbar {
-      display: none;
-    }
+        @keyframes incomeSlideIn {
+          from {
+            transform: translateX(24px);
+            opacity: 0;
+          }
 
-    .scrollbar-none {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-  `}</style>
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        .scrollbar-none::-webkit-scrollbar {
+          display: none;
+        }
+
+        .scrollbar-none {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
 
       <Toast toasts={toasts} />
 
-      <div className="min-h-screen pb-24 space-y-4 sm:space-y-5">
-        {/* HEADER */}
+      <div className="min-h-screen space-y-4 pb-24 sm:space-y-5">
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <section
           className="
-    relative
-    overflow-hidden
-    rounded-[0.25rem]
-    sm:rounded-[2rem]
-    border
-    border-white/70
-    dark:border-slate-700
-    bg-gradient-to-br
-    from-white
-    via-emerald-50/50
-    to-violet-50/70
-    dark:from-slate-900
-    dark:via-slate-900
-    dark:to-emerald-950/30
-    p-4
-    sm:p-6
-    shadow-[0_20px_60px_rgba(16,185,129,0.08)]
-  "
+            relative
+            overflow-hidden
+            rounded-[0.25rem]
+            border
+            border-white/70
+            bg-gradient-to-br
+            from-white
+            via-emerald-50/50
+            to-violet-50/70
+            p-4
+            shadow-[0_20px_60px_rgba(16,185,129,0.08)]
+            dark:border-slate-700
+            dark:from-slate-900
+            dark:via-slate-900
+            dark:to-emerald-950/30
+            sm:rounded-[2rem]
+            sm:p-6
+          "
         >
-          <div className="absolute -right-20 -top-20 w-52 h-52 rounded-full bg-emerald-400/10 blur-3xl" />
-          <div className="absolute -left-20 -bottom-20 w-52 h-52 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="absolute -right-20 -top-20 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl" />
+
+          <div className="absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-violet-500/10 blur-3xl" />
 
           <div className="relative">
             <div
               className="
-        flex flex-col gap-5
-        rounded-2xl
-        border border-slate-200/70
-        bg-white/80
-        p-4
-        shadow-sm
-        backdrop-blur-xl
-        dark:border-slate-800/80
-        dark:bg-slate-950/70
-        sm:p-5
-        lg:p-6
-      "
+                flex
+                flex-col
+                gap-5
+                rounded-2xl
+                border
+                border-slate-200/70
+                bg-white/80
+                p-4
+                shadow-sm
+                backdrop-blur-xl
+                dark:border-slate-800/80
+                dark:bg-slate-950/70
+                sm:p-5
+                lg:p-6
+              "
             >
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -1618,11 +3280,12 @@ const Income = () => {
                     <span className="relative flex h-2 w-2 shrink-0">
                       <span
                         className="
-                  absolute inset-0
-                  animate-ping
-                  rounded-full
-                  bg-emerald-400/60
-                "
+                          absolute
+                          inset-0
+                          animate-ping
+                          rounded-full
+                          bg-emerald-400/60
+                        "
                       />
 
                       <span className="relative h-2 w-2 rounded-full bg-emerald-500" />
@@ -1630,12 +3293,12 @@ const Income = () => {
 
                     <span
                       className="
-                text-[9px]
-                font-black
-                uppercase
-                tracking-[0.2em]
-                text-emerald-500
-              "
+                        text-[9px]
+                        font-black
+                        uppercase
+                        tracking-[0.2em]
+                        text-emerald-500
+                      "
                     >
                       Income Intelligence
                     </span>
@@ -1644,14 +3307,14 @@ const Income = () => {
                   <div className="mt-2 flex flex-col gap-1">
                     <h1
                       className="
-                text-2xl
-                font-black
-                tracking-[-0.03em]
-                text-slate-900
-                dark:text-white
-                sm:text-3xl
-                lg:text-[32px]
-              "
+                        text-2xl
+                        font-black
+                        tracking-[-0.03em]
+                        text-slate-900
+                        dark:text-white
+                        sm:text-3xl
+                        lg:text-[32px]
+                      "
                     >
                       Income Tracker
                     </h1>
@@ -1667,10 +3330,13 @@ const Income = () => {
 
                 <div
                   className="
-            flex w-full items-center gap-2
-            lg:w-auto
-            lg:shrink-0
-          "
+                    flex
+                    w-full
+                    items-center
+                    gap-2
+                    lg:w-auto
+                    lg:shrink-0
+                  "
                 >
                   <button
                     type="button"
@@ -1678,87 +3344,101 @@ const Income = () => {
                     disabled={loading}
                     aria-label="Export income"
                     className="
-              inline-flex
-              h-10
-              shrink-0
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              border
-              border-slate-200
-              bg-white
-              px-3
-              text-xs
-              font-bold
-              text-slate-600
-              shadow-sm
-              transition-all
-              hover:border-slate-300
-              hover:bg-slate-50
-              hover:text-slate-900
-              active:scale-[.97]
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-              dark:border-slate-700
-              dark:bg-slate-900
-              dark:text-slate-300
-              dark:hover:border-slate-600
-              dark:hover:bg-slate-800
-              dark:hover:text-white
-              focus:outline-none
-              focus:ring-2
-              focus:ring-emerald-500/20
-              sm:px-3.5
-            "
+                      inline-flex
+                      h-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      px-3
+                      text-xs
+                      font-bold
+                      text-slate-600
+                      shadow-sm
+                      transition-all
+                      hover:border-slate-300
+                      hover:bg-slate-50
+                      hover:text-slate-900
+                      active:scale-[.97]
+                      disabled:cursor-not-allowed
+                      disabled:opacity-50
+                      dark:border-slate-700
+                      dark:bg-slate-900
+                      dark:text-slate-300
+                      dark:hover:border-slate-600
+                      dark:hover:bg-slate-800
+                      dark:hover:text-white
+                      focus:outline-none
+                      focus:ring-2
+                      focus:ring-emerald-500/20
+                      sm:px-3.5
+                    "
                   >
                     {loading ? (
-                      <Loader2 size={14} className="animate-spin" />
+                      <Loader2
+                        size={14}
+                        className="animate-spin"
+                      />
                     ) : (
                       <Download size={14} />
                     )}
 
                     <span className="hidden sm:inline">
-                      {loading ? "Exporting..." : "Export"}
+                      {loading
+                        ? "Processing..."
+                        : "Export"}
                     </span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setShowModal(true)}
+                    onClick={() =>
+                      setShowModal(true)
+                    }
+                    disabled={loading}
                     className="
-              group
-              inline-flex
-              h-10
-              shrink-0
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              bg-gradient-to-r
-              from-emerald-500
-              to-teal-500
-              px-3.5
-              text-xs
-              font-black
-              text-white
-              shadow-lg
-              shadow-emerald-500/20
-              transition-all
-              hover:-translate-y-0.5
-              hover:shadow-xl
-              hover:shadow-emerald-500/30
-              active:scale-[.97]
-              focus:outline-none
-              focus:ring-2
-              focus:ring-emerald-500/30
-              sm:px-4
-            "
+                      group
+                      inline-flex
+                      h-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      bg-gradient-to-r
+                      from-emerald-500
+                      to-teal-500
+                      px-3.5
+                      text-xs
+                      font-black
+                      text-white
+                      shadow-lg
+                      shadow-emerald-500/20
+                      transition-all
+                      hover:-translate-y-0.5
+                      hover:shadow-xl
+                      hover:shadow-emerald-500/30
+                      active:scale-[.97]
+                      disabled:cursor-not-allowed
+                      disabled:opacity-50
+                      focus:outline-none
+                      focus:ring-2
+                      focus:ring-emerald-500/30
+                      sm:px-4
+                    "
                   >
                     <Plus
                       size={15}
                       strokeWidth={2.5}
-                      className="transition-transform duration-200 group-hover:rotate-90"
+                      className="
+                        transition-transform
+                        duration-200
+                        group-hover:rotate-90
+                      "
                     />
 
                     <span>Add Income</span>
@@ -1768,7 +3448,10 @@ const Income = () => {
 
               <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
 
-              {/* Filters row — container query so the pills never get squeezed */}
+              {/* =================================================
+                  TIME FRAME + CUSTOM RANGE
+              ================================================= */}
+
               <div className="@container">
                 <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
                   <TimeFrameSelector
@@ -1780,101 +3463,43 @@ const Income = () => {
                     }}
                   />
 
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 @3xl:flex @3xl:flex-none @3xl:items-center">
-                    {timeFrame === "custom" ? (
+                  {timeFrame ===
+                    "custom" && (
+                    <div className="min-w-0 @3xl:shrink-0">
                       <CustomRangePicker
-                        customRange={customRange}
-                        setCustomRange={(range) => {
-                          setCustomRange(range);
-                          setShowAll(false);
-                        }}
-                      />
-                    ) : (
-                    <YearSelector
-                      selectedYear={selectedYear}
-                      setSelectedYear={(year) => {
-                        setSelectedYear(year);
-
-                        // future months are not selectable in the current year
-                        if (year === currentYear) {
-                          setSelectedMonth((month) =>
-                            Math.min(month, currentMonth),
-                          );
-                          setYearMonth((month) =>
-                            month !== null && month > currentMonth ? null : month,
-                          );
+                        customRange={
+                          customRange
                         }
-                      }}
-                      currentYear={currentYear}
-                    />
-                    )}
+                        setCustomRange={(
+                          range,
+                        ) => {
+                          setCustomRange(
+                            range,
+                          );
 
-                    {timeFrame === "yearly" && (
-                      <MonthSelector
-                        allowAll
-                        selectedMonth={yearMonth}
-                        setSelectedMonth={(month) => {
-                          setYearMonth(month);
-                          setShowAll(false);
+                          setShowAll(
+                            false,
+                          );
                         }}
-                        selectedYear={selectedYear}
-                        currentYear={currentYear}
-                        currentMonth={currentMonth}
                       />
-                    )}
-
-                    {timeFrame === "monthly" && (
-                      <MonthSelector
-                        selectedMonth={selectedMonth}
-                        setSelectedMonth={(month) => {
-                          setSelectedMonth(month);
-                          setShowAll(false);
-                        }}
-                        selectedYear={selectedYear}
-                        currentYear={currentYear}
-                        currentMonth={currentMonth}
-                      />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {selectedYear !== currentYear && (
-                <div
-                  className="
-            inline-flex
-            w-fit
-            shrink-0
-            items-center
-            gap-2
-            rounded-xl
-            border
-            border-violet-200
-            bg-violet-50
-            px-3
-            py-2
-            text-[10px]
-            font-black
-            text-violet-600
-            dark:border-violet-500/20
-            dark:bg-violet-500/10
-            dark:text-violet-400
-          "
-                >
-                  <RotateCcw size={12} />
-
-                  <span>Viewing {selectedYear}</span>
-                </div>
-              )}
             </div>
           </div>
         </section>
 
-        {/* STAT CARDS */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* =================================================
+            STAT CARDS
+        ================================================= */}
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="Total income"
-            value={fmtINR(totalIncome)}
+            value={fmtINR(
+              totalIncome,
+            )}
             sub={rangeLabel}
             icon={TrendingUp}
             accent="#10b981"
@@ -1882,7 +3507,9 @@ const Income = () => {
 
           <StatCard
             label="Average"
-            value={fmtINR(averageIncome)}
+            value={fmtINR(
+              averageIncome,
+            )}
             sub={`${filteredTransactions.length} transactions`}
             icon={BarChart2}
             accent="#8b5cf6"
@@ -1890,7 +3517,9 @@ const Income = () => {
 
           <StatCard
             label="Highest"
-            value={fmtINR(highestIncome)}
+            value={fmtINR(
+              highestIncome,
+            )}
             sub="single transaction"
             icon={ArrowUpRight}
             accent="#3b82f6"
@@ -1898,39 +3527,51 @@ const Income = () => {
 
           <StatCard
             label="Transactions"
-            value={filteredTransactions.length}
+            value={
+              filteredTransactions.length
+            }
             sub={
-              categoryFilter === "all"
+              categoryFilter ===
+              "all"
                 ? "all records"
-                : categoryFilter.replace(/_/g, " ")
+                : categoryFilter.replace(
+                    /_/g,
+                    " ",
+                  )
             }
             icon={CircleDollarSign}
             accent="#f97316"
           />
         </section>
 
-        {/* CHART + BREAKDOWN */}
-        <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* =================================================
+            CHART + BREAKDOWN
+        ================================================= */}
+
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <div
             className="
-          xl:col-span-2
-          rounded-3xl
-          border
-          border-slate-100
-          dark:border-slate-700
-          bg-white
-          dark:bg-slate-900
-          p-4
-          sm:p-5
-          shadow-[0_12px_40px_rgba(15,23,42,0.05)]
-          dark:shadow-black/20
-        "
+              rounded-3xl
+              border
+              border-slate-100
+              bg-white
+              p-4
+              shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+              dark:border-slate-700
+              dark:bg-slate-900
+              dark:shadow-black/20
+              sm:p-5
+              xl:col-span-2
+            "
           >
-            <div className="flex items-start justify-between gap-3 mb-5">
+            <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                    <BarChart2 size={14} className="text-emerald-500" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
+                    <BarChart2
+                      size={14}
+                      className="text-emerald-500"
+                    />
                   </div>
 
                   <h3 className="text-sm font-black text-slate-800 dark:text-white">
@@ -1938,15 +3579,21 @@ const Income = () => {
                   </h3>
                 </div>
 
-                <p className="mt-1 ml-10 text-[10px] text-slate-400">
+                <p className="ml-10 mt-1 text-[10px] text-slate-400">
                   {rangeLabel}
                 </p>
               </div>
             </div>
 
             <div className="h-56 sm:h-64">
-              {chartData.some((item) => item.income > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
+              {chartData.some(
+                (item) =>
+                  item.income > 0,
+              ) ? (
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
                   <BarChart
                     data={chartData}
                     margin={{
@@ -1994,7 +3641,8 @@ const Income = () => {
                       }}
                       interval={
                         dailyBars
-                          ? chartData.length > 20
+                          ? chartData.length >
+                            20
                             ? 4
                             : 2
                           : 0
@@ -2009,35 +3657,68 @@ const Income = () => {
                         fontSize: 9,
                       }}
                       width={48}
-                      tickFormatter={(value) => fmtINR(value)}
+                      tickFormatter={(
+                        value,
+                      ) =>
+                        fmtINR(value)
+                      }
                     />
 
                     <Tooltip
                       cursor={{
                         fill: "#10b98108",
                       }}
-                      content={<CustomTooltip />}
+                      content={
+                        <CustomTooltip />
+                      }
                     />
 
                     <Bar
                       dataKey="income"
                       fill="url(#premiumIncomeGradient)"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={dailyBars ? 18 : 32}
+                      radius={[
+                        6,
+                        6,
+                        0,
+                        0,
+                      ]}
+                      maxBarSize={
+                        dailyBars
+                          ? 18
+                          : 32
+                      }
                     >
-                      {chartData.map((item, index) => (
-                        <Cell
-                          key={item.key}
-                          fill={BAR_COLORS[index % BAR_COLORS.length]}
-                          fillOpacity={item.income > 0 ? 1 : 0.18}
-                        />
-                      ))}
+                      {chartData.map(
+                        (
+                          item,
+                          index,
+                        ) => (
+                          <Cell
+                            key={
+                              item.key ||
+                              index
+                            }
+                            fill={
+                              BAR_COLORS[
+                                index %
+                                  BAR_COLORS.length
+                              ]
+                            }
+                            fillOpacity={
+                              item.income >
+                              0
+                                ? 1
+                                : 0.18
+                            }
+                          />
+                        ),
+                      )}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+                <div className="flex h-full flex-col items-center justify-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-800">
                     <BarChart2
                       size={22}
                       className="text-slate-300 dark:text-slate-600"
@@ -2049,35 +3730,46 @@ const Income = () => {
                   </p>
 
                   <p className="mt-1 text-[10px] text-slate-400">
-                    Income will appear here.
+                    Income will appear
+                    here.
                   </p>
                 </div>
               )}
             </div>
           </div>
 
-          <IncomeBreakdown transactions={filteredTransactions} />
+          <IncomeBreakdown
+            transactions={
+              filteredTransactions
+            }
+          />
         </section>
 
-        {/* TRANSACTIONS */}
+        {/* =================================================
+            TRANSACTIONS
+        ================================================= */}
+
         <section
           className="
-        rounded-3xl
-        border
-        border-slate-100
-        dark:border-slate-700
-        bg-white
-        dark:bg-slate-900
-        overflow-hidden
-        shadow-[0_12px_40px_rgba(15,23,42,0.05)]
-        dark:shadow-black/20
-      "
+            overflow-hidden
+            rounded-3xl
+            border
+            border-slate-100
+            bg-white
+            shadow-[0_12px_40px_rgba(15,23,42,0.05)]
+            dark:border-slate-700
+            dark:bg-slate-900
+            dark:shadow-black/20
+          "
         >
-          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="border-b border-slate-100 p-4 dark:border-slate-800 sm:p-5">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-                  <ReceiptText size={17} className="text-emerald-500" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-500/10">
+                  <ReceiptText
+                    size={17}
+                    className="text-emerald-500"
+                  />
                 </div>
 
                 <div>
@@ -2086,8 +3778,10 @@ const Income = () => {
                       Transactions
                     </h3>
 
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
-                      {filteredTransactions.length}
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-500 dark:bg-emerald-500/10">
+                      {
+                        filteredTransactions.length
+                      }
                     </span>
                   </div>
 
@@ -2098,65 +3792,76 @@ const Income = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative flex-1 sm:flex-none">
+                <div className="relative min-w-0 flex-1 sm:flex-none">
                   <Search
                     size={13}
                     className="
-                  absolute
-                  left-3
-                  top-1/2
-                  -translate-y-1/2
-                  text-slate-400
-                "
+                      absolute
+                      left-3
+                      top-1/2
+                      -translate-y-1/2
+                      text-slate-400
+                    "
                   />
 
                   <input
                     value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
-                      setShowAll(false);
+                    onChange={(
+                      event,
+                    ) => {
+                      setSearch(
+                        event.target
+                          .value,
+                      );
+                      setShowAll(
+                        false,
+                      );
                     }}
                     placeholder="Search income…"
                     className="
-                  w-full
-                  sm:w-48
-                  pl-9
-                  pr-9
-                  py-2.5
-                  rounded-2xl
-                  border
-                  border-slate-200
-                  dark:border-slate-700
-                  bg-slate-50
-                  dark:bg-slate-950
-                  text-xs
-                  text-slate-700
-                  dark:text-slate-200
-                  outline-none
-                  focus:border-emerald-400
-                  focus:ring-4
-                  focus:ring-emerald-500/10
-                  placeholder:text-slate-300
-                "
+                      w-full
+                      rounded-2xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      py-2.5
+                      pl-9
+                      pr-9
+                      text-xs
+                      text-slate-700
+                      outline-none
+                      placeholder:text-slate-300
+                      focus:border-emerald-400
+                      focus:ring-4
+                      focus:ring-emerald-500/10
+                      dark:border-slate-700
+                      dark:bg-slate-950
+                      dark:text-slate-200
+                      sm:w-48
+                    "
                   />
 
                   {search && (
                     <button
                       type="button"
-                      onClick={() => setSearch("")}
+                      onClick={() =>
+                        setSearch(
+                          "",
+                        )
+                      }
                       className="
-                    absolute
-                    right-2
-                    top-1/2
-                    -translate-y-1/2
-                    w-6
-                    h-6
-                    rounded-lg
-                    flex
-                    items-center
-                    justify-center
-                    text-slate-400
-                  "
+                        absolute
+                        right-2
+                        top-1/2
+                        flex
+                        h-6
+                        w-6
+                        -translate-y-1/2
+                        items-center
+                        justify-center
+                        rounded-lg
+                        text-slate-400
+                      "
                       aria-label="Clear search"
                     >
                       <X size={12} />
@@ -2165,35 +3870,49 @@ const Income = () => {
                 </div>
 
                 <CategoryFilter
-                  value={categoryFilter}
-                  onChange={(value) => {
-                    setCategoryFilter(value);
-                    setShowAll(false);
+                  value={
+                    categoryFilter
+                  }
+                  onChange={(
+                    value,
+                  ) => {
+                    setCategoryFilter(
+                      value,
+                    );
+                    setShowAll(
+                      false,
+                    );
                   }}
                 />
 
-                {(search || categoryFilter !== "all") && (
+                {(search ||
+                  categoryFilter !==
+                    "all") && (
                   <button
                     type="button"
-                    onClick={resetFilters}
+                    onClick={
+                      resetFilters
+                    }
                     className="
-                  h-10
-                  w-10
-                  shrink-0
-                  rounded-xl
-                  flex
-                  items-center
-                  justify-center
-                  text-slate-400
-                  hover:text-emerald-500
-                  hover:bg-emerald-50
-                  dark:hover:bg-emerald-500/10
-                  transition
-                "
+                      flex
+                      h-10
+                      w-10
+                      shrink-0
+                      items-center
+                      justify-center
+                      rounded-xl
+                      text-slate-400
+                      transition
+                      hover:bg-emerald-50
+                      hover:text-emerald-500
+                      dark:hover:bg-emerald-500/10
+                    "
                     aria-label="Reset filters"
                     title="Reset filters"
                   >
-                    <RotateCcw size={13} />
+                    <RotateCcw
+                      size={13}
+                    />
                   </button>
                 )}
               </div>
@@ -2201,33 +3920,59 @@ const Income = () => {
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {visibleTransactions.length > 0 ? (
-              visibleTransactions.map((transaction) => (
-                <TransactionItem
-                  key={transaction.id}
-                  transaction={transaction}
-                  isEditing={editingId === transaction.id}
-                  editForm={editForm}
-                  setEditForm={setEditForm}
-                  onSave={handleEditTransaction}
-                  onCancel={() => setEditingId(null)}
-                  onDelete={(id) => {
-                    const transactionToDelete = filteredTransactions.find(
-                      (item) => item.id === id,
-                    );
+            {visibleTransactions.length >
+            0 ? (
+              visibleTransactions.map(
+                (transaction) => (
+                  <TransactionItem
+                    key={
+                      transaction.id
+                    }
+                    transaction={
+                      transaction
+                    }
+                    isEditing={
+                      editingId ===
+                      transaction.id
+                    }
+                    editForm={
+                      editForm
+                    }
+                    setEditForm={
+                      setEditForm
+                    }
+                    onSave={
+                      handleEditTransaction
+                    }
+                    onCancel={() =>
+                      setEditingId(
+                        null,
+                      )
+                    }
+                    onDelete={(id) => {
+                      const transactionToDelete =
+                        filteredTransactions.find(
+                          (item) =>
+                            item.id ===
+                            id,
+                        );
 
-                    setDeleteTarget(
-                      transactionToDelete || {
-                        id,
-                      },
-                    );
-                  }}
-                  setEditingId={setEditingId}
-                />
-              ))
+                      setDeleteTarget(
+                        transactionToDelete ||
+                          {
+                            id,
+                          },
+                      );
+                    }}
+                    setEditingId={
+                      setEditingId
+                    }
+                  />
+                ),
+              )
             ) : (
-              <div className="py-16 px-5 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-emerald-50 to-violet-50 dark:from-emerald-500/10 dark:to-violet-500/10 flex items-center justify-center">
+              <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-50 to-violet-50 dark:from-emerald-500/10 dark:to-violet-500/10">
                   <ReceiptText
                     size={24}
                     className="text-emerald-300 dark:text-emerald-400"
@@ -2239,55 +3984,67 @@ const Income = () => {
                 </h4>
 
                 <p className="mt-1 max-w-xs text-xs text-slate-400">
-                  {search || categoryFilter !== "all"
+                  {search ||
+                  categoryFilter !==
+                    "all"
                     ? "Try changing your search or filters."
                     : `No income recorded for ${rangeLabel}.`}
                 </p>
 
-                {search || categoryFilter !== "all" ? (
+                {search ||
+                categoryFilter !==
+                  "all" ? (
                   <button
                     type="button"
-                    onClick={resetFilters}
+                    onClick={
+                      resetFilters
+                    }
                     className="
-                  mt-4
-                  flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2.5
-                  rounded-xl
-                  bg-slate-100
-                  dark:bg-slate-800
-                  text-slate-600
-                  dark:text-slate-300
-                  text-xs
-                  font-black
-                "
+                      mt-4
+                      flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      bg-slate-100
+                      px-4
+                      py-2.5
+                      text-xs
+                      font-black
+                      text-slate-600
+                      dark:bg-slate-800
+                      dark:text-slate-300
+                    "
                   >
-                    <RotateCcw size={13} />
+                    <RotateCcw
+                      size={13}
+                    />
                     Reset filters
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setShowModal(true)}
+                    onClick={() =>
+                      setShowModal(
+                        true,
+                      )
+                    }
                     className="
-                  mt-4
-                  flex
-                  items-center
-                  gap-2
-                  px-4
-                  py-2.5
-                  rounded-xl
-                  bg-gradient-to-r
-                  from-emerald-500
-                  to-teal-500
-                  text-white
-                  text-xs
-                  font-black
-                  shadow-lg
-                  shadow-emerald-500/20
-                "
+                      mt-4
+                      flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      bg-gradient-to-r
+                      from-emerald-500
+                      to-teal-500
+                      px-4
+                      py-2.5
+                      text-xs
+                      font-black
+                      text-white
+                      shadow-lg
+                      shadow-emerald-500/20
+                    "
                   >
                     <Plus size={13} />
                     Add first income
@@ -2297,48 +4054,61 @@ const Income = () => {
             )}
           </div>
 
-          {filteredTransactions.length > 10 && (
+          {filteredTransactions.length >
+            10 && (
             <div className="border-t border-slate-100 dark:border-slate-800">
               {!showAll ? (
                 <button
                   type="button"
-                  onClick={() => setShowAll(true)}
+                  onClick={() =>
+                    setShowAll(
+                      true,
+                    )
+                  }
                   className="
-                w-full
-                py-4
-                flex
-                items-center
-                justify-center
-                gap-2
-                text-[10px]
-                font-black
-                text-emerald-500
-                hover:bg-emerald-50/50
-                dark:hover:bg-emerald-500/5
-                transition
-              "
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    py-4
+                    text-[10px]
+                    font-black
+                    text-emerald-500
+                    transition
+                    hover:bg-emerald-50/50
+                    dark:hover:bg-emerald-500/5
+                  "
                 >
                   <Eye size={13} />
-                  View all {filteredTransactions.length} transactions
+                  View all{" "}
+                  {
+                    filteredTransactions.length
+                  }{" "}
+                  transactions
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowAll(false)}
+                  onClick={() =>
+                    setShowAll(
+                      false,
+                    )
+                  }
                   className="
-                w-full
-                py-4
-                flex
-                items-center
-                justify-center
-                gap-2
-                text-[10px]
-                font-black
-                text-slate-400
-                hover:bg-slate-50
-                dark:hover:bg-slate-800
-                transition
-              "
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    py-4
+                    text-[10px]
+                    font-black
+                    text-slate-400
+                    transition
+                    hover:bg-slate-50
+                    dark:hover:bg-slate-800
+                  "
                 >
                   <EyeOff size={13} />
                   Show less
@@ -2348,53 +4118,80 @@ const Income = () => {
           )}
         </section>
 
-        {/* MOBILE QUICK ADD */}
+        {/* =================================================
+            MOBILE QUICK ADD
+        ================================================= */}
+
         <button
           type="button"
-          onClick={() => setShowModal(true)}
+          onClick={() =>
+            setShowModal(true)
+          }
           className="
-        md:hidden
-        fixed
-        bottom-5
-        right-5
-        z-40
-        w-14
-        h-14
-        rounded-2xl
-        bg-gradient-to-br
-        from-emerald-500
-        to-teal-500
-        text-white
-        flex
-        items-center
-        justify-center
-        shadow-2xl
-        shadow-emerald-500/30
-        active:scale-90
-        transition
-      "
+            fixed
+            bottom-5
+            right-5
+            z-40
+            flex
+            h-14
+            w-14
+            items-center
+            justify-center
+            rounded-2xl
+            bg-gradient-to-br
+            from-emerald-500
+            to-teal-500
+            text-white
+            shadow-2xl
+            shadow-emerald-500/30
+            transition
+            active:scale-90
+            md:hidden
+          "
           aria-label="Add income"
         >
           <Plus size={23} />
         </button>
       </div>
 
+      {/* =================================================
+          ADD MODAL
+      ================================================= */}
+
       <AddTransactionModal
         showModal={showModal}
-        setShowModal={setShowModal}
-        newTransaction={newTransaction}
-        setNewTransaction={setNewTransaction}
-        handleAddTransaction={handleAddTransaction}
+        setShowModal={
+          setShowModal
+        }
+        newTransaction={
+          newTransaction
+        }
+        setNewTransaction={
+          setNewTransaction
+        }
+        handleAddTransaction={
+          handleAddTransaction
+        }
         loading={loading}
         lockType="income"
       />
 
+      {/* =================================================
+          DELETE MODAL
+      ================================================= */}
+
       {deleteTarget && (
         <DeleteModal
-          transaction={deleteTarget}
+          transaction={
+            deleteTarget
+          }
           loading={loading}
-          onConfirm={confirmDelete}
-          onClose={() => setDeleteTarget(null)}
+          onConfirm={
+            confirmDelete
+          }
+          onClose={() =>
+            setDeleteTarget(null)
+          }
         />
       )}
     </>
