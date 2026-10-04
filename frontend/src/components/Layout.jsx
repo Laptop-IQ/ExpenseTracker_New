@@ -45,7 +45,12 @@ import {
 import Sidebar from "./Sidebar";
 import CoinLoader, { CoinLoaderBlock } from "./common/CoinLoader";
 import { useCreatePeriod } from "../utils/usePeriod";
-import { getPeriodBounds, resolvePeriodRange } from "../utils/commonHelpers";
+import {
+  getLocalDateInputValue,
+  getPeriodBounds,
+  resolvePeriodRange,
+  toIsoWithClientTime,
+} from "../utils/commonHelpers";
 import AddTransactionModal from "../components/Add";
 import "./Layout.css";
 
@@ -115,7 +120,7 @@ const getDefaultTransaction = (type = "income") => ({
   type,
   description: "",
   amount: "",
-  date: new Date().toISOString().split("T")[0],
+  date: getLocalDateInputValue(),
   category: type === "income" ? "Salary" : "Food",
 });
 
@@ -926,6 +931,8 @@ const Layout = ({ onLogout, user }) => {
         ...newTransaction,
         description: newTransaction.description.trim(),
         amount,
+        // local date + current time, so it lands in the right day/week
+        date: toIsoWithClientTime(newTransaction.date),
       });
 
       closeAddModal();

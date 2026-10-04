@@ -7,6 +7,16 @@ export async function getDashboardOverview(req, res) {
   const now = new Date();
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // end of today, so entries stamped later today (e.g. 12:00) are included
+  const endOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
 
   const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const endOfPrevMonth = new Date(
@@ -26,7 +36,7 @@ export async function getDashboardOverview(req, res) {
         {
           $match: {
             userId,
-            date: { $gte: startOfMonth, $lte: now },
+            date: { $gte: startOfMonth, $lte: endOfToday },
           },
         },
         { $group: { _id: null, total: { $sum: "$amount" } } },
@@ -35,7 +45,7 @@ export async function getDashboardOverview(req, res) {
         {
           $match: {
             userId,
-            date: { $gte: startOfMonth, $lte: now },
+            date: { $gte: startOfMonth, $lte: endOfToday },
           },
         },
         { $group: { _id: null, total: { $sum: "$amount" } } },
@@ -82,7 +92,7 @@ export async function getDashboardOverview(req, res) {
     const [recentIncome, recentExpense] = await Promise.all([
       Income.find({
         userId,
-        date: { $gte: startOfMonth, $lte: now },
+        date: { $gte: startOfMonth, $lte: endOfToday },
       })
         .sort({ date: -1 })
         .limit(10)
@@ -90,7 +100,7 @@ export async function getDashboardOverview(req, res) {
 
       Expense.find({
         userId,
-        date: { $gte: startOfMonth, $lte: now },
+        date: { $gte: startOfMonth, $lte: endOfToday },
       })
         .sort({ date: -1 })
         .limit(10)
@@ -110,7 +120,7 @@ export async function getDashboardOverview(req, res) {
       {
         $match: {
           userId,
-          date: { $gte: startOfMonth, $lte: now },
+          date: { $gte: startOfMonth, $lte: endOfToday },
         },
       },
       {

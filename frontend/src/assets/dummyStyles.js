@@ -453,9 +453,9 @@ export const loginStyles = {
   inputIcon:
     "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400",
   input:
-    "w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500 text-gray-900 placeholder:text-gray-400 caret-teal-600",
   passwordInput:
-    "w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500 text-gray-900 placeholder:text-gray-400 caret-teal-600",
   passwordToggle:
     "absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600",
 
@@ -561,9 +561,9 @@ export const signupStyles = {
   inputIcon:
     "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400",
   input:
-    "w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500 text-gray-900 placeholder:text-gray-400 caret-teal-600",
   passwordInput:
-    "w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500 text-gray-900 placeholder:text-gray-400 caret-teal-600",
   passwordToggle:
     "absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600",
 

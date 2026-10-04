@@ -93,7 +93,7 @@ const VerifyOtp = () => {
               value={digit}
               ref={(el) => (inputRefs.current[index] = el)}
               onChange={(e) => handleChange(e, index)}
-              className="w-12 h-12 border border-gray-300 rounded-lg text-center text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
+              className="text-gray-900 placeholder:text-gray-500 w-12 h-12 border border-gray-300 rounded-lg text-center text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
             />
           ))}
         </div>

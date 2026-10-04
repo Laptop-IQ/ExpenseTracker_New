@@ -2640,102 +2640,26 @@ const Income = () => {
       customRange,
     ]);
 
-  const chartData =
-    useMemo(() => {
-      if (timeFrame === "custom") {
-        const totals = new Map();
+  const chartData = useMemo(() => {
+    // same bucketing as the Expense page: hour (daily), full date (weekly),
+    // day-of-month (monthly / single-month custom), month otherwise
+    const totals = new Map();
 
-        for (const transaction of timeFrameTransactions) {
-          const key =
-            chartKeyForDate(
-              timeFrame,
-              new Date(
-                transaction.date,
-              ),
-              customRange,
-            );
+    for (const transaction of timeFrameTransactions) {
+      const date = new Date(transaction.date);
 
-          totals.set(
-            key,
-            (totals.get(key) || 0) +
-              Number(
-                transaction.amount ||
-                  0,
-              ),
-          );
-        }
+      if (Number.isNaN(date.getTime())) continue;
 
-        return chartPoints.map(
-          (point) => ({
-            ...point,
-            income:
-              totals.get(
-                chartKeyForPoint(
-                  timeFrame,
-                  point,
-                  customRange,
-                ),
-              ) || 0,
-          }),
-        );
-      }
+      const key = chartKeyForDate(timeFrame, date, customRange);
 
-      return chartPoints.map(
-        (point) => {
-          const income =
-            timeFrameTransactions
-              .filter(
-                (transaction) => {
-                  const d =
-                    new Date(
-                      transaction.date,
-                    );
+      totals.set(key, (totals.get(key) || 0) + Number(transaction.amount || 0));
+    }
 
-                  if (
-                    timeFrame ===
-                      "daily" ||
-                    timeFrame ===
-                      "weekly" ||
-                    timeFrame ===
-                      "monthly"
-                  ) {
-                    return (
-                      d.getDate() ===
-                      point.day
-                    );
-                  }
-
-                  return (
-                    d.getMonth() ===
-                    point.month
-                  );
-                },
-              )
-              .reduce(
-                (
-                  sum,
-                  transaction,
-                ) =>
-                  sum +
-                  Number(
-                    transaction.amount ||
-                      0,
-                  ),
-                0,
-              );
-
-          return {
-            ...point,
-            income,
-          };
-        },
-      );
-    }, [
-      chartPoints,
-      timeFrameTransactions,
-      timeFrame,
-      customRange,
-    ]);
+    return chartPoints.map((point) => ({
+      ...point,
+      income: totals.get(chartKeyForPoint(timeFrame, point, customRange)) || 0,
+    }));
+  }, [chartPoints, timeFrameTransactions, timeFrame, customRange]);
 
   const dailyBars =
     isDailyGranularity(

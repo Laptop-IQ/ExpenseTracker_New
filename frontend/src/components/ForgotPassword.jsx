@@ -79,7 +79,7 @@ const ForgotPassword = () => {
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-4 mb-6 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400 transition shadow-sm"
+              className="text-gray-900 placeholder:text-gray-500 w-full p-4 mb-6 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400 transition shadow-sm"
             />
 
             <button
@@ -121,7 +121,7 @@ const ForgotPassword = () => {
                     }
                   }}
                   id={`otp-${idx}`}
-                  className="w-13 h-13 text-center text-lg font-medium border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-400 shadow-sm transition"
+                  className="text-gray-900 placeholder:text-gray-500 w-13 h-13 text-center text-lg font-medium border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-400 shadow-sm transition"
                 />
               ))}
             </div>
@@ -131,7 +131,7 @@ const ForgotPassword = () => {
               placeholder="New Password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full p-4 mb-6 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400 transition shadow-sm"
+              className="text-gray-900 placeholder:text-gray-500 w-full p-4 mb-6 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400 transition shadow-sm"
             />
 
             <button
