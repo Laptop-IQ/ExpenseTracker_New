@@ -14,3 +14,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </NotificationProvider>
   </React.StrictMode>,
 );
+
+import "./styles/app.css";
+import "./styles/legacy.css";

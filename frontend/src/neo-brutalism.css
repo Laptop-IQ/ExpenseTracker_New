@@ -1,0 +1,125 @@
+/* Neo-brutalism design system — high contrast, crisp borders, offset shadows. */
+:root {
+  color-scheme: light !important;
+  --neo-ink: #171717;
+  --neo-paper: #fffdf5;
+  --neo-yellow: #ffe66d;
+  --neo-pink: #ff8fab;
+  --neo-blue: #7bdff2;
+  --neo-green: #b8f28b;
+  --neo-line: 2px solid var(--neo-ink);
+  --neo-shadow: 5px 5px 0 var(--neo-ink);
+  --neo-shadow-small: 3px 3px 0 var(--neo-ink);
+}
+html, body, #root {
+  min-height: 100%;
+}
+html { background: #fff8d9 !important; scroll-behavior: smooth; }
+body {
+  color: var(--neo-ink) !important;
+  background-color: #fff8d9 !important;
+  background-image: radial-gradient(#17171718 0.8px, transparent 0.8px) !important;
+  background-size: 14px 14px !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; }
+button, [role="button"] { transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease !important; }
+button:active, [role="button"]:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--neo-ink) !important; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #ff8fab !important; outline-offset: 2px; }
+/* App shell / navigation */
+aside, nav, header {
+  scrollbar-width: thin;
+}
+[class*="sidebar"], [class*="Sidebar"], [class*="navbar"], [class*="Navbar"] {
+  border-color: var(--neo-ink) !important;
+}
+/* Cards and dashboard panels, including Tailwind utility-built cards */
+.rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg,
+[class*="stat-card"], [class*="StatCard"], [class*="dashboard-card"],
+[class*="panel"], [class*="Panel"], [class*="card"], [class*="Card"] {
+  border-color: var(--neo-ink) !important;
+  border-width: 2px !important;
+  border-radius: 5px !important;
+  box-shadow: var(--neo-shadow) !important;
+}
+/* Flatten dark glass UI into bold paper-like surfaces */
+.bg-\[\#0e1320\], .bg-\[\#0a0f1e\], .bg-slate-950, .bg-slate-900,
+.bg-gray-900, .bg-zinc-900, .bg-neutral-900, .bg-\[\#101017\], .bg-\[\#07070b\] {
+  background: var(--neo-paper) !important;
+}
+.text-slate-200, .text-slate-300, .text-slate-400, .text-slate-500,
+.text-slate-600, .text-slate-700, .text-gray-300, .text-gray-400,
+.text-gray-500, .text-zinc-300, .text-zinc-400, .text-neutral-300 {
+  color: #454545 !important;
+}
+.border-slate-800, .border-slate-700, .border-slate-800\/70, .border-gray-800,
+.border-zinc-800, .border-white\/10 { border-color: var(--neo-ink) !important; }
+/* Strong buttons and links */
+button:not(.recharts-wrapper button), a[class*="button"], a[class*="btn"],
+[class*="Button"], [class*="btn-primary"] {
+  border-radius: 4px;
+}
+.bg-violet-600, .bg-purple-600, .bg-indigo-600, .bg-blue-600,
+button[class*="bg-violet"], button[class*="bg-purple"], button[class*="bg-indigo"] {
+  background: var(--neo-yellow) !important;
+  color: var(--neo-ink) !important;
+  border: 2px solid var(--neo-ink) !important;
+  box-shadow: var(--neo-shadow-small) !important;
+  font-weight: 800 !important;
+}
+input, select, textarea {
+  color: var(--neo-ink) !important;
+  background: #fffdf5 !important;
+  border: 2px solid var(--neo-ink) !important;
+  border-radius: 4px !important;
+  box-shadow: 2px 2px 0 #171717 !important;
+}
+input::placeholder, textarea::placeholder { color: #777 !important; }
+.modal, [role="dialog"] {
+  color: var(--neo-ink) !important;
+  background: var(--neo-paper) !important;
+  border: 2px solid var(--neo-ink) !important;
+  border-radius: 5px !important;
+  box-shadow: 8px 8px 0 var(--neo-ink) !important;
+}
+/* Dashboard panel colors */
+.dashboard-fade-delay-2 > section, .dashboard-fade-delay-2 section {
+  background: var(--neo-paper) !important;
+  border: 2px solid var(--neo-ink) !important;
+  border-radius: 5px !important;
+  box-shadow: var(--neo-shadow) !important;
+}
+/* Keep charts legible while avoiding expensive blur/backdrop effects. */
+.recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line { stroke: #d7d0b7 !important; }
+[class*="backdrop-blur"], [style*="backdrop-filter"] { backdrop-filter: none !important; }
+[class*="shadow-\["] { --tw-shadow: var(--neo-shadow) !important; }
+/* Faster perceived rendering: content is laid out independently below the fold. */
+main section, main article { content-visibility: auto; contain-intrinsic-size: auto 280px; }
+@media (max-width: 768px) {
+  :root { --neo-shadow: 3px 3px 0 var(--neo-ink); --neo-shadow-small: 2px 2px 0 var(--neo-ink); }
+  .rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg,
+  [class*="stat-card"], [class*="dashboard-card"], [class*="panel"], [class*="card"] { box-shadow: var(--neo-shadow) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+
+/* Sidebar Financial Health + Saving Goals widget */
+.financial-health-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.neo-health-stat { min-width: 0; padding: 12px 10px; background: #fffdf5; border: 2px solid #171717; box-shadow: 3px 3px 0 #171717; display: flex; flex-direction: column; gap: 6px; }
+.neo-health-stat span { color: #555; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .045em; }
+.neo-health-stat strong { color: #171717; font-size: clamp(12px, 1vw, 16px); overflow-wrap: anywhere; }
+.neo-health-income { background: #b8f28b; }
+.neo-health-expense { background: #ffb4a2; }
+.neo-health-balance { background: #7bdff2; }
+.neo-health-saved { background: #ffe66d; }
+.neo-health-progress { height: 12px; margin: 14px 2px 18px; background: #fffdf5; border: 2px solid #171717; overflow: hidden; }
+.neo-health-progress span { display: block; height: 100%; background: #b8f28b; border-right: 2px solid #171717; transition: width 220ms ease; }
+.neo-goals-cta { display: flex; align-items: center; gap: 10px; padding: 12px; border: 2px solid #171717; background: #ff8fab; box-shadow: 3px 3px 0 #171717; }
+.neo-goals-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border: 2px solid #171717; background: #fffdf5; }
+.neo-goals-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
+.neo-goals-copy strong { color: #171717; font-size: 13px; font-weight: 900; }
+.neo-goals-copy span { color: #353535; font-size: 10px; line-height: 1.4; }
+.neo-goals-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; padding: 7px 8px; border: 2px solid #171717; background: #ffe66d; color: #171717 !important; font-size: 11px; font-weight: 900; text-decoration: none; box-shadow: 2px 2px 0 #171717; }
+.neo-goals-link:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 #171717; }

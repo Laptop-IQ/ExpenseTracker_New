@@ -19,7 +19,7 @@ const DeleteAccount = () => {
 
     setLoading(true);
     try {
-      const res = await axios.delete(`${API_BASE}/user/delete-account`, {
+      await axios.delete(`${API_BASE}/user/delete-account`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -44,9 +44,9 @@ const DeleteAccount = () => {
       {/* Delete Button */}
       <button
         onClick={() => setShowModal(true)}
-        className="bg-linear-to-r from-red-500 to-pink-500 hover:scale-105 transition transform text-white px-5 py-2 rounded-xl shadow-lg"
+        className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-600 hover:text-white"
       >
-        ⚠️ Delete My Account
+        Delete my account
       </button>
 
       {/* Modal */}

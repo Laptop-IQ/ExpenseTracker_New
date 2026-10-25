@@ -1,0 +1,127 @@
+/* Maximalism design system: expressive color, layered depth, playful details. */
+:root {
+  color-scheme: light;
+  --max-ink: #211331;
+  --max-paper: #fffaf2;
+  --max-purple: #7c3aed;
+  --max-pink: #ff4fa3;
+  --max-orange: #ff8a3d;
+  --max-yellow: #ffe45e;
+  --max-teal: #4de1c1;
+  --max-blue: #70a7ff;
+  --max-lime: #c8f169;
+  --max-border: 2px solid var(--max-ink);
+  --max-shadow: 7px 7px 0 rgba(33, 19, 49, .92), 0 14px 28px rgba(85, 47, 135, .10);
+  --max-shadow-sm: 4px 4px 0 rgba(33, 19, 49, .9);
+}
+html, body, #root { min-height: 100%; }
+html { background: #fff3f8; scroll-behavior: smooth; }
+body {
+  color: var(--max-ink) !important;
+  background-color: #fff3f8 !important;
+  background-image:
+    radial-gradient(ellipse at 8% 8%, rgba(255, 79, 163, .18), transparent 25%),
+    radial-gradient(ellipse at 92% 15%, rgba(112, 167, 255, .22), transparent 27%),
+    radial-gradient(ellipse at 76% 92%, rgba(77, 225, 193, .20), transparent 26%),
+    radial-gradient(rgba(124, 58, 237, .12) .8px, transparent .8px) !important;
+  background-size: auto, auto, auto, 20px 20px !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; }
+button, [role="button"], a { transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease; }
+button:active, [role="button"]:active { transform: translate(2px, 2px) scale(.99); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid var(--max-pink) !important; outline-offset: 3px; }
+aside, nav, header { scrollbar-width: thin; }
+/* Colorful shell and layered panels */
+[class*="sidebar"], [class*="Sidebar"], [class*="navbar"], [class*="Navbar"] {
+  border-color: rgba(33, 19, 49, .18) !important;
+}
+.rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg,
+[class*="stat-card"], [class*="StatCard"], [class*="dashboard-card"],
+[class*="panel"], [class*="Panel"], [class*="card"], [class*="Card"] {
+  border: var(--max-border) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--max-shadow) !important;
+}
+/* Retain readable surfaces even where legacy pages use dark utility classes. */
+.bg-\[\#0e1320\], .bg-\[\#0a0f1e\], .bg-slate-950, .bg-slate-900,
+.bg-gray-900, .bg-zinc-900, .bg-neutral-900, .bg-\[\#101017\], .bg-\[\#07070b\] {
+  background: linear-gradient(145deg, #fffaf2, #fff0f7) !important;
+}
+.text-slate-200, .text-slate-300, .text-slate-400, .text-slate-500,
+.text-slate-600, .text-slate-700, .text-gray-300, .text-gray-400,
+.text-gray-500, .text-zinc-300, .text-zinc-400, .text-neutral-300 { color: #5c4b69 !important; }
+.border-slate-800, .border-slate-700, .border-slate-800\/70, .border-gray-800,
+.border-zinc-800, .border-white\/10 { border-color: rgba(33, 19, 49, .18) !important; }
+/* Main actions: vivid gradients with dimensional depth. */
+.bg-violet-600, .bg-purple-600, .bg-indigo-600, .bg-blue-600,
+button[class*="bg-violet"], button[class*="bg-purple"], button[class*="bg-indigo"],
+button[class*="bg-blue"] {
+  background: linear-gradient(120deg, var(--max-purple), var(--max-pink)) !important;
+  color: #fff !important;
+  border: 2px solid var(--max-ink) !important;
+  border-radius: 14px !important;
+  box-shadow: 4px 4px 0 var(--max-ink) !important;
+  font-weight: 800 !important;
+}
+button:hover, [role="button"]:hover, a[class*="button"]:hover, a[class*="btn"]:hover { filter: saturate(1.12); }
+input, select, textarea {
+  color: var(--max-ink) !important;
+  background: rgba(255, 250, 242, .96) !important;
+  border: 2px solid rgba(33, 19, 49, .72) !important;
+  border-radius: 13px !important;
+  box-shadow: 3px 3px 0 rgba(124, 58, 237, .22) !important;
+}
+input::placeholder, textarea::placeholder { color: #897a95 !important; }
+.modal, [role="dialog"] {
+  color: var(--max-ink) !important;
+  background: linear-gradient(145deg, #fffaf2, #f7edff) !important;
+  border: 2px solid var(--max-ink) !important;
+  border-radius: 24px !important;
+  box-shadow: 10px 10px 0 rgba(124, 58, 237, .45), 0 24px 70px rgba(33, 19, 49, .22) !important;
+}
+.dashboard-fade-delay-2 > section, .dashboard-fade-delay-2 section {
+  background: linear-gradient(145deg, rgba(255,250,242,.98), rgba(255,239,248,.96)) !important;
+  border: var(--max-border) !important;
+  border-radius: 22px !important;
+  box-shadow: var(--max-shadow) !important;
+}
+/* Vary dashboard panel accents for a deliberate maximalist collage. */
+main section:nth-of-type(4n + 1) { --max-accent: var(--max-pink); }
+main section:nth-of-type(4n + 2) { --max-accent: var(--max-blue); }
+main section:nth-of-type(4n + 3) { --max-accent: var(--max-yellow); }
+main section:nth-of-type(4n + 4) { --max-accent: var(--max-teal); }
+.recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line { stroke: #e6d9ef !important; }
+.recharts-text { fill: #5c4b69 !important; }
+/* Remove costly glass blur while keeping the layered visual feel. */
+[class*="backdrop-blur"], [style*="backdrop-filter"] { backdrop-filter: none !important; }
+/* Faster below-the-fold rendering without introducing animation-heavy effects. */
+main section, main article { content-visibility: auto; contain-intrinsic-size: auto 280px; }
+/* Financial Health + Saving Goals widgets */
+.financial-health-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.neo-health-stat { min-width: 0; padding: 13px 11px; background: #fffaf2; border: 2px solid var(--max-ink); border-radius: 14px; box-shadow: 3px 3px 0 rgba(33,19,49,.9); display: flex; flex-direction: column; gap: 6px; }
+.neo-health-stat span { color: #5c4b69; font-size: 11px; font-weight: 850; text-transform: uppercase; letter-spacing: .055em; }
+.neo-health-stat strong { color: var(--max-ink); font-size: clamp(12px, 1vw, 16px); overflow-wrap: anywhere; }
+.neo-health-income { background: linear-gradient(135deg, #c8f169, #e7ffad); }
+.neo-health-expense { background: linear-gradient(135deg, #ff9ac8, #ffd0e4); }
+.neo-health-balance { background: linear-gradient(135deg, #70a7ff, #c6dcff); }
+.neo-health-saved { background: linear-gradient(135deg, #ffe45e, #fff2a8); }
+.neo-health-progress { height: 13px; margin: 14px 2px 18px; background: #f2e8fb; border: 2px solid var(--max-ink); border-radius: 99px; overflow: hidden; }
+.neo-health-progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--max-purple), var(--max-pink), var(--max-orange)); border-right: 2px solid var(--max-ink); transition: width 220ms ease; }
+.neo-goals-cta { display: flex; align-items: center; gap: 10px; padding: 13px; border: 2px solid var(--max-ink); border-radius: 16px; background: linear-gradient(120deg, #c9b0ff, #ffb3da 55%, #ffe45e); box-shadow: 4px 4px 0 var(--max-ink); }
+.neo-goals-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border: 2px solid var(--max-ink); border-radius: 12px; background: #fffaf2; }
+.neo-goals-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
+.neo-goals-copy strong { color: var(--max-ink); font-size: 13px; font-weight: 900; }
+.neo-goals-copy span { color: #49345b; font-size: 10px; line-height: 1.4; }
+.neo-goals-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; padding: 8px 10px; border: 2px solid var(--max-ink); border-radius: 10px; background: var(--max-yellow); color: var(--max-ink) !important; font-size: 11px; font-weight: 900; text-decoration: none; box-shadow: 3px 3px 0 var(--max-ink); }
+.neo-goals-link:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--max-ink); }
+@media (max-width: 768px) {
+  :root { --max-shadow: 4px 4px 0 rgba(33,19,49,.9); --max-shadow-sm: 3px 3px 0 rgba(33,19,49,.9); }
+  .rounded-3xl, .rounded-2xl, .rounded-xl, .rounded-lg,
+  [class*="stat-card"], [class*="dashboard-card"], [class*="panel"], [class*="card"] { box-shadow: var(--max-shadow) !important; }
+  body { background-size: auto, auto, auto, 24px 24px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

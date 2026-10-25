@@ -23,7 +23,15 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // `motion` (framer-motion) and `Icon` render props are only used inside JSX,
+      // which core ESLint does not track, so they are allowed here.
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^([A-Z_]|motion$)',
+          argsIgnorePattern: '^([A-Z_]|_)',
+        },
+      ],
     },
   },
 ])

@@ -39,7 +39,7 @@ const handleSubmit = async (e) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000); // 8s max wait
 
-    const res = await axios.post(
+    await axios.post(
       `${API_BASE}/user/register`,
       { name, email, password },
       {

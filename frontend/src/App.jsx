@@ -1,18 +1,60 @@
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import Layout from "./components/Layout";
-import Dashboard from "./pages/Dashboard";
-import Login from "./components/Login";
-import Signup from "./components/Signup";
-import ContactUs from "./pages/ContactUs";
-import VerifyOtp from "./components/VerifyOtp";
-import ForgotPassword from "./components/ForgotPassword";
-import Income from "./pages/Income";
-import Expense from "./pages/Expense";
-import Profile from "./pages/Profile";
+
 import axios from "axios";
 import NotificationBar from "./Context/NotificationBar";
+import CoinLoader from "./components/common/CoinLoader";
+
+// Route-level code splitting: every screen is its own chunk, so the first
+// paint only downloads what the current screen needs.
+const loaders = {
+  Layout: () => import("./components/Layout"),
+  Dashboard: () => import("./pages/Dashboard"),
+  Income: () => import("./pages/Income"),
+  Expense: () => import("./pages/Expense"),
+  Goals: () => import("./pages/Goals"),
+  CategoryDetail: () => import("./pages/CategoryDetail"),
+  Profile: () => import("./pages/Profile"),
+  ContactUs: () => import("./pages/ContactUs"),
+  Login: () => import("./components/Login"),
+  Signup: () => import("./components/Signup"),
+  VerifyOtp: () => import("./components/VerifyOtp"),
+  ForgotPassword: () => import("./components/ForgotPassword"),
+};
+
+const Layout = lazy(loaders.Layout);
+const Dashboard = lazy(loaders.Dashboard);
+const Income = lazy(loaders.Income);
+const Expense = lazy(loaders.Expense);
+const Goals = lazy(loaders.Goals);
+const CategoryDetail = lazy(loaders.CategoryDetail);
+const Profile = lazy(loaders.Profile);
+const ContactUs = lazy(loaders.ContactUs);
+const Login = lazy(loaders.Login);
+const Signup = lazy(loaders.Signup);
+const VerifyOtp = lazy(loaders.VerifyOtp);
+const ForgotPassword = lazy(loaders.ForgotPassword);
+
+// Warm the cache for the main screens once the browser is idle after login,
+// so moving between pages feels instant.
+// Prefetch only the dashboard after the browser is idle. Loading every page
+// immediately after login competes with the first render and wastes bandwidth.
+const prefetchMainPages = () => {
+  const run = () => loaders.Dashboard().catch(() => {});
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout: 4000 });
+  } else {
+    window.setTimeout(run, 2000);
+  }
+};
+
+const FullPageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb]">
+    <CoinLoader size={64} />
+  </div>
+);
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -152,6 +194,10 @@ useEffect(() => {
   }
 }, [transactions]);
 
+  useEffect(() => {
+    if (user) prefetchMainPages();
+  }, [user]);
+
   const handleLogin = (userData, remember = false, tokenFromApi = null) => {
     persistAuth(userData, tokenFromApi, remember);
     navigate("/");
@@ -197,6 +243,7 @@ useEffect(() => {
     <>
       <ScrollToTop />
         <NotificationBar />
+        <Suspense fallback={<FullPageLoader />}>
         <Routes>
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
           <Route path="/signup" element={<Signup onSignup={handleSignup} />} />
@@ -265,6 +312,9 @@ useEffect(() => {
               }
             />
             <Route path="/ContactUs" element={<ContactUs />} />
+            <Route path="/expense/category/:name" element={<CategoryDetail kind="expense" />} />
+            <Route path="/income/source/:name" element={<CategoryDetail kind="income" />} />
+            <Route path="/goals" element={<Goals />} />
           </Route>
 
           <Route
@@ -272,6 +322,7 @@ useEffect(() => {
             element={<Navigate to={user ? "/" : "/login"} replace />}
           />
         </Routes>
+        </Suspense>
     </>
   );
 };

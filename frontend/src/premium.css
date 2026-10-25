@@ -1,0 +1,161 @@
+/* Premium Modern design system — calm SaaS surfaces, consistent hierarchy, responsive first. */
+:root {
+  color-scheme: light;
+  --premium-bg: #f4f7fc;
+  --premium-surface: #ffffff;
+  --premium-surface-soft: #f8faff;
+  --premium-ink: #172544;
+  --premium-muted: #6b7892;
+  --premium-line: #e5ebf5;
+  --premium-primary: #2878f0;
+  --premium-primary-dark: #175bd2;
+  --premium-primary-soft: #eaf2ff;
+  --premium-green: #13b981;
+  --premium-radius: 17px;
+  --premium-shadow: 0 3px 14px rgba(29, 55, 99, .045);
+  --premium-shadow-hover: 0 10px 26px rgba(29, 55, 99, .09);
+  --premium-focus: 0 0 0 4px rgba(40,120,240,.13);
+}
+html { scroll-behavior: smooth; background: var(--premium-bg); }
+body {
+  margin: 0;
+  color: var(--premium-ink) !important;
+  background: radial-gradient(ellipse at 8% 0%, rgba(54, 126, 242, .055), transparent 30%), var(--premium-bg) !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; }
+button, [role="button"], a { -webkit-tap-highlight-color: transparent; }
+button, [role="button"] { touch-action: manipulation; }
+button, a, input, select, textarea { transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease, opacity .16s ease; }
+:focus-visible { outline: 3px solid rgba(40,120,240,.55) !important; outline-offset: 3px; }
+::selection { background: #d8e8ff; color: #16366c; }
+/* Consistent card language without imposing layout on every nested card. */
+.rounded-3xl, .rounded-2xl, .rounded-xl,
+[class*="stat-card"], [class*="StatCard"], [class*="dashboard-card"],
+[class*="panel-card"], [class*="PanelCard"] {
+  border-color: var(--premium-line) !important;
+  border-radius: var(--premium-radius) !important;
+  box-shadow: var(--premium-shadow) !important;
+}
+main { min-width: 0; }
+main section, main article { min-width: 0; }
+main section:hover, main article:hover { box-shadow: var(--premium-shadow-hover); }
+input, select, textarea {
+  color: var(--premium-ink) !important;
+  background: #fff !important;
+  border: 1px solid #dce4f0 !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+  min-height: 42px;
+  max-width: 100%;
+}
+input:focus, select:focus, textarea:focus { border-color: #83b2ff !important; box-shadow: var(--premium-focus) !important; outline: none; }
+input::placeholder, textarea::placeholder { color: #98a5ba !important; }
+textarea { resize: vertical; }
+button[class*="bg-violet"], button[class*="bg-purple"], button[class*="bg-indigo"], button[class*="bg-blue"],
+.bg-violet-600, .bg-purple-600, .bg-indigo-600, .bg-blue-600 {
+  background: linear-gradient(135deg, var(--premium-primary), var(--premium-primary-dark)) !important;
+  color: #fff !important; border: 1px solid transparent !important; border-radius: 11px !important;
+  box-shadow: 0 4px 10px rgba(40,120,240,.15) !important; font-weight: 650 !important;
+}
+button:hover, [role="button"]:hover { filter: brightness(1.015); }
+button:active, [role="button"]:active { transform: translateY(1px); }
+a { text-underline-offset: 3px; }
+.modal, [role="dialog"] {
+  color: var(--premium-ink) !important; background: #fff !important;
+  border: 1px solid var(--premium-line) !important; border-radius: 21px !important;
+  box-shadow: 0 24px 70px rgba(16,24,40,.19) !important;
+}
+.modal-overlay { padding: 16px; }
+.recharts-cartesian-grid-horizontal line, .recharts-cartesian-grid-vertical line { stroke: #edf1f7 !important; }
+.recharts-text { fill: var(--premium-muted) !important; }
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: #cbd6e7 transparent; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd6e7; border-radius: 20px; }
+/* Avoid expensive blur layers and excessive movement on lower-power devices. */
+[class*="backdrop-blur"], [style*="backdrop-filter"] { backdrop-filter: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+@media (min-width: 1440px) { main { max-width: 1800px; } }
+@media (max-width: 1024px) {
+  :root { --premium-radius: 15px; }
+  main { min-width: 0; }
+  main section, main article { contain-intrinsic-size: auto 240px; }
+}
+@media (max-width: 768px) {
+  body { background-image: none !important; }
+  main { padding-left: 14px !important; padding-right: 14px !important; }
+  .rounded-3xl, .rounded-2xl, .rounded-xl, [class*="stat-card"], [class*="StatCard"], [class*="dashboard-card"] { box-shadow: 0 3px 12px rgba(26,36,64,.045) !important; }
+  input, select, textarea { font-size: 16px !important; }
+  .modal, [role="dialog"] { max-width: calc(100vw - 24px) !important; max-height: calc(100dvh - 24px) !important; overflow-y: auto; }
+  table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+@media (max-width: 480px) {
+  :root { --premium-radius: 13px; }
+  main { padding-left: 10px !important; padding-right: 10px !important; }
+  button { min-height: 40px; }
+  .modal, [role="dialog"] { border-radius: 17px !important; }
+}
+
+/* ── Premium contrast repair: sidebar + Financial Health widget ───────────── */
+/* Keep dashboard panels on the same readable light surface as the new theme. */
+.panel-card {
+  color: #172544 !important;
+  background: #ffffff !important;
+  border: 1px solid #e5ebf5 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 5px 18px rgba(29, 55, 99, .055) !important;
+  overflow: hidden;
+}
+.panel-header { border-bottom: 1px solid #edf1f7 !important; }
+.panel-title-wrap h2, .panel-title-wrap p,
+.panel-header h2, .panel-header p { color: #172544 !important; }
+.panel-title-wrap p, .panel-header p { color: #78859b !important; }
+.financial-health-mini-grid { gap: 10px !important; }
+.neo-health-stat {
+  background: #f8faff !important;
+  border: 1px solid #e5ebf5 !important;
+  border-radius: 13px !important;
+  box-shadow: none !important;
+  color: #172544 !important;
+}
+.neo-health-stat span { color: #64748b !important; }
+.neo-health-stat strong { color: #172544 !important; }
+.neo-health-income { background: #ecfdf5 !important; border-color: #c8f3df !important; }
+.neo-health-expense { background: #fff1f2 !important; border-color: #ffe0e5 !important; }
+.neo-health-balance { background: #eff6ff !important; border-color: #dbeafe !important; }
+.neo-health-saved { background: #fffbeb !important; border-color: #fdecc0 !important; }
+.neo-health-progress { height: 8px !important; background: #eaf0f8 !important; border: 0 !important; border-radius: 99px !important; margin: 14px 2px 18px !important; }
+.neo-health-progress span { background: linear-gradient(90deg, #2878f0, #13b981) !important; border: 0 !important; border-radius: inherit !important; }
+.neo-goals-cta {
+  background: linear-gradient(120deg, #f0f5ff, #f7f2ff) !important;
+  border: 1px solid #e0e8fb !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  padding: 13px !important;
+}
+.neo-goals-icon { color: #2878f0 !important; background: #ffffff !important; border: 1px solid #dce7fb !important; border-radius: 11px !important; }
+.neo-goals-copy strong { color: #172544 !important; }
+.neo-goals-copy span { color: #6b7892 !important; }
+.neo-goals-link { color: #175bd2 !important; background: #ffffff !important; border: 1px solid #d8e5fb !important; border-radius: 10px !important; box-shadow: none !important; }
+/* The selected route remains white-on-blue; inactive routes use readable slate. */
+[aria-label="Main navigation"] a.group { color: #52627b !important; }
+[aria-label="Main navigation"] a.group.bg-violet-600,
+[aria-label="Main navigation"] a.group[class*="bg-violet-600"] {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2878f0, #175bd2) !important;
+  box-shadow: 0 6px 14px rgba(40, 120, 240, .20) !important;
+}
+[aria-label="Main navigation"] a.group.bg-violet-600 span,
+[aria-label="Main navigation"] a.group[class*="bg-violet-600"] span { color: #ffffff !important; }
+[aria-label="Main navigation"] a.group:hover:not(.bg-violet-600) { color: #175bd2 !important; background: #eff6ff !important; }
+[aria-label="Main navigation"] a.group:hover:not(.bg-violet-600) span { color: #175bd2 !important; }
+@media (max-width: 768px) {
+  .panel-card { border-radius: 16px !important; }
+  .neo-goals-cta { gap: 8px !important; }
+  .neo-goals-link { padding: 8px 10px !important; }
+}

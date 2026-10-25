@@ -1,0 +1,176 @@
+/* Final premium consistency pass: neutralize legacy dark inline UI on light shell. */
+:root {
+  --app-bg: #f4f7fc;
+  --app-surface: #fff;
+  --app-ink: #172544;
+  --app-muted: #6b7892;
+  --app-line: #e5ebf5;
+  --app-blue: #2878f0;
+  --app-blue-dark: #175bd2;
+  --app-green: #0ca678;
+  --app-red: #e54861;
+}
+body, #root { color: var(--app-ink); }
+/* Legacy income/expense hero panels and page-level dark backgrounds */
+main [style*="background: rgb(6, 9, 15)"],
+main [style*="background: #06090f"],
+main [style*="background: rgb(11, 17, 32)"],
+main [style*="background: #0b1120"],
+main [style*="background: rgb(12, 18, 32)"],
+main [style*="background: #0c1220"],
+main [style*="background-color: rgb(11, 17, 32)"],
+main [style*="background-color: #0b1120"] {
+  background: #fff !important;
+  color: var(--app-ink) !important;
+  border-color: var(--app-line) !important;
+  box-shadow: 0 5px 20px rgba(29,55,99,.055) !important;
+}
+/* Repair dark inline text and labels inside legacy sections without affecting charts. */
+main [style*="color: #e8edf8"], main [style*="color: rgb(232, 237, 248)"],
+main [style*="color: #f8fafc"], main [style*="color: rgb(248, 250, 252)"],
+main [style*="color: #fff"], main [style*="color: white"] { color: var(--app-ink) !important; }
+main [style*="color: #8895ae"], main [style*="color: rgb(136, 149, 174)"],
+main [style*="color: #94a3b8"], main [style*="color: rgb(148, 163, 184)"] { color: var(--app-muted) !important; }
+/* Keep semantic financial values vivid and readable. */
+main [style*="color: #00e5a0"], main [style*="color: #10b981"], main [style*="color: #34d399"] { color: #0b9b70 !important; }
+main [style*="color: #ff6b6b"], main [style*="color: #f43f5e"] { color: #d93652 !important; }
+/* All financial pages share the same hierarchy and readable surface treatment. */
+main h1 { color: #142342 !important; letter-spacing: -.035em; font-weight: 800; }
+main h2, main h3, main h4 { color: #1c2b49; letter-spacing: -.02em; }
+main p { overflow-wrap: anywhere; }
+main .dark\:text-white, main [class*="dark:text-white"] { color: #172544 !important; }
+main [class*="dark:bg-gray-"], main [class*="dark:bg-slate-"], main [class*="dark:bg-[#"] {
+  background-color: #fff !important;
+}
+main [class*="dark:border-"] { border-color: #e5ebf5 !important; }
+/* Income/Expense cards and chart panels: premium white surfaces. */
+main .rounded-3xl, main .rounded-2xl, main .rounded-xl {
+  border-color: #e5ebf5;
+}
+/* Modal, range picker, gauge and toast surfaces */
+[role="dialog"], .ReactModal__Content, .modal, [data-radix-popper-content-wrapper] > div {
+  color: #172544 !important;
+  background: #fff !important;
+  border-color: #e5ebf5 !important;
+  box-shadow: 0 24px 70px rgba(16,24,40,.16) !important;
+}
+.ReactModal__Overlay { background: rgba(20,35,66,.36) !important; backdrop-filter: blur(3px); }
+/* Toasts that previously used dark inline colors */
+[aria-live="polite"] > div > div[style*="background"] {
+  background: #fff !important;
+  color: #172544 !important;
+  border: 1px solid #e5ebf5 !important;
+  box-shadow: 0 12px 32px rgba(29,55,99,.14) !important;
+}
+/* Auth pages get the same polished light visual language while preserving forms. */
+body:has(input[type="password"]) #root { min-height: 100vh; }
+#root input, #root select, #root textarea { color: #172544; }
+#root button:disabled { cursor: not-allowed; opacity: .58; transform: none; }
+/* Avoid horizontal spill on long page names, charts and tables. */
+html, body { max-width: 100%; overflow-x: clip; }
+main, main > div, main section, main article { min-width: 0; }
+.recharts-responsive-container { min-width: 0 !important; }
+@media (max-width: 768px) {
+  main { width: 100%; }
+  main h1 { font-size: clamp(1.35rem, 5vw, 1.9rem); }
+  main [class*="grid-cols-4"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  main [class*="grid-cols-3"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  main [class*="grid-cols-2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  main [class*="grid-cols-4"], main [class*="grid-cols-3"] { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ---- Legacy dark inline surfaces: final contrast repair ---- */
+/* Income, Expense, Goals and older widget components still carry these dark inline tokens. */
+main [style*='background: "#080B12"'],
+main [style*='background: #080B12'],
+main [style*='background: "#0a0f1e"'],
+main [style*='background: #0a0f1e'],
+main [style*='background: "#0b0f15"'],
+main [style*='background: #0b0f15'],
+main [style*='background: "#0d1526"'],
+main [style*='background: #0d1526'],
+main [style*='background: "#0E1320"'],
+main [style*='background: #0E1320'],
+main [style*='background: "#111827"'],
+main [style*='background: #111827'],
+main [style*='background: "#131821"'],
+main [style*='background: #131821'],
+main [style*='background: "#141923"'],
+main [style*='background: #141923'],
+main [style*='background: "#151a23"'],
+main [style*='background: #151a23'],
+main [style*='background: "#1a202b"'],
+main [style*='background: #1a202b'],
+main [style*='background: rgb(8, 11, 18)'],
+main [style*='background: rgb(10, 15, 30)'],
+main [style*='background: rgb(11, 15, 21)'],
+main [style*='background: rgb(13, 21, 38)'],
+main [style*='background: rgb(14, 19, 32)'],
+main [style*='background: rgb(17, 24, 39)'],
+main [style*='background: rgb(19, 24, 33)'],
+main [style*='background: rgb(20, 25, 35)'],
+main [style*='background: rgb(21, 26, 35)'],
+main [style*='background: rgb(26, 32, 43)'],
+main [style*='background-color: rgb(8, 11, 18)'],
+main [style*='background-color: rgb(10, 15, 30)'],
+main [style*='background-color: rgb(11, 15, 21)'],
+main [style*='background-color: rgb(13, 21, 38)'],
+main [style*='background-color: rgb(14, 19, 32)'],
+main [style*='background-color: rgb(17, 24, 39)'],
+main [style*='background-color: rgb(20, 25, 35)'] {
+  background: #ffffff !important;
+  color: #172544 !important;
+  border-color: #e5ebf5 !important;
+  box-shadow: 0 5px 22px rgba(29, 55, 99, .06) !important;
+}
+
+/* Make inherited legacy text readable after a dark surface becomes white. */
+main [style*='color: "#E8EDF8"'],
+main [style*='color: #E8EDF8'],
+main [style*='color: "#e8edf8"'],
+main [style*='color: #e8edf8'],
+main [style*='color: "#F8FAFC"'],
+main [style*='color: #F8FAFC'],
+main [style*='color: "#f8fafc"'],
+main [style*='color: #f8fafc'],
+main [style*='color: "#CBD5E1"'],
+main [style*='color: #CBD5E1'],
+main [style*='color: "#cbd5e1"'],
+main [style*='color: #cbd5e1'] {
+  color: #172544 !important;
+}
+main [style*='color: "#8895AE"'],
+main [style*='color: #8895AE'],
+main [style*='color: "#8895ae"'],
+main [style*='color: #8895ae'],
+main [style*='color: "#94A3B8"'],
+main [style*='color: #94A3B8'],
+main [style*='color: "#94a3b8"'],
+main [style*='color: #94a3b8'] {
+  color: #6b7892 !important;
+}
+
+/* Preserve strong contrast for navigation and primary actions. */
+aside a, aside button, nav a, nav button {
+  text-decoration: none;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(40, 120, 240, .45) !important;
+  outline-offset: 2px;
+}
+
+/* Avoid forcing every modal child to white; only style the modal surface itself. */
+[role='dialog'], .ReactModal__Content, .modal {
+  color: #172544 !important;
+}
+[role='dialog'] p, [role='dialog'] label, [role='dialog'] h1,
+[role='dialog'] h2, [role='dialog'] h3, .ReactModal__Content p,
+.ReactModal__Content label, .ReactModal__Content h1, .ReactModal__Content h2,
+.ReactModal__Content h3 {
+  color: #172544;
+}

@@ -5,16 +5,16 @@ export const dashboardStyles = {
   container: "min-h-screen p-4 md:p-6",
 
   headerContainer:
-    "bg-gradient-to-r from-teal-200 to-cyan-200 rounded-lg md:rounded-xl p-4 sm:p-6 -mx-2 sm:-mx-7 overflow-x-hidden mb-6 md:mb-8 border border-blue-300 shadow-lg shadow-blue-100",
+    "bg-gradient-to-r from-blue-200 to-blue-200 rounded-lg md:rounded-xl p-4 sm:p-6 -mx-2 sm:-mx-7 overflow-x-hidden mb-6 md:mb-8 border border-blue-300 shadow-lg shadow-blue-100",
   headerContent:
     "flex flex-col sm:flex-row flex-wrap justify-between items-start sm:items-center gap-4 mb-8",
   headerTitle:
-    "text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-700 bg-clip-text text-transparent",
+    "text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent",
   headerSubtitle: "text-gray-600 mt-2 text-sm sm:text-base",
 
   // Button styles
   addButton:
-    "flex items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl transition-all shadow hover:shadow-md font-medium cursor-pointer text-sm sm:text-base",
+    "flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-3 sm:px-5 py-2 sm:py-3 rounded-xl transition-all shadow hover:shadow-md font-medium cursor-pointer text-sm sm:text-base",
   timeFrameContainer:
     "flex px-10 -mx-14 justify-center lg:-mx-0 md:-mx-0 lg:justify-end md:justify-end mt-4",
   timeFrameWrapper:
@@ -22,7 +22,7 @@ export const dashboardStyles = {
   timeFrameButton: (isActive) =>
     `px-2.5 py-2 text-sm rounded-lg transition-all ${
       isActive
-        ? "bg-teal-500 text-white"
+        ? "bg-blue-500 text-white"
         : "text-gray-600 hover:bg-gray-100 cursor-pointer"
     }`,
 
@@ -31,7 +31,7 @@ export const dashboardStyles = {
     "grid grid-cols-1 p-1 lg:-mx-3 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-8 mb-8",
 
   // Financial card styles
-  balanceBadge: "bg-teal-100 text-teal-800 px-2 py-1 rounded-lg text-xs",
+  balanceBadge: "bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs",
   expenseBadge: "bg-orange-100 text-orange-800 px-1 py-1 rounded-lg text-xs",
 
   // Gauge container styles
@@ -68,7 +68,7 @@ export const dashboardStyles = {
 
   // List container styles
   listContainer:
-    "bg-white rounded-xl lg:p-5 md:p-6 mx-0 md:-mx-3 shadow-lg border border-blue-300 shadow-blue-100",
+    "bg-white rounded-lg mt-5 lg:p-5 md:p-6 mx-0 md:-mx-3 shadow-lg border border-blue-300 shadow-blue-100",
   listHeader:
     "flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3",
   listTitle:
@@ -110,22 +110,22 @@ export const dashboardStyles = {
   // View all button styles
   viewAllContainer: "pt-4 border-t border-gray-100",
   viewAllButton:
-    "w-full flex items-center justify-center gap-2 py-3 text-teal-600 font-medium hover:bg-teal-50 rounded-xl transition-colors",
+    "w-full flex items-center justify-center gap-2 py-3 text-blue-600 font-medium hover:bg-blue-50 rounded-xl transition-colors",
 
   // Icon container styles
   iconContainer: (color) => `p-2 ${color} rounded-lg`,
 
   // Specific icon colors
-  walletIconContainer: "p-2 bg-teal-100 rounded-lg",
+  walletIconContainer: "p-2 bg-blue-100 rounded-lg",
   arrowDownIconContainer: "p-2 bg-orange-100 rounded-lg",
-  piggyBankIconContainer: "p-2 bg-cyan-100 rounded-lg",
+  piggyBankIconContainer: "p-2 bg-blue-100 rounded-lg",
 };
 
 // Additional styles for financial trends
 export const trendStyles = {
   positive: "text-orange-600",
   negative: "text-green-600",
-  positiveRate: "bg-teal-100 text-teal-700",
+  positiveRate: "bg-blue-100 text-blue-700",
   negativeRate: "bg-red-100 text-red-700",
 };
 
@@ -139,13 +139,13 @@ export const incomeStyles = {
   // Layout
   wrapper: "space-y-4 md:space-y-6 p-3 md:p-4 max-w-7xl mx-auto",
   headerContainer:
-    "bg-gradient-to-r from-green-200 to-emerald-200 rounded-lg md:rounded-xl p-4 -mx-7 lg:-mx-7 overflow-x-hidden md:p-6 mb-6 md:mb-8 border border-blue-300 shadow-lg shadow-blue-100",
+    "bg-gradient-to-r from-blue-200 to-blue-200 rounded-lg md:rounded-xl p-4 -mx-7 lg:-mx-7 overflow-x-hidden md:p-6 mb-6 md:mb-8 border border-blue-300 shadow-lg shadow-blue-100",
   header:
     "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 mb-4 md:mb-6",
   headerTitle: "text-xl md:text-2xl lg:text-3xl font-bold text-gray-800",
   headerSubtitle: "text-gray-600 mt-1 text-sm md:text-base",
   addButton:
-    "flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg md:rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm md:text-base cursor-pointer",
+    "flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg md:rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm md:text-base cursor-pointer",
 
   // Summary Cards
   summaryGrid:
@@ -153,7 +153,7 @@ export const incomeStyles = {
 
   // Chart
   chartContainer:
-    "hidden md:block -mx-7 bg-gradient-to-r from-green-50 to-emerald-100 rounded-lg p-6 shadow-lg shadow-blue-200 border border-blue-300",
+    "hidden md:block -mx-7 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-6 shadow-lg shadow-blue-200 border border-blue-300",
   chartTitle:
     "text-lg md:text-xl font-bold text-gray-800 mb-4 md:mb-5 flex items-center gap-2 md:gap-3",
 
@@ -161,7 +161,7 @@ export const incomeStyles = {
   listContainer:
     "bg-white rounded-xl -mx-7 md:rounded-xl p-4 md:p-6 shadow-sm border border-blue-300 relative overflow-hidden",
   sectionTitle:
-    "text-lg md:text-xl font-bold text-teal-800 mb-4 md:mb-5 flex items-center gap-2 md:gap-3",
+    "text-lg md:text-xl font-bold text-blue-800 mb-4 md:mb-5 flex items-center gap-2 md:gap-3",
 
   // Filter Section
   filterContainer: "flex flex-col sm:flex-row gap-2 md:gap-3 w-full sm:w-auto",
@@ -180,9 +180,8 @@ export const incomeStyles = {
   emptyStateIcon:
     "w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4 rounded-full bg-green-50 flex items-center justify-center",
   emptyStateText: "text-gray-600 font-medium text-sm md:text-base",
-  emptyStateSubtext: "text-xs md:text-sm text-gray-500 mt-1 md:mt-2",
   emptyStateButton:
-    "mt-3 md:mt-4 flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-3 py-2 md:px-4 md:py-2.5 rounded-lg md:rounded-xl transition-all shadow-md hover:shadow-lg mx-auto text-sm md:text-base",
+    "mt-3 md:mt-4 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-600 hover:from-blue-700 hover:to-blue-700 text-white px-3 py-2 md:px-4 md:py-2.5 rounded-lg md:rounded-xl transition-all shadow-md hover:shadow-lg mx-auto text-sm md:text-base",
 
   // Time Frame Selector Container
   timeFrameContainer:
@@ -210,8 +209,6 @@ export const incomeStyles = {
   iconBlue: "p-2 bg-blue-100 rounded-lg",
   iconPurple: "p-2 bg-purple-100 rounded-lg",
 
-  borderGreen: "border-l-4 border-Green-500",
-  borderPurple: "border-l-4 border-Purple-500",
   borderRose: "border-l-4 border-Rose-800",
 
   // Icon text colors
@@ -273,7 +270,6 @@ export const expensePageStyles = {
   emptyStateIcon:
     "w-16 h-16 mx-auto mb-4 rounded-full bg-orange-50 ",
   emptyStateText: "text-gray-600 font-medium",
-  emptyStateSubtext: "text-sm text-gray-500 mt-2",
 
   // Icons
   iconOrange: "p-2 bg-orange-100 rounded-lg",
@@ -326,11 +322,11 @@ export const profileStyles = {
 
   // Header styles
   header:
-    "hidden sm:block bg-gradient-to-r from-teal-500 to-emerald-600 p-2 text-center py-12",
+    "hidden sm:block bg-gradient-to-r from-blue-500 to-blue-600 p-2 text-center py-12",
   avatar:
     "block w-44 h-44 mx-auto rounded-full flex items-center justify-center",
   userName: "text-5xl font-bold text-white mx-48",
-  userEmail: "text-teal-100 mt-2 mx-48",
+  userEmail: "text-blue-100 mt-2 mx-48",
 
   // Content styles
   content: "p-8 -mx-6.5",
@@ -339,24 +335,24 @@ export const profileStyles = {
   // Card styles
   card: "bg-blue-50 rounded-lg p-6 border border-blue-100",
   cardTitle: "text-xl font-semibold pb-3 text-black flex items-center",
-  icon: "w-5 h-5 mr-2 text-teal-600",
+  icon: "w-5 h-5 mr-2 text-blue-600",
 
   // Form styles
   label: "text-sm text-gray-500  block mb-1",
   input:
-    "w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-300 focus:border-teal-500 ",
+    "w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-500 ",
   inputWithError:
-    "w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-500",
 
   // Button styles
   buttonPrimary:
-    "flex-1 bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-2.5 rounded-xl font-medium shadow-md cursor-pointer",
+    "flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-xl font-medium shadow-md cursor-pointer",
   buttonSecondary:
     "flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-100 cursor-pointer",
   editButton:
-    "text-teal-600 hover:text-teal-700 font-medium text-sm cursor-pointer",
+    "text-blue-600 hover:text-blue-700 font-medium text-sm cursor-pointer",
   changeButton:
-    "text-teal-600 hover:text-teal-700 font-medium lg:text-sm cursor-pointer",
+    "text-blue-600 hover:text-blue-700 font-medium lg:text-sm cursor-pointer",
 
   // Security item
   securityItem:
@@ -410,9 +406,9 @@ export const modalStyles = {
   // Color classes
   colorClasses: {
     teal: {
-      button: "bg-teal-500 hover:bg-teal-600",
-      ring: "focus:ring-teal-500",
-      typeButtonSelected: "bg-teal-500",
+      button: "bg-blue-500 hover:bg-blue-600",
+      ring: "focus:ring-blue-500",
+      typeButtonSelected: "bg-blue-500",
     },
     orange: {
       button: "bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600",
@@ -428,18 +424,18 @@ export const modalStyles = {
 export const loginStyles = {
   // Page container
   pageContainer:
-    "min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-teal-50 to-emerald-50",
+    "min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-blue-50",
 
   // Card container
   cardContainer:
     "w-full max-w-md bg-white rounded-lg shadow-xl overflow-hidden",
 
   // Header styles
-  header: "bg-gradient-to-r from-teal-500 to-emerald-600 p-6 text-center",
+  header: "bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-center",
   avatar:
     "w-20 h-20 mx-auto rounded-full bg-white/20 flex items-center justify-center mb-4",
   headerTitle: "text-2xl font-bold text-white",
-  headerSubtitle: "text-teal-100 mt-2",
+  headerSubtitle: "text-blue-100 mt-2",
 
   // Form container
   formContainer: "p-8",
@@ -457,27 +453,27 @@ export const loginStyles = {
   inputIcon:
     "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400",
   input:
-    "w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 caret-blue-600",
   passwordInput:
-    "w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 caret-blue-600",
   passwordToggle:
     "absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600",
 
   // Checkbox
   checkboxContainer: "mb-6 flex items-center",
   checkbox:
-    "w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 cursor-pointer",
+    "w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer",
   checkboxLabel: "ml-2 z-20 block text-sm text-gray-700 cursor-pointer",
 
   // Button
   button:
-    "w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center cursor-pointer",
+    "w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center cursor-pointer",
   buttonDisabled: "opacity-80 cursor-not-allowed",
 
   // Sign up link
   signUpContainer: "mt-8 text-center",
   signUpText: "text-gray-600",
-  signUpLink: "font-medium text-teal-600 hover:underline",
+  signUpLink: "font-medium text-blue-600 hover:underline",
 
   // Spinner for loading state
   spinner: "animate-spin -ml-1 mr-3 h-5 w-5 text-white",
@@ -504,7 +500,7 @@ export const navbarStyles = {
   userButton:
     "flex items-center gap-2 px-4.5 py-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer",
   userAvatar:
-    "w-9 h-9 flex items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-cyan-500 text-white font-bold text-lg",
+    "w-9 h-9 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-500 text-white font-bold text-lg",
   statusIndicator:
     "absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white",
   userTextContainer: "text-left hidden md:block",
@@ -515,10 +511,10 @@ export const navbarStyles = {
 
   // Dropdown menu styles
   dropdownMenu:
-    "absolute top-14 right-0 w-56 bg-gradient-to-r from-green-50 to-pink-100 rounded-lg shadow-lg border border-gray-100 z-50",
+    "absolute top-14 right-0 w-56 bg-gradient-to-r from-blue-50 to-pink-100 rounded-lg shadow-lg border border-gray-100 z-50",
   dropdownHeader: "px-4 py-3 border-b border-gray-100",
   dropdownAvatar:
-    "w-12 h-12 p-5 rounded-full bg-gradient-to-br from-teal-600 to-cyan-500 flex items-center justify-center text-white font-bold text-lg",
+    "w-12 h-12 p-5 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center text-white font-bold text-lg",
   dropdownName: "text-sm text-gray-800 ",
   dropdownEmail: "text-xs text-gray-500 truncate max-w-[120px]",
 
@@ -536,7 +532,7 @@ export const navbarStyles = {
 export const signupStyles = {
   // Page container (reusing from login)
   pageContainer:
-    "min-h-screen flex items-center justify-center p-3 bg-gradient-to-br from-teal-50 to-emerald-50",
+    "min-h-screen flex items-center justify-center p-3 bg-gradient-to-br from-blue-50 to-blue-50",
 
   // Card container (reusing from login)
   cardContainer:
@@ -544,11 +540,11 @@ export const signupStyles = {
 
   // Header styles (reusing from login with additions)
   header:
-    "bg-gradient-to-r from-teal-500 to-emerald-600 p-6 text-center relative",
+    "bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-center relative",
   avatar:
     "w-18 h-18 mx-auto rounded-full bg-white/20 flex items-center justify-center mb-2",
   headerTitle: "text-2xl font-bold text-white",
-  headerSubtitle: "text-teal-100 mt-2",
+  headerSubtitle: "text-blue-100 mt-2",
   backButton:
     "absolute top-4 left-4 p-2 text-white rounded-full hover:bg-white/10 transition-colors",
 
@@ -565,27 +561,27 @@ export const signupStyles = {
   inputIcon:
     "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400",
   input:
-    "w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 caret-blue-600",
   passwordInput:
-    "w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-teal-300 focus:border-teal-500",
+    "w-full pl-10 pr-10 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-500 text-gray-900 placeholder:text-gray-400 caret-blue-600",
   passwordToggle:
     "absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600",
 
   // Checkbox (reusing from login)
   checkboxContainer: "mb-6 flex items-center",
   checkbox:
-    "w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 cursor-pointer",
+    "w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer",
   checkboxLabel: "ml-2 z-20 block text-sm text-gray-700 cursor-pointer",
 
   // Button (reusing from login)
   button:
-    "w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center cursor-pointer",
+    "w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center cursor-pointer",
   buttonDisabled: "opacity-80 cursor-not-allowed",
 
   // Sign in link (reusing from login with modifications)
   signInContainer: "mt-2 text-center",
   signInText: "text-gray-600",
-  signInLink: "font-medium text-teal-600 hover:underline",
+  signInLink: "font-medium text-blue-600 hover:underline",
 
   // Spinner for loading state (reusing from login)
   spinner: "animate-spin -ml-1 mr-3 h-5 w-5 text-white",
@@ -639,18 +635,18 @@ export const sidebarStyles = {
   },
 
   sidebarInner: {
-    base: "bg-gradient-to-r from-blue-50 to-cyan-200 border-r border-blue-400 shadow-r shadow-blue-200 h-full flex flex-col",
+    base: "bg-slate-900 border-r border-slate-700/60 shadow-xl shadow-black/40 h-full flex flex-col",
   },
 
   // User profile section
   userProfileContainer: {
-    base: "p-5 border-b pt-20 md:pt-5 lg:pt-5 xl:pt-5 border-gray-100 rounded-full",
+    base: "p-5 border-b pt-20 md:pt-5 lg:pt-5 xl:pt-5 border-slate-800 rounded-full",
     collapsed: "px-3",
     expanded: "px-6",
   },
 
   userInitials: {
-    base: "w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center text-white font-bold text-xl",
+    base: "w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center text-white font-bold text-xl border-2 border-slate-700",
   },
 
   // Menu items
@@ -659,73 +655,76 @@ export const sidebarStyles = {
   },
 
   menuItem: {
-    base: "relative flex items-center gap-3 py-3 rounded-lg font-medium transition-all duration-200",
-    active: "text-black bg-white",
-    inactive: "text-black hover:text-teal-700 hover:bg-gray-50",
+    base: "relative flex items-center gap-3 py-3 rounded-xl font-medium transition-all duration-200",
+    active:
+      "text-sky-400 bg-gradient-to-r from-blue-600/15 to-blue-500/10 border border-blue-500/25",
+    inactive: "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
     collapsed: "justify-center px-0 mx-1",
     expanded: "px-4",
   },
 
   menuIcon: {
-    active: "text-black",
-    inactive: "text-gray-600",
+    active: "text-sky-400",
+    inactive: "text-slate-500",
   },
 
   activeIndicator:
-    "absolute right-4 w-2 h-2 bg-teal-400 rounded-full animate-ping",
+    "absolute right-4 w-2 h-2 bg-blue-400 rounded-full animate-ping",
 
   // Toggle button
   toggleButton: {
-    base: "absolute -right-3 top-12 z-20 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center text-gray-500 hover:text-teal-600 hover:border-teal-400 hover:bg-teal-50 transition-all",
+    base: "absolute -right-3 top-12 z-20 w-6 h-6 bg-slate-800 border border-slate-600 rounded-full flex items-center justify-center text-slate-500 hover:text-sky-400 hover:border-sky-500 hover:bg-slate-700 transition-all",
   },
 
   // Footer section
   footerContainer: {
-    base: "border-t border-teal-500 p-4 mt-24",
+    base: "border-t border-slate-800 p-4 mt-24",
     collapsed: "px-3",
     expanded: "px-6",
   },
 
   footerLink: {
-    base: "w-full flex items-center px-3 py-2 rounded-lg font-medium text-gray-600 hover:text-teal-700 hover:bg-gray-100 transition-all duration-200",
+    base: "w-full flex items-center px-3 py-2 rounded-xl font-medium text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-all duration-200",
     expanded: "gap-2",
     collapsed: "justify-center",
   },
 
   logoutButton: {
-    base: "w-full flex items-center px-3 py-2 rounded-lg font-medium text-gray-600 hover:text-red-600 hover:bg-red-100 transition-all duration-200",
+    base: "w-full flex items-center px-3 py-2 rounded-xl font-medium text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200",
     expanded: "gap-2",
     collapsed: "justify-center",
   },
+
   // Mobile sidebar
   mobileOverlay: "fixed inset-0 z-40 lg:hidden",
-  mobileBackdrop: "absolute inset-0 bg-black/30 backdrop-blur-sm",
+  mobileBackdrop: "absolute inset-0 bg-black/50 backdrop-blur-sm",
 
   mobileSidebar: {
-    base: "absolute left-0 top-0 bottom-0 w-4/5 max-w-sm bg-white shadow-2xl rounded-r-2xl overflow-hidden",
+    base: "absolute left-0 top-0 bottom-0 w-4/5 max-w-sm bg-slate-900 border-r border-slate-700/60 shadow-2xl rounded-r-2xl overflow-hidden",
   },
 
   mobileHeader:
-    "p-6 flex justify-between items-center border-b border-gray-100",
+    "p-6 flex justify-between items-center border-b border-slate-800",
   mobileUserContainer: "flex pt-28 items-center gap-3",
-  mobileCloseButton: "p-2 rounded-lg hover:bg-gray-100",
+  mobileCloseButton:
+    "p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200",
 
   mobileMenuList: "space-y-1",
   mobileMenuItem: {
     base: "flex items-center gap-4 px-6 py-4 font-medium",
-    active: "text-teal-600 bg-teal-50",
-    inactive: "text-gray-600 hover:bg-gray-50",
+    active: "text-sky-400 bg-blue-600/10 border-r-2 border-sky-400",
+    inactive: "text-slate-400 hover:text-slate-200 hover:bg-slate-800",
   },
 
-  mobileFooter: "border-t border-gray-100 p-6",
+  mobileFooter: "border-t border-slate-800 p-6",
   mobileFooterLink:
-    "flex items-center gap-4 py-2 font-medium text-gray-600 hover:text-teal-700",
+    "flex items-center gap-4 py-2 font-medium text-slate-500 hover:text-slate-300",
   mobileLogoutButton:
-    "flex items-center gap-4 py-2 font-medium text-gray-600 hover:text-red-600 w-full",
+    "flex items-center gap-4 py-2 font-medium text-red-500 hover:text-red-400 w-full",
 
   // Mobile menu button
   mobileMenuButton:
-    "lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-cyan-500 to-teal-600 text-white rounded-full flex items-center justify-center shadow-xl",
+    "lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-blue-900/40",
 };
 
 // Helper function to combine class names
@@ -753,18 +752,18 @@ export const styles = {
   statCards: {
     grid: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6",
     incomeCard:
-      "bg-gradient-to-r from-green-100 to-emerald-200 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
-    card: "bg-gradient-to-r from-emerald-50 to-teal-200 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
+      "bg-gradient-to-r from-blue-100 to-blue-200 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
+    card: "bg-gradient-to-r from-blue-50 to-blue-200 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
     savingCard:
       "bg-gradient-to-r from-purple-50 to-indigo-100 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
     expenseCard:
       "bg-gradient-to-r from-red-50 to-orange-300 p-5 rounded-xl shadow-lg hover:shadow-blue-400 border border-blue-300",
     cardHeader: "flex justify-between items-start",
     cardTitle: "text-sm text-black",
-    cardValue: "text-2xl font-bold text-teal-800 mt-1",
+    cardValue: "text-2xl font-bold text-blue-800 mt-1",
     iconContainer: (color) => `bg-${color}-100 p-2 rounded-lg`,
     icon: (color) => `w-5 h-5 text-${color}-600`,
-    cardFooter: "text-xs text-teal-500 mt-3",
+    cardFooter: "text-xs text-blue-500 mt-3",
   },
 
   // Grid Layout
@@ -776,7 +775,7 @@ export const styles = {
 
   // Card Styles
   cards: {
-    base: "bg-linear-to-br from-teal-100 to-emerald-200 rounded-xl p-6 shadow-lg shadow-blue-200 border border-blue-300",
+    base: "bg-linear-to-br from-blue-100 to-blue-200 rounded-xl p-6 shadow-lg shadow-blue-200 border border-blue-300",
     rightBase:
       "bg-gradient-to-r from-white to-olive-200 rounded-xl p-6 shadow-lg shadow-blue-200 border border-blue-300",
     header: "flex justify-between items-center mb-3",
@@ -801,14 +800,14 @@ export const styles = {
       "flex items-center ml-2 lg:flex-col xl:flex-row md:flex-row justify-between p-1 -mx-0 lg:p-4 md:p-4 hover:bg-blue-100 rounded-lg transition-all duration-300 border border-black ",
     iconWrapper: (type) =>
       type === "income"
-        ? "bg-teal-100 text-teal-600"
+        ? "bg-blue-100 text-blue-600"
         : "bg-orange-100 text-orange-600",
     icon: "w-4 h-4",
     details: "min-w-0",
     description: "font-medium text-gray-800 truncate max-w-[120px]",
     meta: "text-xs text-gray-500 mt-1",
     amount: (type) =>
-      `font-semibold ₹{type === "income" ? "text-teal-600" : "text-orange-600"}`,
+      `font-semibold ${type === "income" ? "text-blue-600" : "text-orange-600"}`,
     emptyState: "text-center py-8",
     emptyIconContainer:
       "w-16 h-16 mx-auto mb-4 rounded-full bg-purple-100 flex items-center justify-center",
@@ -823,7 +822,7 @@ export const styles = {
   categories: {
     title:
       "text-lg md:text-xl lg:text-xl xl:text-xl font-bold text-gray-800 mb-6 flex items-center gap-3",
-    titleIcon: "w-6 h-6 text-cyan-500",
+    titleIcon: "w-6 h-6 text-blue-500",
     list: "space-y-4",
     categoryItem:
       "flex items-center md:text-lg lg:text-sm xl:text-lg justify-between",
@@ -834,7 +833,7 @@ export const styles = {
     summaryContainer: "mt-6 pt-6 border-t border-gray-100",
     summaryGrid: "grid grid-cols-2 gap-4",
     summaryIncomeCard:
-      "bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg p-4 border border-black",
+      "bg-gradient-to-br from-blue-50 to-blue-50 rounded-lg p-4 border border-black",
     summaryExpenseCard:
       "bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-4 border border-black",
     summaryTitle: "text-sm text-gray-600",
@@ -844,10 +843,10 @@ export const styles = {
   // Color Helpers
   colors: {
     transaction: {
-      text: (type) => (type === "income" ? "text-teal-600" : "text-orange-600"),
+      text: (type) => (type === "income" ? "text-blue-600" : "text-orange-600"),
       bg: (type) =>
         type === "income"
-          ? "bg-teal-100 text-teal-600"
+          ? "bg-blue-100 text-blue-600"
           : "bg-orange-100 text-orange-600",
     },
     expenseChange: (change) =>

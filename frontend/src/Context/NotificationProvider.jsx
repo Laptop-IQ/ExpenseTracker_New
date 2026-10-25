@@ -9,6 +9,7 @@ import NotificationBar from "../Context/NotificationBar";
 
 const NotificationContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (!context)
@@ -19,13 +20,15 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
-  const [notifications, setNotifications] = useState([]);
-
-  // ✅ LOAD notifications from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem("notifications");
-    if (stored) setNotifications(JSON.parse(stored));
-  }, []);
+  // ✅ LOAD notifications from localStorage (lazy init -> no extra render)
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem("notifications");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // ✅ SAVE notifications to localStorage automatically
   useEffect(() => {

@@ -13,6 +13,7 @@ import incomeRouter from "./routes/incomeRoute.js";
 import expenseRouter from "./routes/expenseRoute.js";
 import dashboardRouter from "./routes/dashboardRoute.js";
 import contactRoutes from "./routes/contactRoutes.js";
+import goalRoutes from "./routes/goalRoutes.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -54,11 +55,31 @@ app.use("/api/user/register", authLimiter);
 app.use("/api/user/forgot-password", authLimiter);
 app.use("/api/user/reset-password", authLimiter);
 
-// 🌐 CORS
+// 🌐 CORS: allow configured frontend origins and local Vite development.
+// CLIENT_URL may contain one origin or a comma-separated list of origins.
+const allowedOrigins = new Set(
+  [
+    ...(process.env.CLIENT_URL || "").split(","),
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ]
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin(origin, callback) {
+      // Requests without Origin (e.g. health checks/server-to-server) are allowed.
+      if (!origin || allowedOrigins.has(origin.replace(/\/$/, ""))) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204,
   }),
 );
 
@@ -82,6 +103,7 @@ app.use("/api/user", userRouter);
 app.use("/api/income", incomeRouter);
 app.use("/api/expense", expenseRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/goals", goalRoutes);
 
 // 🏠 Health check (important for uptime bots)
 app.get("/", (req, res) => {
