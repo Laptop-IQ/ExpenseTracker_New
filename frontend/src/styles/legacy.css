@@ -1,0 +1,44 @@
+/* ==========================================================================
+   Harmonises the Income and Expense pages (Tailwind-class based) with the
+   light design system. Only touches classic "dark card" utilities and the
+   text that sits inside them, so accent buttons keep their own colours.
+   ========================================================================== */
+
+.page :is(.bg-slate-950, .bg-slate-900, .bg-slate-800) {
+  color: var(--ink);
+  background-color: var(--surface) !important;
+  background-image: none !important;
+  border-color: var(--line) !important;
+}
+.page :is(.from-slate-900, .via-slate-900, .from-slate-950) { background-image: none !important; background-color: var(--surface) !important; }
+.page :is(.bg-slate-700) { background-color: var(--surface-3) !important; }
+.page :is(.border-slate-700, .border-slate-800, .border-slate-600) { border-color: var(--line) !important; }
+
+.page :is(.bg-slate-950, .bg-slate-900, .bg-slate-800, .bg-slate-700) :is(.text-white, .text-slate-100, .text-slate-200):not([class*="bg-"]) { color: var(--ink) !important; }
+.page :is(.bg-slate-950, .bg-slate-900, .bg-slate-800, .bg-slate-700) :is(.text-slate-300):not([class*="bg-"]) { color: var(--ink-2) !important; }
+.page :is(.bg-slate-950, .bg-slate-900, .bg-slate-800, .bg-slate-700) :is(.text-slate-400, .text-slate-500):not([class*="bg-"]) { color: var(--muted) !important; }
+.page :is(.bg-slate-950, .bg-slate-900, .bg-slate-800) :is([class*="bg-white/"], [class*="bg-slate-7"]) { background-color: var(--surface-3) !important; }
+
+/* bright accents were chosen for dark backgrounds; deepen them on white */
+.page .text-emerald-400, .page .text-emerald-300 { color: #0f9f6e; }
+.page .text-rose-400, .page .text-red-400, .page .text-rose-300 { color: #e04158; }
+.page .text-violet-400, .page .text-violet-300, .page .text-purple-400 { color: #6b4de6; }
+.page .text-cyan-400, .page .text-cyan-300, .page .text-sky-400 { color: #0e8bbd; }
+.page .text-amber-400, .page .text-orange-400 { color: #c97a00; }
+
+/* small all-caps labels: sentence case reads better and is easier to scan */
+.page .uppercase { text-transform: none; }
+.page :is(.tracking-widest, .tracking-wider, .tracking-\[0\.2em\], .tracking-\[0\.18em\], .tracking-\[0\.16em\], .tracking-\[0\.15em\]) { letter-spacing: 0.01em; }
+
+/* variants with an opacity suffix (bg-slate-900/90 ...) and the floating add button.
+   `dark:` prefixed classes never match [class*="bg-slate-900/"] directly because
+   the ancestor selector below only accepts a plain (un-prefixed) class token. */
+.page :is([class~="bg-slate-900/90"], [class~="bg-slate-900/80"], [class~="bg-slate-900/70"], [class~="bg-slate-950/90"], [class~="bg-slate-800/80"]) {
+  background-color: var(--surface) !important;
+  border-color: var(--line-strong) !important;
+  color: var(--ink) !important;
+}
+.page :is([class~="bg-slate-900/90"], [class~="bg-slate-950/90"]) :is(.text-slate-200, .text-slate-300):not([class*="bg-"]) { color: var(--ink) !important; }
+@media (max-width: 1023px) {
+  .page button.fixed.bottom-5.right-5 { bottom: 84px; }
+}

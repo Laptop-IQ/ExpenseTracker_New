@@ -1,0 +1,58 @@
+.cat-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.cat-back { display: inline-flex; align-items: center; gap: 7px; justify-self: start; padding: 6px 10px 6px 6px; color: var(--ink-2); font-size: 13.5px; font-weight: 650; background: transparent; border: 0; border-radius: 10px; }
+.cat-back:hover { color: var(--primary); background: var(--primary-50); }
+
+.cat-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 18px 20px; }
+.cat-badge { display: grid; place-items: center; width: 52px; height: 52px; color: var(--primary); background: var(--primary-50); border-radius: 15px; }
+.cat-badge svg { width: 24px; height: 24px; }
+.cat-hero-text { flex: 1; min-width: 160px; }
+.cat-hero-text h2 { margin: 0; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; }
+.cat-hero-text p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+
+.cat-field { display: grid; gap: 5px; min-width: 150px; }
+.cat-field > span { color: var(--muted); font-size: 12.5px; font-weight: 650; }
+.cat-field select { min-height: 40px; font-weight: 600; }
+.cat-switch { min-width: 220px; }
+.cat-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; padding: 16px 20px; }
+.cat-filters .btn { margin-left: auto; }
+
+.cat-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.cat-kpis .kpi { gap: 8px; }
+.cat-kpis .kpi-label { color: var(--muted); font-size: 13px; font-weight: 650; }
+.cat-kpis .kpi-value { font-size: 24px; }
+
+.cat-clear { border: 0; cursor: pointer; }
+.cat-chart { height: 300px; padding: 16px 16px 10px 8px; }
+
+.cat-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cat-months, .cat-tx { margin: 0; padding: 8px 12px 12px; list-style: none; }
+.cat-months button { display: grid; grid-template-columns: 96px minmax(0, 1fr) 34px 92px; align-items: center; gap: 12px; width: 100%; padding: 10px; font-size: 13.5px; text-align: left; background: transparent; border: 0; border-radius: 10px; }
+.cat-months button:not(:disabled):hover { background: var(--surface-2); }
+.cat-months button.on { background: var(--primary-50); }
+.cat-months button:disabled { color: var(--faint); cursor: default; }
+.cm-name { font-weight: 600; }
+.cm-bar { height: 8px; overflow: hidden; background: var(--surface-3); border-radius: 99px; }
+.cm-bar i { display: block; height: 100%; background: var(--primary); border-radius: inherit; transition: width 0.5s var(--ease); }
+.cm-count { color: var(--muted); font-size: 12.5px; text-align: right; }
+.cat-months b { text-align: right; font-weight: 700; }
+
+.cat-tx li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 8px; border-bottom: 1px solid var(--line); }
+.cat-tx li:last-child { border-bottom: 0; }
+.tx-text { min-width: 0; }
+.tx-text b, .tx-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-text b { font-size: 14px; font-weight: 650; }
+.tx-text small { color: var(--muted); font-size: 12.5px; }
+.cat-tx strong { white-space: nowrap; font-size: 14px; font-weight: 700; }
+.cat-more { margin: 0 12px 14px; width: calc(100% - 24px); }
+
+@media (max-width: 1100px) { .cat-grid { grid-template-columns: minmax(0, 1fr); } .cat-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .cat-hero { padding: 16px; }
+  .cat-switch, .cat-field { min-width: 0; width: 100%; }
+  .cat-filters .btn { margin-left: 0; width: 100%; }
+  .cat-kpis { gap: 10px; }
+  .cat-kpis .kpi { padding: 14px; }
+  .cat-kpis .kpi-value { font-size: 19px; }
+  .cat-chart { height: 240px; padding-left: 0; }
+  .cat-months button { grid-template-columns: 80px minmax(0, 1fr) 26px 78px; gap: 8px; padding: 10px 6px; }
+}
