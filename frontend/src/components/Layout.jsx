@@ -1023,6 +1023,7 @@ const Layout = ({ onLogout, user }) => {
 
   // These pages carry their own add/export controls, so the shared actions are hidden there.
   const normalizedPath = pathname.toLowerCase().replace(/\/+$/, "");
+  const accent = normalizedPath.startsWith("/income") ? "income" : normalizedPath.startsWith("/expense") ? "expense" : "default";
   const hideTopbarActions =
     ["/income", "/expense", "/goals", "/profile"].includes(normalizedPath) ||
     normalizedPath.startsWith("/expense/category/") ||
@@ -1032,7 +1033,7 @@ const Layout = ({ onLogout, user }) => {
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-accent={accent}>
       <Sidebar user={user} onLogout={onLogout} pinned={sidebarPinned} setPinned={setSidebarPinned} />
 
       {showModal && (

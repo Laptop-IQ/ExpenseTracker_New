@@ -1,5 +1,6 @@
 import ReactDOM, { createPortal } from "react-dom";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import PeriodControls from "../components/common/PeriodControls";
 import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 
 import {
@@ -372,115 +373,44 @@ function StatCard({
   trend,
   trendLabel,
 }) {
+  const hasTrend = trend !== undefined && trend !== null && trend !== 0;
+
   return (
     <div
-      className="
-        group
-        relative
-        overflow-hidden
-        rounded-3xl
-        border
-        border-white/60
-        dark:border-slate-700/70
-        bg-white/90
-        dark:bg-slate-900/90
-        backdrop-blur-xl
-        p-4
-        sm:p-5
-        shadow-[0_12px_40px_rgba(15,23,42,0.06)]
-        dark:shadow-black/20
-        hover:-translate-y-1
-        hover:shadow-[0_20px_50px_rgba(249,115,22,0.12)]
-        transition-all
-        duration-300
-      "
+      className="group relative overflow-hidden rounded-2xl border p-4 sm:rounded-3xl sm:p-5"
+      style={{ background: "#ffffff", borderColor: "#e6ebf3" }}
     >
-      <div
-        className="
-          absolute
-          -right-8
-          -top-8
-          w-24
-          h-24
-          rounded-full
-          blur-2xl
-          opacity-30
-          pointer-events-none
-        "
-        style={{ background: accent }}
-      />
-
-      <div className="relative">
-        <div className="flex items-start justify-between gap-3">
-          <div
-            className="
-              w-10
-              h-10
-              sm:w-11
-              sm:h-11
-              rounded-2xl
-              flex
-              items-center
-              justify-center
-            "
-            style={{
-              background: `${accent}15`,
-              color: accent,
-            }}
-          >
-            {Icon && <Icon size={19} />}
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[9px] font-bold tracking-[0.16em] sm:text-[10px]" style={{ color: "#93a0b6" }}>
+            {label}
+          </p>
+          <p className="mt-2 truncate text-xl font-black tracking-tight sm:text-2xl" style={{ color: "#0f1b33" }}>
+            {value}
+          </p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {hasTrend && (
+              <span
+                className="flex items-center gap-0.5 text-[10px] font-bold"
+                style={{ color: trend > 0 ? "#e04158" : "#0f9f6e" }}
+                title={trendLabel}
+              >
+                {trend > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                {Math.abs(trend).toFixed(0)}%
+              </span>
+            )}
+            <span className="truncate text-[10px] sm:text-xs" style={{ color: "#65748f" }}>
+              {sub}
+            </span>
           </div>
-
-          {/* FIXED: no accidental createPortal here */}
-          {trend !== undefined && trend !== null && (
-            <div
-              className={`
-                flex
-                items-center
-                gap-1
-                px-2
-                py-1
-                rounded-full
-                text-[10px]
-                font-bold
-                ${
-                  trend > 0
-                    ? "bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400"
-                    : trend < 0
-                      ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                }
-              `}
-            >
-              {trend > 0 ? (
-                <ArrowUpRight size={11} />
-              ) : trend < 0 ? (
-                <ArrowDownRight size={11} />
-              ) : null}
-              {Math.abs(trend).toFixed(0)}%
-            </div>
-          )}
         </div>
 
-        <p className="mt-4 text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-bold text-slate-400 dark:text-slate-500">
-          {label}
-        </p>
-
-        <p className="mt-1 text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white truncate">
-          {value}
-        </p>
-
-        {sub && (
-          <p className="mt-1.5 text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 truncate">
-            {sub}
-          </p>
-        )}
-
-        {trendLabel && (
-          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-            {trendLabel}
-          </p>
-        )}
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 sm:rounded-2xl"
+          style={{ color: accent, background: `${accent}12`, border: `1px solid ${accent}18` }}
+        >
+          {Icon && <Icon size={16} />}
+        </div>
       </div>
     </div>
   );
@@ -1152,7 +1082,7 @@ function SpendingBreakdown({ transactions }) {
 
   const navigate = useNavigate();
   const [showAll, setShowAll] = useState(false);
-  const visibleRows = showAll ? breakdown : breakdown.slice(0, 6);
+  const visibleRows = showAll ? breakdown : breakdown.slice(0, 3);
   const goTo = (category) => navigate(`/expense/category/${encodeURIComponent(category)}`);
 
   if (!breakdown.length) {
@@ -1266,7 +1196,7 @@ function SpendingBreakdown({ transactions }) {
           text-slate-400
         "
         >
-          {showAll ? `ALL ${breakdown.length}` : "TOP 6"}
+          {showAll ? `ALL ${breakdown.length}` : "TOP 3"}
         </span>
       </div>
 
@@ -1401,7 +1331,7 @@ function SpendingBreakdown({ transactions }) {
           onClick={() => setShowAll((value) => !value)}
           className="mt-4 w-full rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"
         >
-          {showAll ? "Show top 6 only" : `View all ${breakdown.length} categories`}
+          {showAll ? "Show top 3 only" : `View all ${breakdown.length} categories`}
         </button>
       )}
     </div>
@@ -3122,227 +3052,6 @@ function AddTransactionModal({
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           YEAR COMPARISON                                  */
-/* -------------------------------------------------------------------------- */
-
-function YearComparisonCard({ selectedYear, currentTotal, previousTotal }) {
-  const difference = currentTotal - previousTotal;
-
-  const percentage = previousTotal > 0 ? (difference / previousTotal) * 100 : 0;
-
-  const isHigher = difference > 0;
-
-  return (
-    <div
-      className="
-      rounded-3xl
-      border
-      border-slate-100
-      dark:border-slate-700
-      bg-gradient-to-br
-      from-slate-900
-      via-slate-900
-      to-violet-950
-      text-white
-      p-5
-      shadow-2xl
-      shadow-violet-900/10
-      overflow-hidden
-      relative
-    "
-    >
-      <div
-        className="
-        absolute
-        -right-12
-        -top-12
-        w-36
-        h-36
-        rounded-full
-        bg-violet-500/20
-        blur-3xl
-      "
-      />
-
-      <div
-        className="
-        absolute
-        -left-10
-        -bottom-10
-        w-28
-        h-28
-        rounded-full
-        bg-orange-500/20
-        blur-3xl
-      "
-      />
-
-      <div className="relative">
-        <div
-          className="
-          flex
-          items-center
-          justify-between
-        "
-        >
-          <div>
-            <p
-              className="
-              text-[9px]
-              uppercase
-              tracking-widest
-              text-white/50
-              font-black
-            "
-            >
-              Year comparison
-            </p>
-
-            <h3
-              className="
-              mt-1
-              text-sm
-              font-black
-            "
-            >
-              {selectedYear} vs {selectedYear - 1}
-            </h3>
-          </div>
-
-          <div
-            className="
-            w-9
-            h-9
-            rounded-xl
-            bg-white/10
-            flex
-            items-center
-            justify-center
-          "
-          >
-            {isHigher ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-          </div>
-        </div>
-
-        <div
-          className="
-          grid
-          grid-cols-2
-          gap-3
-          mt-5
-        "
-        >
-          <div
-            className="
-            rounded-2xl
-            bg-white/5
-            border
-            border-white/10
-            p-3
-          "
-          >
-            <p
-              className="
-              text-[9px]
-              text-white/40
-              font-bold
-              uppercase
-            "
-            >
-              {selectedYear}
-            </p>
-
-            <p
-              className="
-              mt-1
-              text-lg
-              font-black
-            "
-            >
-              {fmtINR(currentTotal)}
-            </p>
-          </div>
-
-          <div
-            className="
-            rounded-2xl
-            bg-white/5
-            border
-            border-white/10
-            p-3
-          "
-          >
-            <p
-              className="
-              text-[9px]
-              text-white/40
-              font-bold
-              uppercase
-            "
-            >
-              {selectedYear - 1}
-            </p>
-
-            <p
-              className="
-              mt-1
-              text-lg
-              font-black
-            "
-            >
-              {fmtINR(previousTotal)}
-            </p>
-          </div>
-        </div>
-
-        <div
-          className="
-          mt-4
-          flex
-          items-center
-          gap-2
-        "
-        >
-          <span
-            className={`
-            inline-flex
-            items-center
-            gap-1
-            px-2.5
-            py-1
-            rounded-full
-            text-[10px]
-            font-black
-            ${
-              isHigher
-                ? "bg-red-400/15 text-red-300"
-                : "bg-emerald-400/15 text-emerald-300"
-            }
-          `}
-          >
-            {isHigher ? (
-              <ArrowUpRight size={11} />
-            ) : (
-              <ArrowDownRight size={11} />
-            )}
-            {Math.abs(percentage).toFixed(1)}%
-          </span>
-
-          <span
-            className="
-            text-[10px]
-            text-white/45
-          "
-          >
-            {isHigher ? "higher spending" : "lower spending"}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*                              MAIN PAGE                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -3973,278 +3682,22 @@ const ExpensePage = () => {
         {/* HEADER                                                            */}
         {/* ================================================================= */}
 
-        <section
-          className="
-          relative
-          overflow-hidden
-          rounded-[0.25rem]
-          sm:rounded-[2rem]
-          border
-          border-white/70
-          dark:border-slate-700
-          bg-gradient-to-br
-          from-white
-          via-orange-50/50
-          to-violet-50/70
-          dark:from-slate-900
-          dark:via-slate-900
-          dark:to-violet-950/30
-          p-4
-          sm:p-6
-          shadow-[0_20px_60px_rgba(249,115,22,0.08)]
-        "
-        >
-          <div
-            className="
-            absolute
-            -right-20
-            -top-20
-            w-52
-            h-52
-            rounded-full
-            bg-orange-400/10
-            blur-3xl
-          "
-          />
-
-          <div
-            className="
-            absolute
-            -left-20
-            -bottom-20
-            w-52
-            h-52
-            rounded-full
-            bg-violet-500/10
-            blur-3xl
-          "
-          />
-
-          <div className="relative">
-            <div
-              className="
-              flex
-              flex-col
-              gap-5
-              rounded-2xl
-              border
-              border-slate-200/70
-              bg-white/80
-              p-4
-              shadow-sm
-              backdrop-blur-xl
-              dark:border-slate-800/80
-              dark:bg-slate-950/70
-              sm:p-5
-              lg:p-6
-            "
-            >
-              {/* Top row */}
-              <div
-                className="
-                flex
-                flex-col
-                gap-5
-                lg:flex-row
-                lg:items-start
-                lg:justify-between
-              "
-              >
-                {/* Title */}
-                <div className="min-w-0">
-                  
-
-                  <div
-                    className="
-                    mt-2
-                    flex
-                    flex-col
-                    gap-1
-                  "
-                  >
-                    
-
-                    <p
-                      className="
-                      max-w-xl
-                      text-xs
-                      leading-5
-                      text-slate-500
-                      dark:text-slate-400
-                      sm:text-sm
-                    "
-                    >
-                      Smart spending insights for{" "}
-                      <span
-                        className="
-                        font-bold
-                        text-slate-700
-                        dark:text-slate-200
-                      "
-                      >
-                        {rangeLabel}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div
-                  className="
-                  flex
-                  w-full
-                  items-center
-                  gap-2
-                  lg:w-auto
-                  lg:shrink-0
-                "
-                >
-                  <button
-                    type="button"
-                    onClick={handleExport}
-                    disabled={loading}
-                    aria-label="Export expenses"
-                    className="
-                      inline-flex
-                      h-10
-                      shrink-0
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-xl
-                      border
-                      border-slate-200
-                      bg-white
-                      px-3
-                      text-xs
-                      font-bold
-                      text-slate-600
-                      shadow-sm
-                      transition-all
-                      hover:border-slate-300
-                      hover:bg-slate-50
-                      hover:text-slate-900
-                      active:scale-[.97]
-                      disabled:cursor-not-allowed
-                      disabled:opacity-50
-                      dark:border-slate-700
-                      dark:bg-slate-900
-                      dark:text-slate-300
-                      dark:hover:border-slate-600
-                      dark:hover:bg-slate-800
-                      dark:hover:text-white
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-orange-500/20
-                      sm:px-3.5
-                    "
-                  >
-                    {loading ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Download size={14} />
-                    )}
-
-                    <span className="hidden sm:inline">
-                      {loading ? "Exporting..." : "Export"}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(true)}
-                    className="
-                      group
-                      inline-flex
-                      h-10
-                      shrink-0
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-xl
-                      bg-gradient-to-r
-                      from-orange-500
-                      to-amber-500
-                      px-3.5
-                      text-xs
-                      font-black
-                      text-white
-                      shadow-lg
-                      shadow-orange-500/20
-                      transition-all
-                      hover:-translate-y-0.5
-                      hover:shadow-xl
-                      hover:shadow-orange-500/30
-                      active:scale-[.97]
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-orange-500/30
-                      sm:px-4
-                    "
-                  >
-                    <Plus
-                      size={15}
-                      strokeWidth={2.5}
-                      className="
-                        transition-transform
-                        duration-200
-                        group-hover:rotate-90
-                      "
-                    />
-
-                    <span>Add Expense</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Divider */}
-              <div
-                className="
-                h-px
-                bg-slate-100
-                dark:bg-slate-800/80
-              "
-              />
-
-              {/* Timeframe */}
-              <div className="@container">
-                <div
-                  className="
-                  flex
-                  flex-col
-                  gap-3
-                  @3xl:flex-row
-                  @3xl:items-center
-                  @3xl:justify-between
-                "
-                >
-                  <TimeFrameSelector
-                    timeFrame={timeFrame}
-                    setTimeFrame={(value) => {
-                      setTimeFrame(value);
-                      setShowAll(false);
-                      setFilter("all");
-                    }}
-                  />
-
-                  {timeFrame === "custom" && (
-                    <div
-                      className="
-                      min-w-0
-                      @3xl:shrink-0
-                    "
-                    >
-                      <CustomRangePicker
-                        customRange={customRange}
-                        setCustomRange={handleCustomRangeChange}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <PeriodControls
+          timeFrame={timeFrame}
+          onTimeFrameChange={(value) => {
+            setTimeFrame(value);
+            setShowAll(false);
+            setFilter("all");
+          }}
+          rangeLabel={rangeLabel}
+          onExport={handleExport}
+          exporting={loading}
+          onAdd={() => setShowModal(true)}
+          addLabel="Add expense"
+          accent="expense"
+          customRange={customRange}
+          onCustomRangeChange={handleCustomRangeChange}
+        />
 
         {/* ================================================================= */}
         {/* STAT CARDS                                                        */}
@@ -4294,18 +3747,6 @@ const ExpensePage = () => {
         </section>
 
         {/* ================================================================= */}
-        {/* YEAR COMPARISON                                                   */}
-        {/* ================================================================= */}
-
-        {timeFrame === "yearly" && (
-          <YearComparisonCard
-            selectedYear={selectedYear}
-            currentTotal={selectedYearTotal}
-            previousTotal={previousYearTotal}
-          />
-        )}
-
-        {/* ================================================================= */}
         {/* CHART + BREAKDOWN                                                 */}
         {/* ================================================================= */}
 
@@ -4319,7 +3760,7 @@ const ExpensePage = () => {
         >
           <div
             className="
-            xl:col-span-2
+            xl:col-span-2 flex flex-col
             rounded-3xl
             border
             border-slate-100
@@ -4418,8 +3859,7 @@ const ExpensePage = () => {
 
             <div
               className="
-              h-56
-              sm:h-64
+              min-h-[240px] flex-1
             "
             >
               {chartData.some((item) => item.expense > 0) ? (

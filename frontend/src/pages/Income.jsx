@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import PeriodControls from "../components/common/PeriodControls";
 import axios from "axios";
 
 import {
@@ -3170,227 +3171,25 @@ const Income = () => {
             HEADER
         ================================================= */}
 
-        <section
-          className="
-            relative
-            overflow-hidden
-            rounded-[0.25rem]
-            border
-            border-white/70
-            bg-gradient-to-br
-            from-white
-            via-emerald-50/50
-            to-violet-50/70
-            p-4
-            shadow-[0_20px_60px_rgba(16,185,129,0.08)]
-            dark:border-slate-700
-            dark:from-slate-900
-            dark:via-slate-900
-            dark:to-emerald-950/30
-            sm:rounded-[2rem]
-            sm:p-6
-          "
-        >
-          <div className="absolute -right-20 -top-20 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl" />
-
-          <div className="absolute -bottom-20 -left-20 h-52 w-52 rounded-full bg-violet-500/10 blur-3xl" />
-
-          <div className="relative">
-            <div
-              className="
-                flex
-                flex-col
-                gap-5
-                rounded-2xl
-                border
-                border-slate-200/70
-                bg-white/80
-                p-4
-                shadow-sm
-                backdrop-blur-xl
-                dark:border-slate-800/80
-                dark:bg-slate-950/70
-                sm:p-5
-                lg:p-6
-              "
-            >
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  
-
-                  <div className="mt-2 flex flex-col gap-1">
-                    
-
-                    <p className="max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
-                      Smart income insights for{" "}
-                      <span className="font-bold text-slate-700 dark:text-slate-200">
-                        {rangeLabel}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  className="
-                    flex
-                    w-full
-                    items-center
-                    gap-2
-                    lg:w-auto
-                    lg:shrink-0
-                  "
-                >
-                  <button
-                    type="button"
-                    onClick={handleExport}
-                    disabled={loading}
-                    aria-label="Export income"
-                    className="
-                      inline-flex
-                      h-10
-                      shrink-0
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-xl
-                      border
-                      border-slate-200
-                      bg-white
-                      px-3
-                      text-xs
-                      font-bold
-                      text-slate-600
-                      shadow-sm
-                      transition-all
-                      hover:border-slate-300
-                      hover:bg-slate-50
-                      hover:text-slate-900
-                      active:scale-[.97]
-                      disabled:cursor-not-allowed
-                      disabled:opacity-50
-                      dark:border-slate-700
-                      dark:bg-slate-900
-                      dark:text-slate-300
-                      dark:hover:border-slate-600
-                      dark:hover:bg-slate-800
-                      dark:hover:text-white
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-emerald-500/20
-                      sm:px-3.5
-                    "
-                  >
-                    {loading ? (
-                      <Loader2
-                        size={14}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      <Download size={14} />
-                    )}
-
-                    <span className="hidden sm:inline">
-                      {loading
-                        ? "Processing..."
-                        : "Export"}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowModal(true)
-                    }
-                    disabled={loading}
-                    className="
-                      group
-                      inline-flex
-                      h-10
-                      shrink-0
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-xl
-                      bg-gradient-to-r
-                      from-emerald-500
-                      to-teal-500
-                      px-3.5
-                      text-xs
-                      font-black
-                      text-white
-                      shadow-lg
-                      shadow-emerald-500/20
-                      transition-all
-                      hover:-translate-y-0.5
-                      hover:shadow-xl
-                      hover:shadow-emerald-500/30
-                      active:scale-[.97]
-                      disabled:cursor-not-allowed
-                      disabled:opacity-50
-                      focus:outline-none
-                      focus:ring-2
-                      focus:ring-emerald-500/30
-                      sm:px-4
-                    "
-                  >
-                    <Plus
-                      size={15}
-                      strokeWidth={2.5}
-                      className="
-                        transition-transform
-                        duration-200
-                        group-hover:rotate-90
-                      "
-                    />
-
-                    <span>Add Income</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="h-px bg-slate-100 dark:bg-slate-800/80" />
-
-              {/* =================================================
-                  TIME FRAME + CUSTOM RANGE
-              ================================================= */}
-
-              <div className="@container">
-                <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
-                  <TimeFrameSelector
-                    timeFrame={timeFrame}
-                    setTimeFrame={(value) => {
-                      setTimeFrame(value);
-                      setShowAll(false);
-                      setCategoryFilter("all");
-                    }}
-                  />
-
-                  {timeFrame ===
-                    "custom" && (
-                    <div className="min-w-0 @3xl:shrink-0">
-                      <CustomRangePicker
-                        customRange={
-                          customRange
-                        }
-                        setCustomRange={(
-                          range,
-                        ) => {
-                          setCustomRange(
-                            range,
-                          );
-
-                          setShowAll(
-                            false,
-                          );
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <PeriodControls
+          timeFrame={timeFrame}
+          onTimeFrameChange={(value) => {
+            setTimeFrame(value);
+            setShowAll(false);
+            setCategoryFilter("all");
+          }}
+          rangeLabel={rangeLabel}
+          onExport={handleExport}
+          exporting={loading}
+          onAdd={() => setShowModal(true)}
+          addLabel="Add income"
+          accent="income"
+          customRange={customRange}
+          onCustomRangeChange={(range) => {
+            setCustomRange(range);
+            setShowAll(false);
+          }}
+        />
 
         {/* =================================================
             STAT CARDS
@@ -3463,7 +3262,7 @@ const Income = () => {
               dark:bg-slate-900
               dark:shadow-black/20
               sm:p-5
-              xl:col-span-2
+              xl:col-span-2 flex flex-col
             "
           >
             <div className="mb-5 flex items-start justify-between gap-3">
@@ -3487,7 +3286,7 @@ const Income = () => {
               </div>
             </div>
 
-            <div className="h-56 sm:h-64">
+            <div className="min-h-[240px] flex-1">
               {chartData.some(
                 (item) =>
                   item.income > 0,

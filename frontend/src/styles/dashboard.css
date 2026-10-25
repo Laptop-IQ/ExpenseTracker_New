@@ -9,7 +9,7 @@
 .seg::-webkit-scrollbar { display: none; }
 .seg button { min-height: 36px; padding: 0 16px; color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; background: transparent; border: 0; border-radius: 9px; transition: background 0.15s, color 0.15s; }
 .seg button:hover { color: var(--ink); }
-.seg button.on { color: #fff; background: var(--primary); box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3); }
+.seg button.on { color: #fff; background: var(--primary); box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 32%, transparent); }
 .period-label { color: var(--muted); font-size: 13px; font-weight: 600; }
 .period-export { margin-left: auto; }
 .period-custom { padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
@@ -158,3 +158,11 @@ button.kpi:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2)
 .cat-list button.on { background: var(--surface-2); }
 .cat-list li.cat-rest { display: flex; align-items: center; gap: 10px; padding: 9px 10px; color: var(--muted); font-size: 13.5px; }
 .cat-more-btn { width: 100%; }
+
+/* period controls used on Income and Expense */
+.period-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+@media (max-width: 720px) {
+  .period-actions { width: 100%; margin-left: 0; }
+  .period-actions .btn { flex: 1; }
+}
+

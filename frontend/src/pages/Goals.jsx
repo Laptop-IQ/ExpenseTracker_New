@@ -1757,7 +1757,7 @@ export default function GoalsPage() {
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes pulse { 0%, 100% { opacity: 0.4 } 50% { opacity: 0.8 } }
         .goals-container { animation: fadeIn 0.4s ease-out both }
-        .stats-row { animation: slideDown 0.5s ease-out both }
+        .stats-row { animation: slideDown 0.5s ease-out backwards }
         .goals-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
         .goals-deadline input[type="month"] { min-height: 32px }
         @media (max-width: 640px) {
@@ -1949,7 +1949,7 @@ export default function GoalsPage() {
 
             {/* Create button */}
             <button
-              className="goals-new"
+              className="goals-new" aria-label="New goal"
               onClick={() => setModal({ mode: "new" })}
               style={{
                 display: "flex",
@@ -1975,7 +1975,7 @@ export default function GoalsPage() {
                 e.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              <Plus size={16} /> New goal
+              <Plus size={16} /> <span className="goals-new-label">New goal</span>
             </button>
           </div>
         </div>
