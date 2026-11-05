@@ -62,8 +62,10 @@ function RangePanel({ value, onApply, isSheet }) {
     () => fromMonthIndex(normalizeCustomRange(value).end).year,
   );
 
-  const lo = pickingEnd && hover !== null ? Math.min(draft.start, hover) : draft.start;
-  const hi = pickingEnd && hover !== null ? Math.max(draft.start, hover) : draft.end;
+  const lo =
+    pickingEnd && hover !== null ? Math.min(draft.start, hover) : draft.start;
+  const hi =
+    pickingEnd && hover !== null ? Math.max(draft.start, hover) : draft.end;
 
   const handlePick = (index) => {
     if (index > max) return;
@@ -117,48 +119,51 @@ function RangePanel({ value, onApply, isSheet }) {
       </div>
 
       {/* Month grid with continuous range band */}
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2" onMouseLeave={() => setHover(null)}>
+      <div
+        className="rounded-2xl border border-slate-200 bg-slate-50 p-2"
+        onMouseLeave={() => setHover(null)}
+      >
         <div className="grid grid-cols-3 gap-1.5">
-        {MONTHS_SHORT.map((name, month) => {
-          const index = toMonthIndex(viewYear, month);
-          const disabled = index > max;
-          const inRange = index >= lo && index <= hi;
-          const isStart = index === lo;
-          const isEnd = index === hi;
-          const edge = inRange && (isStart || isEnd);
-          const col = month % 3;
+          {MONTHS_SHORT.map((name, month) => {
+            const index = toMonthIndex(viewYear, month);
+            const disabled = index > max;
+            const inRange = index >= lo && index <= hi;
+            const isStart = index === lo;
+            const isEnd = index === hi;
+            const edge = inRange && (isStart || isEnd);
+            const col = month % 3;
 
-          return (
-            <button
-              key={name}
-              type="button"
-              disabled={disabled}
-              aria-pressed={inRange}
-              aria-label={`${MONTHS_LONG[month]} ${viewYear}`}
-              onClick={() => handlePick(index)}
-              onMouseEnter={() => pickingEnd && !disabled && setHover(index)}
-              className={`group relative flex items-center justify-center font-bold outline-none transition ${cellH} ${
-                inRange ? "bg-blue-500/15" : ""
-              } ${inRange && (isStart || col === 0) ? "rounded-l-xl" : ""} ${
-                inRange && (isEnd || col === 2) ? "rounded-r-xl" : ""
-              } ${disabled ? "cursor-not-allowed" : ""}`}
-            >
-              <span
-                className={`flex h-[85%] w-[88%] items-center justify-center rounded-xl transition ${
-                  edge
-                    ? "bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(124,58,237,.38)]"
-                    : disabled
-                      ? "text-slate-300"
-                      : inRange
-                        ? "text-blue-600"
-                        : "text-slate-700 group-hover:bg-slate-100 group-focus-visible:ring-2 group-focus-visible:ring-blue-500/50"
-                }`}
+            return (
+              <button
+                key={name}
+                type="button"
+                disabled={disabled}
+                aria-pressed={inRange}
+                aria-label={`${MONTHS_LONG[month]} ${viewYear}`}
+                onClick={() => handlePick(index)}
+                onMouseEnter={() => pickingEnd && !disabled && setHover(index)}
+                className={`group relative flex items-center justify-center font-bold outline-none transition ${cellH} ${
+                  inRange ? "bg-blue-500/15" : ""
+                } ${inRange && (isStart || col === 0) ? "rounded-l-xl" : ""} ${
+                  inRange && (isEnd || col === 2) ? "rounded-r-xl" : ""
+                } ${disabled ? "cursor-not-allowed" : ""}`}
               >
-                {name}
-              </span>
-            </button>
-          );
-        })}
+                <span
+                  className={`flex h-[85%] w-[88%] items-center justify-center rounded-xl transition ${
+                    edge
+                      ? "bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 text-white shadow-[0_8px_20px_rgba(124,58,237,.38)]"
+                      : disabled
+                        ? "text-slate-300"
+                        : inRange
+                          ? "text-blue-600"
+                          : "text-slate-700 group-hover:bg-slate-100 group-focus-visible:ring-2 group-focus-visible:ring-blue-500/50"
+                  }`}
+                >
+                  {name}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -167,12 +172,12 @@ function RangePanel({ value, onApply, isSheet }) {
         <div className="min-w-0">
           <p className="truncate text-xs font-extrabold text-slate-900">
             {pickingEnd
-              ? `${formatCustomRangeLabel(draft)} → pick end month`
+              ? `${formatCustomRangeLabel(draft)} → pick end month (or Apply for one month)`
               : formatCustomRangeLabel(draft)}
           </p>
           <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
             {pickingEnd
-              ? "Tap another month to finish"
+              ? "Tap another month to extend the range"
               : `${count} month${count === 1 ? "" : "s"}`}
           </p>
         </div>
@@ -196,7 +201,6 @@ function RangePanel({ value, onApply, isSheet }) {
 
         <button
           type="button"
-          disabled={pickingEnd}
           onClick={() => onApply(draft)}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 font-black text-white shadow-[0_8px_24px_rgba(124,58,237,.35)] transition hover:brightness-110 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50 ${
             isSheet ? "h-12 text-sm" : "h-9 text-xs"
