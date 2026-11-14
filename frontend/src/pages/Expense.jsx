@@ -3064,6 +3064,7 @@ const ExpensePage = () => {
     timeFrame = "monthly",
     setTimeFrame = () => {},
     refreshTransactions = () => {},
+    queueTransaction,
   } = outletContext;
 
   const outletTransactions = allTransactions ?? layoutTransactions;
@@ -3386,6 +3387,30 @@ const ExpensePage = () => {
       date: toIsoWithClientTime(newTransaction.date),
     };
 
+    // Instant path: show the expense right away, sync with the server in the
+    // background (merged automatically once the connection is ready).
+    if (queueTransaction) {
+      try {
+        queueTransaction({ ...payload, type: "expense" });
+
+        setShowModal(false);
+
+        setNewTransaction({
+          date: getLocalDateInputValue(),
+          description: "",
+          amount: "",
+          type: "expense",
+          category: "Food",
+        });
+
+        addToast("Expense added.", "success");
+      } catch (error) {
+        addToast(error?.message || "Failed to save expense.", "error");
+      }
+
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -3417,7 +3442,7 @@ const ExpensePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [loading, newTransaction, getAuthHeaders, refreshTransactions, addToast]);
+  }, [loading, newTransaction, getAuthHeaders, refreshTransactions, queueTransaction, addToast]);
 
   /* ---------------------------------------------------------------------- */
   /*                           EDIT EXPENSE                                 */

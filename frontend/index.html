@@ -5,12 +5,19 @@
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lobster&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lobster&display=swap" media="print" onload="this.media='all'" />
+        <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lobster&display=swap" /></noscript>
+        <style>
+          body{margin:0;background:#f4f6fb}
+          .boot{min-height:100vh;display:flex;align-items:center;justify-content:center}
+          .boot i{width:38px;height:38px;border-radius:50%;border:3px solid #dbe2f0;border-top-color:#4f46e5;animation:bootspin .7s linear infinite}
+          @keyframes bootspin{to{transform:rotate(360deg)}}
+        </style>
     <meta name="theme-color" content="#f4f6fb" />
     <title>FinTrack · Expense Tracker</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot"><i></i></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -1132,6 +1132,7 @@ const Dashboard = () => {
     timeFrame = "monthly",
     setTimeFrame = () => {},
     refreshTransactions,
+    queueTransaction,
     lastUpdated,
   } = outletContext;
 
@@ -1789,6 +1790,29 @@ const Dashboard = () => {
     const url =
       type === "income" ? `${API_BASE}/income/add` : `${API_BASE}/expense/add`;
 
+    // Instant path: show it right away, sync with the server in the
+    // background; goals refresh once the sync completes.
+    if (queueTransaction) {
+      try {
+        const { synced } = queueTransaction({ ...payload, type });
+
+        setShowModal(false);
+        setNewTransaction(createDefaultTransaction());
+        addToast("Transaction saved.", "success");
+
+        synced?.then(() => fetchSavingGoals());
+      } catch (error) {
+        addToast(
+          getErrorMessage(error, "Could not save transaction. Try again."),
+          "error",
+        );
+      } finally {
+        setIsSaving(false);
+      }
+
+      return;
+    }
+
     try {
       await axios.post(url, payload, {
         headers: {
@@ -1825,6 +1849,7 @@ const Dashboard = () => {
   }, [
     newTransaction,
     refreshTransactions,
+    queueTransaction,
     fetchDashboardOverview,
     fetchSavingGoals,
     useServerOverview,

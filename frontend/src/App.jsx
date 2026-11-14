@@ -50,6 +50,23 @@ const prefetchMainPages = () => {
   }
 };
 
+// Start downloading the shell + current page chunk right away (in parallel)
+// for returning users, instead of waiting for React to render and discover them.
+try {
+  const hasSession =
+    localStorage.getItem("token") || sessionStorage.getItem("token");
+  if (hasSession) {
+    const path = window.location.pathname;
+    loaders.Layout().catch(() => {});
+    if (path === "/" || path === "") loaders.Dashboard().catch(() => {});
+    else if (path.startsWith("/income")) loaders.Income().catch(() => {});
+    else if (path.startsWith("/expense")) loaders.Expense().catch(() => {});
+    else if (path.startsWith("/goals")) loaders.Goals().catch(() => {});
+  }
+} catch {
+  /* storage blocked - ignore */
+}
+
 const FullPageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-[#f5f7fb]">
     <CoinLoader size={64} />
@@ -60,8 +77,12 @@ const API_BASE = import.meta.env.VITE_API_BASE;
 
 // to get transaction from localstorage
 const getTransactionsFromStorage = () => {
-  const saved = localStorage.getItem("transactions");
-  return saved ? JSON.parse(saved) : [];
+  try {
+    const saved = localStorage.getItem("transactions");
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
 };
 
  // to protect the routes
@@ -84,11 +105,30 @@ const ScrollToTop = () => {
   return null;
 };
 
+const readStoredAuth = () => {
+  try {
+    const rawUser =
+      localStorage.getItem("user") || sessionStorage.getItem("user");
+    return {
+      user: rawUser ? JSON.parse(rawUser) : null,
+      token:
+        localStorage.getItem("token") || sessionStorage.getItem("token") || null,
+    };
+  } catch {
+    return { user: null, token: null };
+  }
+};
+
 const App = () => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [transactions, setTransactions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [initialAuth] = useState(readStoredAuth);
+  const [user, setUser] = useState(initialAuth.user);
+  const [token, setToken] = useState(initialAuth.token);
+  const [transactions, setTransactions] = useState(getTransactionsFromStorage);
+  // Only block the screen when a token exists but the profile still has to be
+  // fetched. With a stored user the app opens instantly.
+  const [isLoading, setIsLoading] = useState(
+    !initialAuth.user && !!initialAuth.token,
+  );
 
   const navigate = useNavigate();
 
@@ -136,7 +176,7 @@ const App = () => {
     if(localToken) {
       localStorage.setItem("user", JSON.stringify(updatedUser));
     }else if (sessionToken) {
-      sessionToken.setItem("user", JSON.stringify(updatedUser));
+      sessionStorage.setItem("user", JSON.stringify(updatedUser));
     }
   };
 // try to load user with token when mounted
@@ -160,7 +200,7 @@ useEffect (() => {
       }
       if(storedToken) {
         try {
-           const res = await axios.get(`${API_BASE}/api/user/me`, {
+           const res = await axios.get(`${API_BASE}/user/me`, {
       headers: { Authorization: `Bearer ${storedToken}` }
            });
            const profile = res.data;

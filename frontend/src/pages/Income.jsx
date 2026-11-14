@@ -2287,6 +2287,7 @@ const Income = () => {
       layoutTransactions = [],
     refreshTransactions =
       () => {},
+    queueTransaction,
     timeFrame = "monthly",
     setTimeFrame =
       () => {},
@@ -2772,6 +2773,44 @@ const Income = () => {
         ),
       };
 
+      // Instant path: show the income right away, sync in the background.
+      if (queueTransaction) {
+        try {
+          queueTransaction({
+            ...payload,
+            type: "income",
+          });
+
+          learnCategory(
+            payload.description,
+            payload.category,
+          );
+
+          setShowModal(false);
+
+          setNewTransaction({
+            date: safeDateInput(),
+            description: "",
+            amount: "",
+            type: "income",
+            category: "Salary",
+          });
+
+          addToast(
+            "Income added.",
+            "success",
+          );
+        } catch (error) {
+          addToast(
+            error?.message ||
+              "Failed to save income.",
+            "error",
+          );
+        }
+
+        return;
+      }
+
       try {
         setLoading(true);
 
@@ -2824,6 +2863,7 @@ const Income = () => {
       loading,
       newTransaction,
       refreshTransactions,
+      queueTransaction,
       addToast,
     ]);
 

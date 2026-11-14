@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
@@ -134,7 +135,7 @@ const formatCategory = (category) =>
   String(category || "Other").replace(/_/g, " ");
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") || sessionStorage.getItem("token");
 
   return token
     ? {
@@ -194,27 +195,91 @@ const normalizeTransaction = (transaction, type) => ({
 });
 
 /* ============================================================================
+   LOCAL CACHE + OFFLINE QUEUE
+   - Last known server data is cached per user, so the app paints instantly.
+   - New transactions are shown immediately (optimistic) and posted in the
+     background. If the server is still waking up / offline, they stay queued
+     (saved in localStorage) and are merged with server data once connected.
+============================================================================ */
+
+const getUserKey = () => {
+  try {
+    const raw =
+      localStorage.getItem("user") || sessionStorage.getItem("user") || "null";
+    const u = JSON.parse(raw);
+    return u?._id || u?.id || u?.email || "anon";
+  } catch {
+    return "anon";
+  }
+};
+
+const readJSON = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeJSON = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage full / blocked - cache is best effort */
+  }
+};
+
+const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
+
+/* ============================================================================
    TRANSACTION HOOK
 ============================================================================ */
 
 function useTransactions() {
-  const [transactions, setTransactions] = useState([]);
+  const cacheKey = useMemo(() => `fintrack:tx:v1:${getUserKey()}`, []);
+  const pendingKey = useMemo(() => `fintrack:pending:v1:${getUserKey()}`, []);
+
+  // Paint from cache immediately - no blocking loader on repeat visits.
+  const [initialCache] = useState(() => readJSON(cacheKey, null));
+
+  const [serverTx, setServerTx] = useState(() => initialCache?.items || []);
+  const [pending, setPending] = useState(() => readJSON(pendingKey, []));
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(() => !!initialCache);
+  const [lastUpdated, setLastUpdated] = useState(
+    () => (initialCache?.ts ? new Date(initialCache.ts) : new Date()),
+  );
+  const [syncError, setSyncError] = useState(null);
 
-  // becomes true once the first request has finished (success or failure)
-  const [loaded, setLoaded] = useState(false);
+  const pendingRef = useRef(pending);
+  const flushRef = useRef(null);
+  const pullSeq = useRef(0);
 
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const updatePending = useCallback(
+    (updater) => {
+      const next = updater(pendingRef.current);
+      pendingRef.current = next;
+      writeJSON(pendingKey, next);
+      setPending(next);
+    },
+    [pendingKey],
+  );
 
-  const fetchTransactions = useCallback(async () => {
-    // Keep the UI usable when the frontend is opened without a backend env.
-    // Do not throw here: the initial effect would turn a configuration issue
-    // into an uncaught console error. Mutating actions still validate API_BASE.
+  // server data + not-yet-synced items, newest first
+  const transactions = useMemo(
+    () => [...pending.map((p) => p.tx), ...serverTx].sort(byDateDesc),
+    [pending, serverTx],
+  );
+
+  /* ---- background pull (server -> local) ---- */
+  const pull = useCallback(async () => {
     if (!API_BASE) {
       setLoaded(true);
-      setTransactions([]);
       return [];
     }
+
+    const seq = ++pullSeq.current;
 
     try {
       setLoading(true);
@@ -222,29 +287,26 @@ function useTransactions() {
       const headers = getAuthHeaders();
 
       const [incomeResponse, expenseResponse] = await Promise.all([
-        axios.get(`${API_BASE}/income/get`, {
-          headers,
-        }),
-
-        axios.get(`${API_BASE}/expense/get`, {
-          headers,
-        }),
+        axios.get(`${API_BASE}/income/get`, { headers, timeout: 60000 }),
+        axios.get(`${API_BASE}/expense/get`, { headers, timeout: 60000 }),
       ]);
 
       const incomes = safeArray(incomeResponse).map((item) =>
         normalizeTransaction(item, "income"),
       );
-
       const expenses = safeArray(expenseResponse).map((item) =>
         normalizeTransaction(item, "expense"),
       );
 
-      const merged = [...incomes, ...expenses].sort(
-        (a, b) => new Date(b.date) - new Date(a.date),
-      );
+      const merged = [...incomes, ...expenses].sort(byDateDesc);
 
-      setTransactions(merged);
-      setLastUpdated(new Date());
+      // a newer pull already started - let that one win
+      if (seq === pullSeq.current) {
+        const now = new Date();
+        setServerTx(merged);
+        setLastUpdated(now);
+        writeJSON(cacheKey, { ts: now.getTime(), items: merged });
+      }
 
       return merged;
     } catch (error) {
@@ -252,45 +314,114 @@ function useTransactions() {
         "Failed to fetch transactions:",
         error?.response?.data || error?.message || error,
       );
-
       throw error;
     } finally {
-      setLoading(false);
+      if (seq === pullSeq.current) setLoading(false);
       setLoaded(true);
     }
-  }, []);
+  }, [cacheKey]);
 
-  const addTransaction = useCallback(
-    async (transaction) => {
-      if (!API_BASE) {
-        throw new Error("API base URL is not configured.");
+  /* ---- background push (local queue -> server) ---- */
+  const flushPending = useCallback(() => {
+    if (flushRef.current) return flushRef.current;
+    if (!API_BASE) return Promise.resolve(0);
+
+    const run = async () => {
+      let synced = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const next = pendingRef.current[0];
+        if (!next) break;
+
+        try {
+          await axios.post(
+            `${API_BASE}/${next.type === "income" ? "income/add" : "expense/add"}`,
+            next.payload,
+            { headers: getAuthHeaders(), timeout: 60000 },
+          );
+
+          updatePending((list) => list.filter((p) => p.tempId !== next.tempId));
+          synced += 1;
+        } catch (error) {
+          const status = error?.response?.status;
+
+          // No response (offline / server waking up), 5xx, 401, 408, 429:
+          // keep the item queued and retry later.
+          if (!status || status >= 500 || [401, 408, 429].includes(status)) {
+            break;
+          }
+
+          // Server rejected the data itself (validation) - retrying is
+          // pointless, so drop it and tell the user.
+          updatePending((list) => list.filter((p) => p.tempId !== next.tempId));
+          setSyncError({
+            id: Date.now(),
+            message:
+              error?.response?.data?.message ||
+              `Could not save "${next.payload.description}".`,
+          });
+        }
       }
 
+      return synced;
+    };
+
+    flushRef.current = run().finally(() => {
+      flushRef.current = null;
+    });
+
+    return flushRef.current;
+  }, [updatePending]);
+
+  /* ---- public: refresh = push queue first, then pull ---- */
+  const fetchTransactions = useCallback(async () => {
+    await flushPending();
+    return pull();
+  }, [flushPending, pull]);
+
+  /* ---- public: instant add (optimistic) ---- */
+  const queueTransaction = useCallback(
+    (transaction) => {
       if (!transaction?.type) {
         throw new Error("Transaction type is required.");
       }
 
-      if (!transaction?.amount || Number(transaction.amount) <= 0) {
+      const amount = Number(transaction.amount);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
         throw new Error("Please enter a valid amount.");
       }
 
-      const headers = getAuthHeaders();
+      const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-      const endpoint =
-        transaction.type === "income" ? "income/add" : "expense/add";
+      const payload = { ...transaction, amount };
 
-      const payload = {
-        ...transaction,
-        amount: Number(transaction.amount),
+      const tx = {
+        ...normalizeTransaction({ ...payload, id: tempId }, transaction.type),
+        pending: true,
       };
 
-      await axios.post(`${API_BASE}/${endpoint}`, payload, {
-        headers,
-      });
+      updatePending((list) => [
+        ...list,
+        { tempId, type: transaction.type, payload, tx },
+      ]);
 
-      await fetchTransactions();
+      // push + pull in the background; callers may await `synced` if needed
+      const synced = flushPending()
+        .then(() => (pendingRef.current.length === 0 ? pull() : null))
+        .catch(() => null);
+
+      return { tempId, synced };
     },
-    [fetchTransactions],
+    [flushPending, pull, updatePending],
+  );
+
+  const addTransaction = useCallback(
+    async (transaction) => {
+      queueTransaction(transaction);
+    },
+    [queueTransaction],
   );
 
   const editTransaction = useCallback(
@@ -303,23 +434,18 @@ function useTransactions() {
         throw new Error("Transaction ID is required.");
       }
 
-      const headers = getAuthHeaders();
-
       const endpoint =
         transaction.type === "income" ? "income/update" : "expense/update";
 
-      const payload = {
-        ...transaction,
-        amount: Number(transaction.amount),
-      };
+      await axios.put(
+        `${API_BASE}/${endpoint}/${id}`,
+        { ...transaction, amount: Number(transaction.amount) },
+        { headers: getAuthHeaders() },
+      );
 
-      await axios.put(`${API_BASE}/${endpoint}/${id}`, payload, {
-        headers,
-      });
-
-      await fetchTransactions();
+      await pull();
     },
-    [fetchTransactions],
+    [pull],
   );
 
   const deleteTransaction = useCallback(
@@ -332,31 +458,68 @@ function useTransactions() {
         throw new Error("Transaction ID is required.");
       }
 
-      const headers = getAuthHeaders();
+      // still only queued locally - just discard it
+      if (String(id).startsWith("tmp-")) {
+        updatePending((list) => list.filter((p) => p.tempId !== id));
+        return;
+      }
 
       const endpoint = type === "income" ? "income/delete" : "expense/delete";
 
       await axios.delete(`${API_BASE}/${endpoint}/${id}`, {
-        headers,
+        headers: getAuthHeaders(),
       });
 
-      await fetchTransactions();
+      await pull();
     },
-    [fetchTransactions],
+    [pull, updatePending],
   );
 
+  /* ---- initial sync + retry triggers ---- */
   useEffect(() => {
-    fetchTransactions().catch((error) => {
-      console.error("Initial transaction fetch failed:", error);
-    });
+    fetchTransactions().catch(() => {});
   }, [fetchTransactions]);
+
+  useEffect(() => {
+    const retry = () => {
+      fetchTransactions().catch(() => {});
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchTransactions]);
+
+  // keep retrying while something is waiting to be synced
+  const hasPending = pending.length > 0;
+
+  useEffect(() => {
+    if (!hasPending) return undefined;
+
+    const id = window.setInterval(() => {
+      fetchTransactions().catch(() => {});
+    }, 12000);
+
+    return () => window.clearInterval(id);
+  }, [hasPending, fetchTransactions]);
 
   return {
     transactions,
     loading,
     loaded,
     lastUpdated,
+    pendingCount: pending.length,
+    syncError,
     fetchTransactions,
+    queueTransaction,
     addTransaction,
     editTransaction,
     deleteTransaction,
@@ -721,7 +884,10 @@ const Layout = ({ onLogout, user }) => {
     loading,
     loaded,
     lastUpdated,
+    pendingCount,
+    syncError,
     fetchTransactions,
+    queueTransaction,
     addTransaction,
     editTransaction,
     deleteTransaction,
@@ -760,6 +926,11 @@ const Layout = ({ onLogout, user }) => {
   const [showModal, setShowModal] = useState(false);
 
   const [toast, setToast] = useState(null);
+
+  // a queued transaction rejected by the server - tell the user
+  useEffect(() => {
+    if (syncError) setToast({ message: syncError.message, type: "error" });
+  }, [syncError]);
 
   /* --------------------------------------------------------------------------
      ADD TRANSACTION STATE
@@ -967,10 +1138,12 @@ const Layout = ({ onLogout, user }) => {
       allTransactions: transactions,
 
       addTransaction,
+      queueTransaction,
       editTransaction,
       deleteTransaction,
 
       refreshTransactions: fetchTransactions,
+      pendingCount,
 
       timeFrame,
       setTimeFrame,
@@ -984,9 +1157,11 @@ const Layout = ({ onLogout, user }) => {
       filteredTransactions,
       transactions,
       addTransaction,
+      queueTransaction,
       editTransaction,
       deleteTransaction,
       fetchTransactions,
+      pendingCount,
       timeFrame,
       period,
       lastUpdated,
@@ -1043,7 +1218,7 @@ const Layout = ({ onLogout, user }) => {
           newTransaction={newTransaction}
           setNewTransaction={setNewTransaction}
           handleAddTransaction={handleAddTransaction}
-          loading={loading}
+          loading={false}
         />
       )}
 
@@ -1060,7 +1235,11 @@ const Layout = ({ onLogout, user }) => {
           <div className="topbar-actions">
             <span className="updated-at">
               <i aria-hidden />
-              Updated {lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              {pendingCount > 0
+                ? `Syncing ${pendingCount}…`
+                : !loaded
+                  ? "Connecting…"
+                  : <>Updated {lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</>}
             </span>
             <button type="button" className="btn btn-icon" onClick={handleRefresh} disabled={loading} aria-label="Refresh transactions" title="Refresh">
               <RefreshCw size={16} className={loading ? "spin" : ""} />
@@ -1082,11 +1261,6 @@ const Layout = ({ onLogout, user }) => {
 
         <div className="page">
           <div className="outlet-wrapper">
-            {!loaded && transactions.length === 0 && (
-              <div className="fixed inset-0 z-30 flex items-center justify-center bg-white/70">
-                <CoinLoader size={68} label="Loading your money" />
-              </div>
-            )}
             <Suspense fallback={<CoinLoaderBlock label="Loading" minHeight="60vh" />}>
               <Outlet context={outletContext} />
             </Suspense>
