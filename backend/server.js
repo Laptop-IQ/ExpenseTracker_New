@@ -50,6 +50,17 @@ const authLimiter = rateLimit({
   max: 30,
 });
 
+// Each demo start writes seed data, so cap it per IP.
+app.use(
+  "/api/user/guest",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 40,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
+
 app.use("/api/user/login", authLimiter);
 app.use("/api/user/register", authLimiter);
 app.use("/api/user/forgot-password", authLimiter);

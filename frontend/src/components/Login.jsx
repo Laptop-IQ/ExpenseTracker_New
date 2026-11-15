@@ -24,6 +24,39 @@ const Login = ({ onLogin }) => {
     return res.data;
   };
 
+  // Demo account: server creates a private sandbox with sample data.
+  // Everything the guest changes is thrown away at logout.
+  const handleGuestLogin = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const res = await axios.post(`${API_BASE}/user/guest`, null, {
+        timeout: 60000,
+      });
+
+      const { token, user: guestProfile } = res.data;
+
+      // remember = true -> token in localStorage, which every page reads.
+      // The sandbox is deleted on logout / expiry anyway.
+      if (typeof onLogin === "function") {
+        onLogin({ ...guestProfile, isGuest: true }, true, token);
+      } else {
+        navigate("/");
+      }
+    } catch (err) {
+      console.error("Guest login error:", err?.response || err);
+      setError(
+        err.response?.data?.message ||
+          (err.code === "ECONNABORTED"
+            ? "Server is waking up, please try again in a moment."
+            : "Could not start the demo. Please try again."),
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -179,6 +212,26 @@ const Login = ({ onLogin }) => {
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+
+          <div className="mt-4">
+            <div className="flex items-center gap-3 my-3 text-xs text-gray-400">
+              <span className="flex-1 h-px bg-gray-200" />
+              or
+              <span className="flex-1 h-px bg-gray-200" />
+            </div>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              disabled={isLoading}
+              className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-60"
+            >
+              {isLoading ? "Please wait..." : "Try Demo (Continue as Guest)"}
+            </button>
+            <p className="mt-2 text-center text-xs text-gray-500">
+              Explore with sample data. Change anything - it all resets when you
+              log out.
+            </p>
+          </div>
 
           <div className={loginStyles.signUpContainer}>
             <p className={loginStyles.signUpText}>

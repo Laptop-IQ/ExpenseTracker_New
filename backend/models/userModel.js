@@ -12,6 +12,10 @@ const userSchema = new mongoose.Schema(
     otpExpire: Date,
     profilePic: String, // ✅ add this
     cloudinaryId: String, // ✅ add this
+
+    // demo / guest sandbox accounts (deleted on logout or when expired)
+    isGuest: { type: Boolean, default: false, index: true },
+    guestExpiresAt: Date,
   },
   { timestamps: true },
 );

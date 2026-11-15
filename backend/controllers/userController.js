@@ -20,7 +20,7 @@ const createToken = (userId) =>
 export const getCurrentUser = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select(
-      "name email profilePic",
+      "name email profilePic isGuest",
     );
     if (!user) return res.status(404).json({ message: "User not found" });
 

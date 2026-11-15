@@ -105,6 +105,40 @@ const ScrollToTop = () => {
   return null;
 };
 
+// Guest logout: delete the server sandbox, wipe every local trace of the demo
+// data, then hard-reload so no in-memory state (notifications, caches...)
+// can leak into the next session. Next guest starts from the original data.
+const endGuestSession = (guestToken) => {
+  try {
+    if (guestToken && API_BASE) {
+      // keepalive lets the request finish even though the page reloads
+      fetch(`${API_BASE}/user/guest/end`, {
+        method: "POST",
+        keepalive: true,
+        headers: { Authorization: `Bearer ${guestToken}` },
+      }).catch(() => {});
+    }
+  } catch {
+    /* best effort - the sandbox also expires by itself */
+  }
+
+  try {
+    [localStorage, sessionStorage].forEach((store) => {
+      Object.keys(store)
+        .filter(
+          (k) =>
+            k.startsWith("fintrack:") ||
+            ["user", "token", "transactions", "notifications", "category_ai_memory"].includes(k),
+        )
+        .forEach((k) => store.removeItem(k));
+    });
+  } catch {
+    /* storage blocked - ignore */
+  }
+
+  window.location.replace("/login");
+};
+
 const readStoredAuth = () => {
   try {
     const rawUser =
@@ -251,6 +285,14 @@ useEffect(() => {
 
 
   const handleLogout = () => {
+    const isGuest =
+      user?.isGuest || String(user?.email || "").endsWith("@guest.demo.local");
+
+    if (isGuest) {
+      endGuestSession(token || localStorage.getItem("token"));
+      return;
+    }
+
     clearAuth();
     navigate("/login");
   };

@@ -1225,6 +1225,22 @@ const Layout = ({ onLogout, user }) => {
       {toast && <Toast {...toast} onDone={() => setToast(null)} />}
 
       <main className={`app-main ${sidebarPinned ? "" : "sidebar-collapsed"}`}>
+        {(user?.isGuest || String(user?.email || "").endsWith("@guest.demo.local")) && (
+          <div
+            role="status"
+            style={{
+              background: "#eef2ff",
+              color: "#3730a3",
+              fontSize: 13,
+              fontWeight: 600,
+              padding: "8px 16px",
+              textAlign: "center",
+              borderBottom: "1px solid #c7d2fe",
+            }}
+          >
+            Demo account - change anything you like. All data resets when you log out.
+          </div>
+        )}
         <header className="topbar">
           <div className="topbar-title">
             <h1>{pageMeta.title}</h1>
