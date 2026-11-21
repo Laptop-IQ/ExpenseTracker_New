@@ -76,6 +76,7 @@ import {
   getAuthHeaders,
 } from "../utils/commonHelpers";
 
+import { useCategoryRegistry } from "../utils/categoryStore";
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 const TIME_FRAMES = [
@@ -2278,6 +2279,11 @@ function DeleteModal({
 ========================================================= */
 
 const Income = () => {
+  useCategoryRegistry("income", {
+    colors: CATEGORY_COLOR,
+    icons: CATEGORY_ICONS,
+    keys: INCOME_CATEGORIES,
+  });
   const outletContext =
     useOutletContext() || {};
 

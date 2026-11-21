@@ -55,6 +55,7 @@ import {
 } from "../utils/commonHelpers";
 import { isValidDate } from "../utils/commonUtils";
 import AddTransactionModal from "../components/Add";
+import { useCategoryRegistry } from "../utils/categoryStore";
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 
@@ -879,6 +880,8 @@ function CategoryDetail({ category, transactions, year, setYear, onClose }) {
 ============================================================================ */
 
 const Layout = ({ onLogout, user }) => {
+  useCategoryRegistry("expense", { icons: CATEGORY_ICONS, keys: EXPENSE_CATEGORIES });
+  useCategoryRegistry("income", { icons: CATEGORY_ICONS, keys: INCOME_CATEGORIES });
   const {
     transactions,
     loading,
@@ -1187,6 +1190,7 @@ const Layout = ({ onLogout, user }) => {
     if (key.startsWith("/income")) return { title: "Income", sub: "Everything you earned, in one place" };
     if (key.startsWith("/expense/category")) return { title: "Category details", sub: "Month-wise spending and transactions" };
     if (key.startsWith("/expense")) return { title: "Expenses", sub: "See where your money goes" };
+    if (key.startsWith("/categories")) return { title: "Categories", sub: "Add, edit and remove your categories" };
     if (key.startsWith("/goals")) return { title: "Goals", sub: "Save towards what matters" };
     if (key.startsWith("/profile")) return { title: "Profile", sub: "Your account and preferences" };
     if (key.startsWith("/contactus")) return { title: "Help and support", sub: "We usually reply within a day" };
@@ -1200,7 +1204,7 @@ const Layout = ({ onLogout, user }) => {
   const normalizedPath = pathname.toLowerCase().replace(/\/+$/, "");
   const accent = normalizedPath.startsWith("/income") ? "income" : normalizedPath.startsWith("/expense") ? "expense" : "default";
   const hideTopbarActions =
-    ["/income", "/expense", "/goals", "/profile"].includes(normalizedPath) ||
+    ["/income", "/expense", "/goals", "/profile", "/categories"].includes(normalizedPath) ||
     normalizedPath.startsWith("/expense/category/") ||
     normalizedPath.startsWith("/income/source/");
 

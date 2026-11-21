@@ -1,64 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom";
 import { X, Plus, Sparkles } from "lucide-react";
-import {
-  Wallet,
-  Banknote,
-  Briefcase,
-  Coins,
-  TrendingUp,
-  Utensils,
-  ShoppingBasket,
-  Milk,
-  Cookie,
-  Car,
-  Fuel,
-  Home,
-  Zap,
-  HeartPulse,
-  Wrench,
-  ShoppingCart,
-  Gift,
-  Scissors,
-  Baby,
-  Shield,
-  MoreHorizontal,
-} from "lucide-react";
+import { Link } from "react-router-dom";
 import { smartDetectCategory, learnCategory } from "../utils/smartCategoryAI";
+import { useCategories, detectCustomCategory } from "../utils/categoryStore";
 
 const MANUAL_FLAG = "_manualCategory";
-
-const INCOME_CATS = [
-  { key: "Salary", icon: <Wallet size={15} />, color: "#0f9f6e" },
-  { key: "Extra_Income", icon: <Banknote size={15} />, color: "#3b82f6" },
-  { key: "Freelance", icon: <Briefcase size={15} />, color: "#a78bfa" },
-  { key: "Side_Hustles", icon: <Coins size={15} />, color: "#f59e0b" },
-  { key: "Investment", icon: <TrendingUp size={15} />, color: "#06b6d4" },
-];
-
-const EXPENSE_CATS = [
-  { key: "Food", icon: <Utensils size={15} />, color: "#f97316" },
-  { key: "Grocery", icon: <ShoppingBasket size={15} />, color: "#22c55e" },
-  { key: "Dairy", icon: <Milk size={15} />, color: "#fb923c" },
-  { key: "Junk_Food", icon: <Cookie size={15} />, color: "#e11d48" },
-  { key: "Transport", icon: <Car size={15} />, color: "#3b82f6" },
-  { key: "Fuel", icon: <Fuel size={15} />, color: "#f59e0b" },
-  { key: "Housing", icon: <Home size={15} />, color: "#8b5cf6" },
-  { key: "Utilities", icon: <Zap size={15} />, color: "#14b8a6" },
-  { key: "Healthcare", icon: <HeartPulse size={15} />, color: "#ef4444" },
-  { key: "Service", icon: <Wrench size={15} />, color: "#84cc16" },
-  { key: "Shopping", icon: <ShoppingCart size={15} />, color: "#a855f7" },
-  { key: "Entertainment", icon: <Gift size={15} />, color: "#ec4899" },
-  { key: "Investment", icon: <TrendingUp size={15} />, color: "#10b981" },
-  {
-    key: "Personal_Care_Expenses",
-    icon: <Scissors size={15} />,
-    color: "#f43f5e",
-  },
-  { key: "Kids_Needs", icon: <Baby size={15} />, color: "#06b6d4" },
-  { key: "Annual_Expense", icon: <Shield size={15} />, color: "#6366f1" },
-  { key: "Other", icon: <MoreHorizontal size={15} />, color: "#94a3b8" },
-];
 
 function inputStyle(hasError, focused, accent) {
   return {
@@ -106,7 +53,8 @@ const AddTransactionModal = ({
   const effectiveType = lockType ?? newTransaction?.type;
   const isIncome = effectiveType === "income";
   const accent = isIncome ? "#0f9f6e" : "#e04158";
-  const cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+  const { list: listCategories } = useCategories();
+  const cats = listCategories(isIncome ? "income" : "expense");
 
   useEffect(() => {
     isMounted.current = true;
@@ -136,7 +84,9 @@ const AddTransactionModal = ({
     debounceRef.current = setTimeout(() => {
       if (!isMounted.current) return;
       try {
-        const result = smartDetectCategory(text);
+        const result =
+          detectCustomCategory(text, isIncome ? "income" : "expense") ||
+          smartDetectCategory(text);
         const cat = result?.category ?? null;
         const conf = result?.confidence ?? 0.6;
         setAiDetection(cat ? { category: cat, confidence: conf } : null);
@@ -149,7 +99,7 @@ const AddTransactionModal = ({
       }
     }, 380);
     return () => clearTimeout(debounceRef.current);
-  }, [newTransaction?.description, manualCategory, setNewTransaction]);
+  }, [newTransaction?.description, manualCategory, setNewTransaction, isIncome]);
 
   const handleTypeToggle = useCallback(
     (t) => {
@@ -655,7 +605,7 @@ const AddTransactionModal = ({
                   gap: 6,
                 }}
               >
-                {cats.map(({ key, icon, color }) => {
+                {cats.map(({ key, Icon, display, color }) => {
                   const active = newTransaction?.category === key;
                   return (
                     <button
@@ -709,12 +659,35 @@ const AddTransactionModal = ({
                       }}
                     >
                       <span style={{ color: active ? color : "inherit" }}>
-                        {icon}
+                        <Icon size={15} />
                       </span>
-                      {key.replace(/_/g, " ")}
+                      {display}
                     </button>
                   );
                 })}
+                <Link
+                  to="/categories"
+                  onClick={() => setShowModal(false)}
+                  className="cat-btn"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    padding: "10px 8px",
+                    borderRadius: 12,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    background: "transparent",
+                    border: "1px dashed #b9c6dc",
+                    color: "#65748f",
+                  }}
+                >
+                  <Plus size={15} />
+                  New / Manage
+                </Link>
               </div>
             </div>
           </div>

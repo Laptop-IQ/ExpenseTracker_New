@@ -13,6 +13,7 @@ import {
 import { ArrowLeft, RotateCcw } from "lucide-react";
 
 import { EXPENSE_CATEGORY_ICONS, INCOME_CATEGORY_ICONS } from "../assets/color";
+import { useCategoryRegistry } from "../utils/categoryStore";
 import "../styles/category.css";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -87,6 +88,7 @@ function ChartTip({ active, payload, verb = "Spent" }) {
 
 export default function CategoryDetail({ kind = "expense" }) {
   const K = KINDS[kind] || KINDS.expense;
+  useCategoryRegistry(K.type, { icons: K.icons });
   const { name } = useParams();
   const navigate = useNavigate();
   // `transactions` is already narrowed to the period chosen elsewhere in the app

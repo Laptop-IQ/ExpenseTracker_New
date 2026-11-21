@@ -14,6 +14,7 @@ import expenseRouter from "./routes/expenseRoute.js";
 import dashboardRouter from "./routes/dashboardRoute.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import goalRoutes from "./routes/goalRoutes.js";
+import categoryRouter from "./routes/categoryRoute.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -115,6 +116,7 @@ app.use("/api/income", incomeRouter);
 app.use("/api/expense", expenseRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/goals", goalRoutes);
+app.use("/api/categories", categoryRouter);
 
 // 🏠 Health check (important for uptime bots)
 app.get("/", (req, res) => {

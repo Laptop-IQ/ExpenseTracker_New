@@ -74,6 +74,7 @@ import {
 
 import { usePeriod } from "../utils/usePeriod";
 
+import { useCategoryRegistry } from "../utils/categoryStore";
 /* -------------------------------------------------------------------------- */
 /*                                  CONFIG                                    */
 /* -------------------------------------------------------------------------- */
@@ -3056,6 +3057,11 @@ function AddTransactionModal({
 /* -------------------------------------------------------------------------- */
 
 const ExpensePage = () => {
+  useCategoryRegistry("expense", {
+    colors: CATEGORY_COLOR,
+    icons: CATEGORY_ICONS,
+    keys: EXPENSE_CATEGORIES,
+  });
   const outletContext = useOutletContext() || {};
 
   const {

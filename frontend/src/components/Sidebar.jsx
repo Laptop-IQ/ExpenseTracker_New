@@ -10,6 +10,7 @@ import {
   Menu,
   Pin,
   PinOff,
+  Tags,
   Target,
   User,
   Wallet,
@@ -23,8 +24,13 @@ const MAIN_ITEMS = [
   { text: "Expenses", short: "Expenses", path: "/expense", icon: ArrowDown },
   { text: "Goals", short: "Goals", path: "/goals", icon: Target },
 ];
-const ACCOUNT_ITEMS = [{ text: "Profile", short: "Profile", path: "/profile", icon: User }];
-const MOBILE_ITEMS = [...MAIN_ITEMS, ...ACCOUNT_ITEMS];
+const PROFILE_ITEM = { text: "Profile", short: "Profile", path: "/profile", icon: User };
+const ACCOUNT_ITEMS = [
+  { text: "Categories", short: "Categories", path: "/categories", icon: Tags },
+  PROFILE_ITEM,
+];
+// bottom tab bar stays at five tabs; Categories is reachable from the drawer
+const MOBILE_ITEMS = [...MAIN_ITEMS, PROFILE_ITEM];
 
 const EXPANDED = 256;
 const COLLAPSED = 76;

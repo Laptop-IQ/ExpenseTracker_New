@@ -14,6 +14,7 @@ const loaders = {
   Income: () => import("./pages/Income"),
   Expense: () => import("./pages/Expense"),
   Goals: () => import("./pages/Goals"),
+  Categories: () => import("./pages/Categories"),
   CategoryDetail: () => import("./pages/CategoryDetail"),
   Profile: () => import("./pages/Profile"),
   ContactUs: () => import("./pages/ContactUs"),
@@ -28,6 +29,7 @@ const Dashboard = lazy(loaders.Dashboard);
 const Income = lazy(loaders.Income);
 const Expense = lazy(loaders.Expense);
 const Goals = lazy(loaders.Goals);
+const Categories = lazy(loaders.Categories);
 const CategoryDetail = lazy(loaders.CategoryDetail);
 const Profile = lazy(loaders.Profile);
 const ContactUs = lazy(loaders.ContactUs);
@@ -397,6 +399,7 @@ useEffect(() => {
             <Route path="/expense/category/:name" element={<CategoryDetail kind="expense" />} />
             <Route path="/income/source/:name" element={<CategoryDetail kind="income" />} />
             <Route path="/goals" element={<Goals />} />
+            <Route path="/categories" element={<Categories />} />
           </Route>
 
           <Route
